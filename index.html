@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ServiVENT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://rsms.me/">
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <link rel="stylesheet" href="index.css" />
+    <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            primary: {
+              light: '#eff6ff', // blue-50
+              DEFAULT: '#2563eb', // blue-600
+              dark: '#1d4ed8', // blue-700
+              hover: '#1d4ed8' // blue-700
+            },
+            secondary: {
+              light: '#f1f5f9', // slate-100
+              DEFAULT: '#475569', // slate-600
+              dark: '#1e293b' // slate-800
+            },
+            accent: {
+              light: '#ecfdf5', // emerald-50
+              DEFAULT: '#10b981', // emerald-500
+            }
+          }
+        }
+      }
+    }
+    </script>
+<script type="importmap">
+{
+  "imports": {
+    "preact/": "https://aistudiocdn.com/preact@^10.27.2/",
+    "preact": "https://aistudiocdn.com/preact@^10.27.2",
+    "htm/": "https://aistudiocdn.com/htm@^3.1.1/",
+    "deno.ns": "https://aistudiocdn.com/deno.ns@^0.8.0"
+  }
+}
+</script>
+</head>
+<body class="h-full">
+    <div id="root" class="h-full"></div>
+    <script type="module" src="index.tsx"></script>
+</body>
+</html>
