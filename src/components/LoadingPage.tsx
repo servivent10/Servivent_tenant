@@ -9,11 +9,10 @@ import { Spinner } from './Spinner.js';
 import { ICONS } from './Icons.js';
 
 const AnimatedServiVentLogo = () => {
+    // Se cambia a `inline-flex` para que el logo pueda ser centrado
+    // por la propiedad `text-center` de su contenedor padre.
     return html`
-        <div class="relative inline-block overflow-hidden">
-            <${ServiVentLogo} className="mx-auto h-14 w-auto" textColor="text-white" accentColor="text-primary-light animate-pulse-opacity" />
-            <div class="shine-effect"></div>
-        </div>
+        <${ServiVentLogo} className="inline-flex h-12 w-auto" textColor="text-white" accentColor="text-primary-light animate-pulse-opacity" />
     `;
 };
 
@@ -50,27 +49,32 @@ export function LoadingPage({ onForceLogout, steps = [] }) {
                 <div class="absolute inset-0 bg-secondary-dark/70"></div>
             </div>
 
-            <div class="w-full max-w-md space-y-6 rounded-xl bg-black/20 p-8 shadow-2xl backdrop-blur-lg text-center">
-                <${AnimatedServiVentLogo} />
-                
-                <div class="text-left space-y-3 pt-4 min-h-[6rem]">
-                    ${visibleSteps.map(step => html`
-                        <div key=${step.key} class="flex items-center justify-between text-gray-200 text-sm animate-fade-in-down">
-                            <span>${step.label}...</span>
-                            <${StatusIndicator} status=${step.status} />
-                        </div>
-                    `)}
+            <div class="w-full max-w-md rounded-xl bg-black/20 shadow-2xl backdrop-blur-lg text-center overflow-hidden">
+                <div class="relative py-6 bg-black/10 overflow-hidden">
+                    <${AnimatedServiVentLogo} />
+                    <div class="shine-effect"></div>
                 </div>
+                
+                <div class="p-8 pt-4 space-y-6">
+                    <div class="text-left space-y-3 min-h-[6rem]">
+                        ${visibleSteps.map(step => html`
+                            <div key=${step.key} class="flex items-center justify-between text-gray-200 text-sm animate-fade-in-down">
+                                <span>${step.label}...</span>
+                                <${StatusIndicator} status=${step.status} />
+                            </div>
+                        `)}
+                    </div>
 
-                <div class="pt-4">
-                    ${showForceButton && html`
-                        <button 
-                            onClick=${onForceLogout} 
-                            class="text-sm text-gray-300 hover:text-primary-light underline transition-opacity duration-300 animate-pulse-opacity"
-                        >
-                            ¿Tarda más de lo esperado? Haz clic aquí.
-                        </button>
-                    `}
+                    <div class="pt-4">
+                        ${showForceButton && html`
+                            <button 
+                                onClick=${onForceLogout} 
+                                class="text-sm text-gray-300 hover:text-primary-light underline transition-opacity duration-300 animate-pulse-opacity"
+                            >
+                                ¿Tarda más de lo esperado? Haz clic aquí.
+                            </button>
+                        `}
+                    </div>
                 </div>
             </div>
         </div>

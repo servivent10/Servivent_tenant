@@ -353,8 +353,8 @@ export function RegistrationFlow({ navigate }) {
                 confirmVariant="primary"
                 icon=${ICONS.business}
             >
-                <p class="text-sm text-gray-300">Estás a punto de crear una nueva cuenta para tu empresa <span class="font-bold text-white">${formData.empresa_nombre}</span> con el plan <span class="font-bold text-white">${getPlanTypeString()}</span>.</p>
-                <p class="text-sm text-gray-300 mt-2">¿Deseas continuar?</p>
+                <p class="text-sm text-gray-600">Estás a punto de crear una nueva cuenta para tu empresa <span class="font-bold text-gray-800">${formData.empresa_nombre}</span> con el plan <span class="font-bold text-gray-800">${getPlanTypeString()}</span>.</p>
+                <p class="text-sm text-gray-600 mt-2">¿Deseas continuar?</p>
             <//>
         </div>
     `;

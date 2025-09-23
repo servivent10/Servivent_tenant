@@ -11,11 +11,295 @@ import { useToast } from '../../hooks/useToast.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { Spinner } from '../../components/Spinner.js';
 import { useLoading } from '../../hooks/useLoading.js';
+import { Tabs } from '../../components/Tabs.js';
+import { ConfirmationModal } from '../../components/ConfirmationModal.js';
+import { FloatingActionButton } from '../../components/FloatingActionButton.js';
+
+function PriceListModal({ isOpen, onClose, onSave, listToEdit }) {
+    const isEditMode = Boolean(listToEdit);
+    const [formData, setFormData] = useState({ nombre: '', descripcion: '' });
+    const [isLoading, setIsLoading] = useState(false);
+    const { addToast } = useToast();
+
+    useEffect(() => {
+        if (isOpen) {
+            setFormData({
+                nombre: isEditMode ? listToEdit.nombre : '',
+                descripcion: isEditMode ? listToEdit.descripcion : '',
+            });
+        }
+    }, [isOpen, listToEdit]);
+
+    const handleInput = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleConfirm = async () => {
+        if (!formData.nombre.trim()) {
+            addToast({ message: 'El nombre de la lista de precios es obligatorio.', type: 'error' });
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const { error } = await supabase.rpc('upsert_price_list', {
+                p_id: isEditMode ? listToEdit.id : null,
+                p_nombre: formData.nombre,
+                p_descripcion: formData.descripcion
+            });
+            if (error) throw error;
+            onSave();
+        } catch (err) {
+            addToast({ message: `Error al guardar: ${err.message}`, type: 'error' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const title = isEditMode ? 'Editar Lista de Precios' : 'Crear Lista de Precios';
+    return html`
+        <${ConfirmationModal}
+            isOpen=${isOpen}
+            onClose=${onClose}
+            onConfirm=${handleConfirm}
+            title=${title}
+            confirmText=${isLoading ? html`<${Spinner}/>` : 'Guardar'}
+            icon=${ICONS.dollar}
+        >
+            <div class="space-y-4">
+                <${FormInput} label="Nombre" name="nombre" type="text" value=${formData.nombre} onInput=${handleInput} />
+                <${FormInput} label="Descripción (Opcional)" name="descripcion" type="text" value=${formData.descripcion} onInput=${handleInput} required=${false} />
+            </div>
+        <//>
+    `;
+}
+
+
+function PriceListsTab() {
+    const [priceLists, setPriceLists] = useState([]);
+    const [originalOrder, setOriginalOrder] = useState([]);
+    const [listToEdit, setListToEdit] = useState(null);
+    const [listToDelete, setListToDelete] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    
+    const [draggedItemIndex, setDraggedItemIndex] = useState(null);
+    const [dragOverIndex, setDragOverIndex] = useState(null);
+    const [isSavingOrder, setIsSavingOrder] = useState(false);
+
+    const { addToast } = useToast();
+    const { startLoading, stopLoading } = useLoading();
+
+    const fetchPriceLists = async () => {
+        startLoading();
+        try {
+            const { data, error } = await supabase.rpc('get_price_lists');
+            if (error) throw error;
+            setPriceLists(data);
+            setOriginalOrder(data.map(d => d.id));
+        } catch (err) {
+            addToast({ message: `Error al cargar listas de precios: ${err.message}`, type: 'error' });
+        } finally {
+            stopLoading();
+        }
+    };
+
+    useEffect(() => {
+        fetchPriceLists();
+    }, []);
+
+    const isOrderChanged = JSON.stringify(priceLists.map(p => p.id)) !== JSON.stringify(originalOrder);
+
+    const handleDragStart = (e, index) => {
+        setDraggedItemIndex(index);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleDragOver = (e, index) => {
+        e.preventDefault();
+        if (index !== draggedItemIndex && index !== dragOverIndex) {
+            setDragOverIndex(index);
+        }
+    };
+
+    const handleDrop = (e, dropIndex) => {
+        e.preventDefault();
+        const draggedItem = priceLists[draggedItemIndex];
+        const newPriceLists = [...priceLists];
+        newPriceLists.splice(draggedItemIndex, 1);
+        newPriceLists.splice(dropIndex, 0, draggedItem);
+        setPriceLists(newPriceLists);
+        handleDragEnd();
+    };
+
+    const handleDragEnd = () => {
+        setDraggedItemIndex(null);
+        setDragOverIndex(null);
+    };
+
+    const handleSaveOrder = async () => {
+        setIsSavingOrder(true);
+        try {
+            const draggableListIds = priceLists
+                .filter(list => !list.es_predeterminada)
+                .map(list => list.id);
+                
+            const { error } = await supabase.rpc('update_price_list_order', {
+                p_list_ids: draggableListIds
+            });
+            if (error) throw error;
+            
+            addToast({ message: 'Orden guardado con éxito.', type: 'success' });
+            setOriginalOrder(priceLists.map(p => p.id));
+        } catch (err) {
+             addToast({ message: `Error al guardar el orden: ${err.message}`, type: 'error' });
+        } finally {
+            setIsSavingOrder(false);
+        }
+    };
+
+
+    const handleAdd = () => {
+        setListToEdit(null);
+        setIsModalOpen(true);
+    };
+
+    const handleEdit = (list) => {
+        setListToEdit(list);
+        setIsModalOpen(true);
+    };
+
+    const handleDelete = (list) => {
+        if (list.es_predeterminada) {
+            addToast({ message: 'La lista de precios general no se puede eliminar.', type: 'warning' });
+            return;
+        }
+        setListToDelete(list);
+        setIsDeleteModalOpen(true);
+    };
+    
+    const handleConfirmDelete = async () => {
+        if (!listToDelete) return;
+        startLoading();
+        try {
+            const { error } = await supabase.rpc('delete_price_list', { p_id: listToDelete.id });
+            if (error) throw error;
+            addToast({ message: 'Lista de precios eliminada.', type: 'success' });
+            fetchPriceLists();
+        } catch (err) {
+            addToast({ message: `Error al eliminar: ${err.message}`, type: 'error' });
+        } finally {
+            stopLoading();
+            setIsDeleteModalOpen(false);
+        }
+    };
+
+    const handleSave = () => {
+        setIsModalOpen(false);
+        fetchPriceLists();
+    };
+
+    return html`
+        <div>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-800">Listas de Precios</h2>
+                    <p class="mt-1 text-sm text-gray-600">Define diferentes políticas de precios para tus productos y arrástralas para ordenarlas.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    ${isOrderChanged && html`
+                        <button onClick=${handleSaveOrder} disabled=${isSavingOrder} class="hidden sm:flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:bg-slate-400 min-w-[120px]">
+                            ${isSavingOrder ? html`<${Spinner}/>` : 'Guardar Orden'}
+                        </button>
+                    `}
+                    <button onClick=${handleAdd} class="hidden sm:flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover">
+                        ${ICONS.add} Crear Lista
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-6 flow-root">
+                 <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                    <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+                        <table class="min-w-full divide-y divide-gray-300">
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0 w-12"><span class="sr-only">Ordenar</span></th>
+                                    <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0">Nombre</th>
+                                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Descripción</th>
+                                    <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-0"><span class="sr-only">Acciones</span></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 bg-white">
+                                ${priceLists.map((list, index) => {
+                                    const isDraggable = !list.es_predeterminada;
+                                    const isBeingDragged = draggedItemIndex === index;
+                                    const isDragOver = dragOverIndex === index;
+
+                                    return html`
+                                    <tr 
+                                        key=${list.id}
+                                        draggable=${isDraggable}
+                                        onDragStart=${isDraggable ? (e) => handleDragStart(e, index) : null}
+                                        onDragOver=${isDraggable ? (e) => handleDragOver(e, index) : null}
+                                        onDrop=${isDraggable ? (e) => handleDrop(e, index) : null}
+                                        onDragEnd=${isDraggable ? handleDragEnd : null}
+                                        onDragLeave=${() => setDragOverIndex(null)}
+                                        class="${isBeingDragged ? 'opacity-50 bg-slate-100' : ''} ${isDragOver ? 'border-t-2 border-primary' : ''} transition-all duration-150"
+                                    >
+                                        <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-500 sm:pl-0">
+                                            ${isDraggable && html`<div class="cursor-move">${ICONS.drag_handle}</div>`}
+                                        </td>
+                                        <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-0">
+                                            ${list.nombre}
+                                            ${list.es_predeterminada && html`<span class="ml-2 inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">General</span>`}
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${list.descripcion}</td>
+                                        <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
+                                            <div class="flex justify-end gap-2">
+                                                <button onClick=${() => handleEdit(list)} class="text-gray-400 hover:text-primary p-1 rounded-full hover:bg-gray-100">${ICONS.edit}</button>
+                                                <button onClick=${() => handleDelete(list)} disabled=${list.es_predeterminada} class="text-gray-400 p-1 rounded-full ${list.es_predeterminada ? 'opacity-50 cursor-not-allowed' : 'hover:text-red-600 hover:bg-gray-100'}">${ICONS.delete}</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `})}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sm:hidden mt-4 space-y-2">
+                ${isOrderChanged && html`
+                    <button onClick=${handleSaveOrder} disabled=${isSavingOrder} class="w-full flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:bg-slate-400">
+                        ${isSavingOrder ? html`<${Spinner}/>` : 'Guardar Orden'}
+                    </button>
+                `}
+                <${FloatingActionButton} onClick=${handleAdd} label="Crear Lista" />
+            </div>
+
+            <${PriceListModal} isOpen=${isModalOpen} onClose=${() => setIsModalOpen(false)} onSave=${handleSave} listToEdit=${listToEdit} />
+            <${ConfirmationModal}
+                isOpen=${isDeleteModalOpen}
+                onClose=${() => setIsDeleteModalOpen(false)}
+                onConfirm=${handleConfirmDelete}
+                title="Eliminar Lista de Precios"
+                confirmText="Sí, eliminar"
+                confirmVariant="danger"
+                icon=${ICONS.warning_amber}
+            >
+                <p class="text-sm text-gray-300">¿Estás seguro? Se eliminarán todos los precios asociados a esta lista.</p>
+            <//>
+        </div>
+    `;
+}
+
 
 export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo, notifications, onCompanyInfoUpdate, navigate }) {
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
     const fileInputRef = useRef(null);
+    const [activeTab, setActiveTab] = useState('empresa');
 
     const [formData, setFormData] = useState({
         nombre: '',
@@ -80,7 +364,6 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
         try {
             let logoUrl = previewUrl;
 
-            // --- LÓGICA DE SUBIDA DIRECTA A STORAGE (igual que avatares) ---
             if (logoFile) {
                 if (!user.empresa_id) {
                     throw new Error("No se pudo identificar la empresa del usuario para subir el logo.");
@@ -101,7 +384,6 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                 
                 logoUrl = `${urlData.publicUrl}?t=${new Date().getTime()}`;
             }
-            // --- FIN DE LA NUEVA LÓGICA ---
 
             const { error: rpcError } = await supabase.rpc('update_company_info', {
                 p_nombre: formData.nombre,
@@ -135,6 +417,11 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
     const breadcrumbs = [
         { name: 'Configuración', href: '#/configuracion' }
     ];
+    
+    const tabs = [
+        { id: 'empresa', label: 'Datos de la Empresa' },
+        { id: 'precios', label: 'Listas de Precios' },
+    ];
 
     const canEdit = user.role === 'Propietario';
 
@@ -148,88 +435,100 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
             companyInfo=${companyInfo}
             notifications=${notifications}
         >
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 class="text-2xl font-semibold text-gray-900">Configuración de la Empresa</h1>
-                    <p class="mt-1 text-sm text-gray-600">Actualiza los datos y el logo de tu empresa.</p>
-                </div>
-                 ${canEdit && html`
-                    <button 
-                        onClick=${handleSave}
-                        disabled=${isSaving || !!dataError}
-                        class="flex-shrink-0 w-full sm:w-auto flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-400 min-w-[120px]"
-                    >
-                        ${isSaving ? html`<${Spinner}/>` : 'Guardar Cambios'}
-                    </button>
-                 `}
+            <h1 class="text-2xl font-semibold text-gray-900">Configuración</h1>
+            <p class="mt-1 text-sm text-gray-600">Gestiona los datos de tu empresa y las políticas de precios.</p>
+
+            <div class="mt-8">
+                <${Tabs} tabs=${tabs} activeTab=${activeTab} onTabClick=${setActiveTab} />
             </div>
 
-            ${dataError && html`
-                <div class="mt-6 p-4 rounded-md bg-red-50 text-red-800 border border-red-200" role="alert">
-                    <h3 class="font-bold flex items-center gap-2">${ICONS.error} Error Crítico de Datos</h3>
-                    <p class="mt-2 text-sm">${dataError}</p>
-                </div>
-            `}
+            <div class="mt-6">
+                ${activeTab === 'empresa' && html`
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                        <div>
+                            <h2 class="text-xl font-semibold text-gray-800">Datos de la Empresa</h2>
+                            <p class="mt-1 text-sm text-gray-600">Actualiza la información y el logo de tu empresa.</p>
+                        </div>
+                         ${canEdit && html`
+                            <button 
+                                onClick=${handleSave}
+                                disabled=${isSaving || !!dataError}
+                                class="flex-shrink-0 w-full sm:w-auto flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-400 min-w-[120px]"
+                            >
+                                ${isSaving ? html`<${Spinner}/>` : 'Guardar Cambios'}
+                            </button>
+                         `}
+                    </div>
 
-            <div class="mt-8 max-w-4xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-sm border">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div class="md:col-span-1">
-                        <h3 class="text-lg font-medium leading-6 text-gray-900">Logo de la Empresa</h3>
-                        <p class="mt-1 text-sm text-gray-500">
-                            Este logo aparecerá en la barra lateral y en futuros documentos.
-                        </p>
-                        <div class="mt-4 flex flex-col items-center">
-                            ${previewUrl ? html`
-                                <img src=${previewUrl} alt="Logo de la empresa" class="h-32 w-32 rounded-lg object-contain bg-slate-100 p-2 border" />
-                            ` : html`
-                                <div class="h-32 w-32 rounded-lg bg-slate-100 border flex items-center justify-center">
-                                    <div class="text-slate-400 text-5xl">${ICONS.business}</div>
+                    ${dataError && html`
+                        <div class="mt-6 p-4 rounded-md bg-red-50 text-red-800 border border-red-200" role="alert">
+                            <h3 class="font-bold flex items-center gap-2">${ICONS.error} Error Crítico de Datos</h3>
+                            <p class="mt-2 text-sm">${dataError}</p>
+                        </div>
+                    `}
+
+                    <div class="mt-4 max-w-4xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-sm border">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <div class="md:col-span-1">
+                                <h3 class="text-lg font-medium leading-6 text-gray-900">Logo</h3>
+                                <div class="mt-4 flex flex-col items-center">
+                                    ${previewUrl ? html`
+                                        <img src=${previewUrl} alt="Logo de la empresa" class="h-32 w-32 rounded-lg object-contain bg-slate-100 p-2 border" />
+                                    ` : html`
+                                        <div class="h-32 w-32 rounded-lg bg-slate-100 border flex items-center justify-center">
+                                            <div class="text-slate-400 text-5xl">${ICONS.business}</div>
+                                        </div>
+                                    `}
+                                    <input
+                                        ref=${fileInputRef}
+                                        type="file"
+                                        class="hidden"
+                                        accept="image/png, image/jpeg, image/svg+xml"
+                                        onChange=${handleFileChange}
+                                        disabled=${!canEdit || !!dataError}
+                                    />
+                                    ${canEdit && html`
+                                        <button
+                                            onClick=${() => fileInputRef.current.click()}
+                                            type="button"
+                                            disabled=${!!dataError}
+                                            class="mt-4 w-full flex items-center justify-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            ${ICONS.upload_file}
+                                            Cambiar Logo
+                                        </button>
+                                    `}
                                 </div>
-                            `}
-                            <input
-                                ref=${fileInputRef}
-                                type="file"
-                                class="hidden"
-                                accept="image/png, image/jpeg, image/svg+xml"
-                                onChange=${handleFileChange}
-                                disabled=${!canEdit || !!dataError}
-                            />
-                            ${canEdit && html`
-                                <button
-                                    onClick=${() => fileInputRef.current.click()}
-                                    type="button"
-                                    disabled=${!!dataError}
-                                    class="mt-4 w-full flex items-center justify-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    ${ICONS.upload_file}
-                                    Cambiar Logo
-                                </button>
-                            `}
-                        </div>
-                    </div>
-                    <div class="md:col-span-2">
-                        <h3 class="text-lg font-medium leading-6 text-gray-900">Información General</h3>
-                        <div class="mt-4 grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-6">
-                            <div class="sm:col-span-2">
-                                <${FormInput} label="Nombre de la Empresa" name="nombre" type="text" value=${formData.nombre} onInput=${handleInput} disabled=${!canEdit || !!dataError} />
                             </div>
-                            <div class="sm:col-span-1">
-                                <${FormInput} label="NIT" name="nit" type="text" value=${formData.nit} onInput=${handleInput} disabled=${!canEdit || !!dataError} />
-                            </div>
-                             <div class="sm:col-span-1">
-                                <${FormInput} label="Teléfono" name="telefono" type="tel" value=${formData.telefono} onInput=${handleInput} required=${false} disabled=${!canEdit || !!dataError} />
-                            </div>
-                            <div class="sm:col-span-2">
-                                <${FormInput} label="Dirección" name="direccion" type="text" value=${formData.direccion} onInput=${handleInput} required=${false} disabled=${!canEdit || !!dataError} />
+                            <div class="md:col-span-2">
+                                <h3 class="text-lg font-medium leading-6 text-gray-900">Información General</h3>
+                                <div class="mt-4 grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-6">
+                                    <div class="sm:col-span-2">
+                                        <${FormInput} label="Nombre de la Empresa" name="nombre" type="text" value=${formData.nombre} onInput=${handleInput} disabled=${!canEdit || !!dataError} />
+                                    </div>
+                                    <div class="sm:col-span-1">
+                                        <${FormInput} label="NIT" name="nit" type="text" value=${formData.nit} onInput=${handleInput} disabled=${!canEdit || !!dataError} />
+                                    </div>
+                                     <div class="sm:col-span-1">
+                                        <${FormInput} label="Teléfono" name="telefono" type="tel" value=${formData.telefono} onInput=${handleInput} required=${false} disabled=${!canEdit || !!dataError} />
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <${FormInput} label="Dirección" name="direccion" type="text" value=${formData.direccion} onInput=${handleInput} required=${false} disabled=${!canEdit || !!dataError} />
+                                    </div>
+                                </div>
+                                ${!canEdit && !dataError && html`
+                                    <div class="mt-6 p-4 rounded-md bg-blue-50 text-blue-700 text-sm" role="alert">
+                                        <p>Solo el rol de <strong>Propietario</strong> puede editar esta información.</p>
+                                    </div>
+                                `}
                             </div>
                         </div>
-                        ${!canEdit && !dataError && html`
-                            <div class="mt-6 p-4 rounded-md bg-blue-50 text-blue-700 text-sm" role="alert">
-                                <p>Solo el rol de <strong>Propietario</strong> puede editar esta información.</p>
-                            </div>
-                        `}
                     </div>
-                </div>
+                `}
+                
+                ${activeTab === 'precios' && html`
+                    <${PriceListsTab} />
+                `}
             </div>
         <//>
     `;

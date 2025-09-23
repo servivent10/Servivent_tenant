@@ -43,7 +43,7 @@ const UserList = ({ users = [], onResetPassword }) => {
         <!-- Vista de tabla para escritorio -->
         <div class="hidden sm:block mt-4 flow-root">
             <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-                <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+                <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:-mx-8">
                     <table class="min-w-full divide-y divide-gray-300">
                         <thead>
                             <tr>
@@ -457,34 +457,34 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
                 confirmText="Guardar Pago"
                 icon=${ICONS.dollar}
             >
-                <div class="space-y-4 text-sm">
+                <div class="space-y-4 text-sm text-gray-600">
                     <div>
-                        <label for="planId" class="block font-medium leading-6 text-gray-200">Plan</label>
-                        <select id="planId" name="planId" value=${paymentData.planId} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-0 p-2 bg-white/10 text-white shadow-sm ring-1 ring-inset ring-gray-600 focus:outline-none focus:ring-2 focus:ring-primary sm:text-sm">
+                        <label for="planId" class="block font-medium leading-6 text-gray-900">Plan</label>
+                        <select id="planId" name="planId" value=${paymentData.planId} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
                             ${UPGRADE_PLANS.filter(p => p.prices.custom === undefined).map(plan => html`<option value=${plan.id}>${plan.title}</option>`)}
                         </select>
                     </div>
                      <div>
-                        <label for="cycle" class="block font-medium leading-6 text-gray-200">Ciclo de Facturación</label>
-                        <select id="cycle" name="cycle" value=${paymentData.cycle} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-0 p-2 bg-white/10 text-white shadow-sm ring-1 ring-inset ring-gray-600 focus:outline-none focus:ring-2 focus:ring-primary sm:text-sm">
+                        <label for="cycle" class="block font-medium leading-6 text-gray-900">Ciclo de Facturación</label>
+                        <select id="cycle" name="cycle" value=${paymentData.cycle} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
                             ${availableCyclesForSelectedPlan.map(cycle => html`<option value=${cycle}>${{monthly: 'Mensual', yearly: 'Anual', lifetime: 'Pago Único'}[cycle]}</option>`)}
                         </select>
                     </div>
-                    <${FormInput} label="Monto a Pagar (Bs)" name="monto" type="number" value=${paymentData.monto} onInput=${handlePaymentInput} theme="dark" />
+                    <${FormInput} label="Monto a Pagar (Bs)" name="monto" type="number" value=${paymentData.monto} onInput=${handlePaymentInput} />
                      <div>
-                        <label for="fecha_vencimiento" class="block font-medium leading-6 text-gray-200">Nueva Fecha de Vencimiento</label>
-                         <input id="fecha_vencimiento" name="fecha_vencimiento" type="date" value=${paymentData.fecha_vencimiento} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-0 p-2 bg-white/10 text-white shadow-sm ring-1 ring-inset ring-gray-600 focus:outline-none focus:ring-2 focus:ring-primary sm:text-sm" />
+                        <label for="fecha_vencimiento" class="block font-medium leading-6 text-gray-900">Nueva Fecha de Vencimiento</label>
+                         <input id="fecha_vencimiento" name="fecha_vencimiento" type="date" value=${paymentData.fecha_vencimiento} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-0 p-2 bg-white text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200" />
                     </div>
                     <div>
-                        <label for="metodo_pago" class="block font-medium leading-6 text-gray-200">Método de Pago</label>
-                        <select id="metodo_pago" name="metodo_pago" value=${paymentData.metodo_pago} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-0 p-2 bg-white/10 text-white shadow-sm ring-1 ring-inset ring-gray-600 focus:outline-none focus:ring-2 focus:ring-primary sm:text-sm">
+                        <label for="metodo_pago" class="block font-medium leading-6 text-gray-900">Método de Pago</label>
+                        <select id="metodo_pago" name="metodo_pago" value=${paymentData.metodo_pago} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
                             <option>Transferencia Bancaria</option>
                             <option>Efectivo</option>
                             <option>QR</option>
                             <option>Tarjeta de Crédito/Débito</option>
                         </select>
                     </div>
-                    <${FormInput} label="Notas (Opcional)" name="notas" type="text" value=${paymentData.notas} onInput=${handlePaymentInput} required=${false} theme="dark" />
+                    <${FormInput} label="Notas (Opcional)" name="notas" type="text" value=${paymentData.notas} onInput=${handlePaymentInput} required=${false} />
                 </div>
             <//>
             
@@ -497,9 +497,9 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
                 icon=${ICONS.key}
             >
                 <div class="space-y-4">
-                   <p class="text-sm text-gray-300">Estableciendo nueva contraseña para <span class="font-bold text-white">${selectedUser?.correo}</span>.</p>
-                   <${FormInput} label="Nueva Contraseña" name="new_password" type="password" value=${newPassword} onInput=${(e) => setNewPassword(e.target.value)} theme="dark" />
-                   <${FormInput} label="Confirmar Nueva Contraseña" name="confirm_password" type="password" value=${confirmPassword} onInput=${(e) => setConfirmPassword(e.target.value)} theme="dark" />
+                   <p class="text-sm text-gray-600">Estableciendo nueva contraseña para <span class="font-bold text-gray-800">${selectedUser?.correo}</span>.</p>
+                   <${FormInput} label="Nueva Contraseña" name="new_password" type="password" value=${newPassword} onInput=${(e) => setNewPassword(e.target.value)} />
+                   <${FormInput} label="Confirmar Nueva Contraseña" name="confirm_password" type="password" value=${confirmPassword} onInput=${(e) => setConfirmPassword(e.target.value)} />
                 </div>
             <//>
         <//>

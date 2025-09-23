@@ -269,52 +269,57 @@ export function UserFormModal({ isOpen, onClose, onSave, userToEdit, branches, c
             title=${title}
             confirmText=${isLoading ? html`<${Spinner}/>` : (isEditMode ? 'Guardar Cambios' : 'Crear Usuario')}
             icon=${ICONS.users}
+            maxWidthClass="max-w-4xl"
         >
-            <div class="space-y-4 text-sm">
-                <div class="flex items-center space-x-4">
-                    <${Avatar} name=${formData.nombre_completo} avatarUrl=${previewUrl} size="h-20 w-20" />
-                     <div class="flex-1">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-gray-600">
+                <div class="md:col-span-1 flex flex-col items-center space-y-4">
+                    <${Avatar} name=${formData.nombre_completo} avatarUrl=${previewUrl} size="h-32 w-32" />
+                    <div class="text-center">
                         <input ref=${fileInputRef} type="file" class="hidden" accept="image/png, image/jpeg" onChange=${handleFileChange} />
-                        <button onClick=${() => fileInputRef.current.click()} class="flex items-center gap-2 rounded-md bg-white/10 px-3 py-2 text-sm font-semibold text-white shadow-sm ring-1 ring-inset ring-gray-400 hover:bg-white/20">
+                        <button onClick=${() => fileInputRef.current.click()} class="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
                             ${ICONS.upload_file} Cambiar Foto
                         </button>
-                        <p class="text-xs text-gray-400 mt-2">JPG o PNG. Máx 2MB.</p>
+                        <p class="text-xs text-gray-500 mt-2">JPG o PNG. Máx 2MB.</p>
                     </div>
                 </div>
 
-                <${FormInput} label="Nombre Completo" name="nombre_completo" type="text" value=${formData.nombre_completo} onInput=${handleInput} theme="dark" error=${errors.nombre_completo} />
-                
-                ${!isEditMode && html`
-                    <${FormInput} label="Correo Electrónico" name="correo" type="email" value=${formData.correo} onInput=${handleInput} theme="dark" error=${errors.correo} />
-                `}
-                
-                ${!isEditMode && html`
-                    <${FormInput} label="Contraseña Temporal" name="password" type="password" value=${formData.password} onInput=${handleInput} theme="dark" error=${errors.password} />
-                `}
+                <div class="md:col-span-2 space-y-4">
+                    <${FormInput} label="Nombre Completo" name="nombre_completo" type="text" value=${formData.nombre_completo} onInput=${handleInput} error=${errors.nombre_completo} />
+                    
+                    ${!isEditMode && html`
+                        <${FormInput} label="Correo Electrónico" name="correo" type="email" value=${formData.correo} onInput=${handleInput} error=${errors.correo} />
+                    `}
+                    
+                    ${!isEditMode && html`
+                        <${FormInput} label="Contraseña Temporal" name="password" type="password" value=${formData.password} onInput=${handleInput} error=${errors.password} />
+                    `}
 
-                <div>
-                    <label for="rol" class="block font-medium leading-6 text-gray-200">Rol</label>
-                    <select id="rol" name="rol" value=${formData.rol} onInput=${handleInput} class="mt-1 block w-full rounded-md border-0 p-2 bg-white/10 text-white shadow-sm ring-1 ring-inset ring-gray-600 focus:outline-none focus:ring-2 focus:ring-primary sm:text-sm">
-                        ${currentUser.role === 'Propietario' && html`<option class="bg-secondary-dark text-white" value="Administrador">Administrador</option>`}
-                        <option class="bg-secondary-dark text-white" value="Empleado">Empleado</option>
-                    </select>
-                </div>
-                 <div>
-                    <label for="sucursal_id" class="block font-medium leading-6 text-gray-200">Sucursal</label>
-                    <select id="sucursal_id" name="sucursal_id" value=${formData.sucursal_id} onInput=${handleInput} class="mt-1 block w-full rounded-md border-0 p-2 bg-white/10 text-white shadow-sm ring-1 ring-inset ring-gray-600 focus:outline-none focus:ring-2 focus:ring-primary sm:text-sm">
-                        ${branches.map(branch => html`<option class="bg-secondary-dark text-white" value=${branch.id}>${branch.nombre}</option>`)}
-                    </select>
-                </div>
-                
-                ${isEditMode && html`
-                    <div class="pt-4 border-t border-white/10">
-                        <p class="text-sm font-medium text-gray-300">Cambiar Contraseña (opcional)</p>
-                        <div class="space-y-4 mt-2">
-                            <${FormInput} label="Nueva Contraseña" name="new_password" type="password" value=${newPassword} onInput=${(e) => setNewPassword(e.target.value)} theme="dark" error=${errors.new_password} required=${false} />
-                            <${FormInput} label="Confirmar Nueva Contraseña" name="confirm_password" type="password" value=${confirmPassword} onInput=${(e) => setConfirmPassword(e.target.value)} theme="dark" error=${errors.confirm_password} required=${false} />
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="rol" class="block font-medium leading-6 text-gray-900">Rol</label>
+                            <select id="rol" name="rol" value=${formData.rol} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
+                                ${currentUser.role === 'Propietario' && html`<option value="Administrador">Administrador</option>`}
+                                <option value="Empleado">Empleado</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="sucursal_id" class="block font-medium leading-6 text-gray-900">Sucursal</label>
+                            <select id="sucursal_id" name="sucursal_id" value=${formData.sucursal_id} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
+                                ${branches.map(branch => html`<option value=${branch.id}>${branch.nombre}</option>`)}
+                            </select>
                         </div>
                     </div>
-                `}
+                    
+                    ${isEditMode && html`
+                        <div class="pt-4 border-t border-gray-200">
+                            <p class="text-sm font-medium text-gray-700">Cambiar Contraseña (opcional)</p>
+                            <div class="space-y-4 mt-2">
+                                <${FormInput} label="Nueva Contraseña" name="new_password" type="password" value=${newPassword} onInput=${(e) => setNewPassword(e.target.value)} error=${errors.new_password} required=${false} />
+                                <${FormInput} label="Confirmar Nueva Contraseña" name="confirm_password" type="password" value=${confirmPassword} onInput=${(e) => setConfirmPassword(e.target.value)} error=${errors.confirm_password} required=${false} />
+                            </div>
+                        </div>
+                    `}
+                </div>
             </div>
         <//>
     `;

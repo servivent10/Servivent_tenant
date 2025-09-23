@@ -200,7 +200,7 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
                     confirmText: 'Sí, eliminar',
                     variant: 'danger',
                     icon: ICONS.warning_amber,
-                    body: html`<p class="text-sm text-gray-300">¿Estás seguro de que quieres eliminar la empresa <span class="font-bold text-white">${company.nombre}</span>? Esta acción es irreversible y eliminará todos sus datos.</p>`
+                    body: html`<p class="text-sm text-gray-600">¿Estás seguro de que quieres eliminar la empresa <span class="font-bold text-gray-800">${company.nombre}</span>? Esta acción es irreversible y eliminará todos sus datos.</p>`
                 };
             case 'suspend':
                 return {
@@ -208,7 +208,7 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
                     confirmText: 'Sí, suspender',
                     variant: 'primary',
                     icon: ICONS.suspend,
-                    body: html`<p class="text-sm text-gray-300">Esto bloqueará el acceso a todos los usuarios de <span class="font-bold text-white">${company.nombre}</span>. ¿Estás seguro?</p>`
+                    body: html`<p class="text-sm text-gray-600">Esto bloqueará el acceso a todos los usuarios de <span class="font-bold text-gray-800">${company.nombre}</span>. ¿Estás seguro?</p>`
                 };
             case 'activate':
                  return {
@@ -216,7 +216,7 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
                     confirmText: 'Sí, reactivar',
                     variant: 'primary',
                     icon: ICONS.activate,
-                    body: html`<p class="text-sm text-gray-300">Esto restaurará el acceso a todos los usuarios de <span class="font-bold text-white">${company.nombre}</span>. ¿Estás seguro?</p>`
+                    body: html`<p class="text-sm text-gray-600">Esto restaurará el acceso a todos los usuarios de <span class="font-bold text-gray-800">${company.nombre}</span>. ¿Estás seguro?</p>`
                 };
             default:
                 return {};

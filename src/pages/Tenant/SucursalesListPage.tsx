@@ -279,7 +279,7 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
                 confirmVariant="danger"
                 icon=${ICONS.warning_amber}
             >
-                <p class="text-sm text-gray-300">¿Estás seguro de que quieres eliminar la sucursal <span class="font-bold text-white">${sucursalToDelete?.nombre}</span>? Esta acción no se puede deshacer.</p>
+                <p class="text-sm text-gray-600">¿Estás seguro de que quieres eliminar la sucursal <span class="font-bold text-gray-800">${sucursalToDelete?.nombre}</span>? Esta acción no se puede deshacer.</p>
             <//>
 
         <//>

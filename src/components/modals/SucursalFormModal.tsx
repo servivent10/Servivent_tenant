@@ -106,10 +106,10 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursalToEdit }) {
             confirmText=${isLoading ? html`<${Spinner}/>` : (isEditMode ? 'Guardar Cambios' : 'Crear Sucursal')}
             icon=${ICONS.storefront}
         >
-            <div class="space-y-4 text-sm">
-                <${FormInput} label="Nombre" name="nombre" type="text" value=${formData.nombre} onInput=${handleInput} theme="dark" error=${errors.nombre} />
-                <${FormInput} label="Dirección" name="direccion" type="text" value=${formData.direccion} onInput=${handleInput} required=${false} theme="dark" />
-                <${FormInput} label="Teléfono" name="telefono" type="tel" value=${formData.telefono} onInput=${handleInput} required=${false} theme="dark" />
+            <div class="space-y-4 text-sm text-gray-600">
+                <${FormInput} label="Nombre" name="nombre" type="text" value=${formData.nombre} onInput=${handleInput} error=${errors.nombre} />
+                <${FormInput} label="Dirección" name="direccion" type="text" value=${formData.direccion} onInput=${handleInput} required=${false} />
+                <${FormInput} label="Teléfono" name="telefono" type="tel" value=${formData.telefono} onInput=${handleInput} required=${false} />
             </div>
         <//>
     `;

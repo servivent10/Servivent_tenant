@@ -285,7 +285,7 @@ export function DashboardLayout({ user, onLogout, onProfileUpdate, sidebarLinks,
             confirmVariant="danger"
             icon=${ICONS.warning_amber}
         >
-            <p class="text-sm text-gray-300">Estás a punto de cerrar tu sesión. ¿Deseas continuar?</p>
+            <p class="text-sm text-gray-600">Estás a punto de cerrar tu sesión. ¿Deseas continuar?</p>
         <//>
         
         <${ProfileModal} 

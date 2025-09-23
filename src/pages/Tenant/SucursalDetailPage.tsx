@@ -409,7 +409,7 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
                 confirmVariant="danger"
                 icon=${ICONS.warning_amber}
             >
-                <p class="text-sm text-gray-300">¿Estás seguro de que quieres eliminar a <span class="font-bold text-white">${userToDelete?.nombre_completo}</span>?</p>
+                <p class="text-sm text-gray-600">¿Estás seguro de que quieres eliminar a <span class="font-bold text-gray-800">${userToDelete?.nombre_completo}</span>?</p>
             <//>
             
             <${ProfileModal} 

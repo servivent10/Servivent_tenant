@@ -15,7 +15,8 @@ export function ConfirmationModal({
     icon = null,
     confirmText = 'Confirmar',
     cancelText = 'Cancelar',
-    confirmVariant = 'primary'
+    confirmVariant = 'primary',
+    maxWidthClass = 'max-w-lg'
 }) {
     const [showModal, setShowModal] = useState(isOpen);
 
@@ -74,14 +75,14 @@ export function ConfirmationModal({
             aria-modal="true"
             aria-labelledby="modal-title"
         >
-            <div class="fixed inset-0 bg-black/60 backdrop-blur-md" aria-hidden="true"></div>
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
             
-            <div class="relative w-full max-w-lg rounded-xl bg-secondary-dark/75 shadow-2xl backdrop-blur-2xl border border-white/20 text-white ${modalAnimation}">
+            <div class="relative w-full ${maxWidthClass} rounded-xl bg-white text-gray-900 shadow-2xl ${modalAnimation}">
                 
                 <!-- Header -->
-                <div class="flex items-start justify-between p-4 border-b border-white/10">
+                <div class="flex items-start justify-between p-4 border-b border-gray-200">
                     <h2 id="modal-title" class="text-lg font-semibold">${title}</h2>
-                    <button onClick=${handleClose} class="p-1 rounded-full text-gray-400 hover:bg-white/10 hover:text-white transition-colors" aria-label="Cerrar">
+                    <button onClick=${handleClose} class="p-1 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-colors" aria-label="Cerrar">
                         ${ICONS.close}
                     </button>
                 </div>
@@ -97,11 +98,11 @@ export function ConfirmationModal({
                 </div>
 
                 <!-- Footer -->
-                <div class="flex justify-end items-center p-4 bg-white/5 rounded-b-xl space-x-3">
+                <div class="flex justify-end items-center p-4 bg-gray-50 rounded-b-xl space-x-3">
                     <button 
                         type="button" 
                         onClick=${handleClose} 
-                        class="rounded-md bg-transparent px-3 py-2 text-sm font-semibold text-white shadow-sm ring-1 ring-inset ring-gray-400 hover:bg-white/10 transition-colors"
+                        class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 transition-colors"
                     >
                         ${cancelText}
                     </button>

@@ -140,7 +140,7 @@ export function ProfileModal({ isOpen, onClose, user, onProfileUpdate }) {
             confirmText=${isLoading ? html`<${Spinner}/>` : 'Guardar Cambios'}
             icon=${ICONS.users}
         >
-            <div class="space-y-6">
+            <div class="space-y-6 text-gray-600">
                 <div class="flex items-center space-x-4">
                     <${Avatar} name=${name} avatarUrl=${previewUrl} size="h-20 w-20" />
                     <div class="flex-1">
@@ -153,12 +153,12 @@ export function ProfileModal({ isOpen, onClose, user, onProfileUpdate }) {
                         />
                         <button
                             onClick=${() => fileInputRef.current.click()}
-                            class="flex items-center gap-2 rounded-md bg-white/10 px-3 py-2 text-sm font-semibold text-white shadow-sm ring-1 ring-inset ring-gray-400 hover:bg-white/20 transition-colors"
+                            class="flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 transition-colors"
                         >
                             ${ICONS.upload_file}
                             Cambiar Foto
                         </button>
-                        <p class="text-xs text-gray-400 mt-2">JPG o PNG. Máx 2MB.</p>
+                        <p class="text-xs text-gray-500 mt-2">JPG o PNG. Máx 2MB.</p>
                     </div>
                 </div>
                 <${FormInput}
@@ -167,14 +167,13 @@ export function ProfileModal({ isOpen, onClose, user, onProfileUpdate }) {
                     type="text"
                     value=${name}
                     onInput=${(e) => setName(e.target.value)}
-                    theme="dark"
                 />
                  <div class="relative py-2">
                     <div class="absolute inset-0 flex items-center" aria-hidden="true">
-                        <div class="w-full border-t border-white/20"></div>
+                        <div class="w-full border-t border-gray-200"></div>
                     </div>
                     <div class="relative flex justify-center">
-                        <span class="bg-secondary-dark px-2 text-sm text-gray-400">Cambiar Contraseña (opcional)</span>
+                        <span class="bg-white px-2 text-sm text-gray-500">Cambiar Contraseña (opcional)</span>
                     </div>
                 </div>
 
@@ -184,7 +183,6 @@ export function ProfileModal({ isOpen, onClose, user, onProfileUpdate }) {
                     type="password"
                     value=${newPassword}
                     onInput=${(e) => setNewPassword(e.target.value)}
-                    theme="dark"
                     required=${false}
                     error=${errors.new_password}
                 />
@@ -194,7 +192,6 @@ export function ProfileModal({ isOpen, onClose, user, onProfileUpdate }) {
                     type="password"
                     value=${confirmPassword}
                     onInput=${(e) => setConfirmPassword(e.target.value)}
-                    theme="dark"
                     required=${false}
                     error=${errors.confirm_password}
                 />

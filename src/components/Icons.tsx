@@ -26,6 +26,11 @@ export const ICONS = {
     key: html`<${Icon} name="key" />`,
     upload_file: html`<${Icon} name="upload_file" />`,
     storefront: html`<${Icon} name="storefront" />`,
+    drag_handle: html`<${Icon} name="drag_indicator" />`,
+    search: html`<${Icon} name="search" />`,
+    payments: html`<${Icon} name="payments" />`,
+    qr_code_2: html`<${Icon} name="qr_code_2" />`,
+    shopping_cart: html`<${Icon} name="shopping_cart" />`,
 
     // Notifications
     notifications: html`<${Icon} name="notifications" className="text-2xl" />`,
@@ -34,10 +39,14 @@ export const ICONS = {
     // Form
     eye: html`<${Icon} name="visibility" className="text-xl" />`,
     eyeSlash: html`<${Icon} name="visibility_off" className="text-xl" />`,
+    add_circle: html`<${Icon} name="add_circle" />`,
+    remove_circle: html`<${Icon} name="remove_circle" />`,
 
     // Dashboard & Navigation
     dollar: html`<${Icon} name="monetization_on" className="text-primary" />`,
     inventory: html`<${Icon} name="inventory_2" />`,
+    edit_note: html`<${Icon} name="edit_note" />`,
+    products: html`<${Icon} name="style" />`,
     activity: html`<${Icon} name="history" className="text-primary" />`,
     bolt: html`<${Icon} name="bolt" className="text-primary" />`,
     newSale: html`<${Icon} name="point_of_sale" className="text-2xl text-primary" />`,

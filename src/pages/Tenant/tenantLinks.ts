@@ -8,7 +8,8 @@ import { ICONS } from '../../components/Icons.js';
 export function getTenantSidebarLinks(role) {
     const links = [
         { name: 'Dashboard', href: '#/dashboard', icon: ICONS.home },
-        { name: 'Terminal de Venta', href: '#/terminal-venta', icon: ICONS.pos },
+        { name: 'Punto de Venta', href: '#/terminal-venta', icon: ICONS.pos },
+        { name: 'Productos', href: '#/productos', icon: ICONS.products },
         { name: 'Inventarios', href: '#/inventarios', icon: ICONS.inventory },
     ];
 

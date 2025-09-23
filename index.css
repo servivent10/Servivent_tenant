@@ -109,3 +109,14 @@ body, #root {
 .animate-modal-fade-out { animation: modal-fade-out 0.2s ease-in forwards; }
 .animate-modal-scale-in { animation: modal-scale-in 0.2s ease-out forwards; }
 .animate-modal-scale-out { animation: modal-scale-out 0.2s ease-in forwards; }
+
+/* Ocultar las flechas en los campos de tipo número */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
+}

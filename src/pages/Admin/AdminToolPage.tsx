@@ -211,12 +211,12 @@ export function AdminToolPage({ navigate }) {
                                 <div>
                                     <label for="supabase-url" class="block text-sm font-medium leading-6 text-gray-900">1. URL del Proyecto</label>
                                     <input id="supabase-url" type="text" placeholder="https://xxxxxxxx.supabase.co" value=${supabaseUrl} onInput=${e => setSupabaseUrl(e.target.value)}
-                                        class="block w-full rounded-md border-0 p-2 bg-gray-50 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm" />
+                                        class="block w-full rounded-md border-0 p-2 bg-gray-50 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200" />
                                 </div>
                                  <div>
                                     <label for="service-key" class="block text-sm font-medium leading-6 text-gray-900">2. Service Role Key</label>
                                     <input id="service-key" type="password" placeholder="Pega tu clave secreta service_role aquí" value=${serviceKey} onInput=${e => setServiceKey(e.target.value)}
-                                        class="block w-full rounded-md border-0 p-2 bg-gray-50 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm" />
+                                        class="block w-full rounded-md border-0 p-2 bg-gray-50 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200" />
                                 </div>
                             </div>
                         </div>
@@ -268,7 +268,7 @@ export function AdminToolPage({ navigate }) {
                             <label for="user-id" class="mt-1 block text-sm font-medium leading-6 text-gray-600">Pega el ID del usuario o usa el botón "Usar" de la lista de arriba.</label>
                             <div class="mt-2">
                                 <input id="user-id" type="text" placeholder="ID de Usuario (UUID)" value=${userId} onInput=${e => setUserId(e.target.value)}
-                                    class="block w-full rounded-md border-0 p-2 bg-gray-50 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm" />
+                                    class="block w-full rounded-md border-0 p-2 bg-gray-50 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200" />
                             </div>
                         </div>
 

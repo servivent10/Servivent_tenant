@@ -13,6 +13,8 @@ import { SuperAdminPage } from './pages/SuperAdmin/SuperAdminPage.js';
 import { CompanyDetailsPage } from './pages/SuperAdmin/CompanyDetailsPage.js';
 import { DashboardPage } from './pages/Tenant/DashboardPage.js';
 import { TerminalVentaPage } from './pages/Tenant/TerminalVentaPage.js';
+import { ProductosPage } from './pages/Tenant/ProductosPage.js';
+import { ProductoDetailPage } from './pages/Tenant/ProductoDetailPage.js';
 import { InventariosPage } from './pages/Tenant/InventariosPage.js';
 import { ComprasPage } from './pages/Tenant/ComprasPage.js';
 import { VentasPage } from './pages/Tenant/VentasPage.js';
@@ -324,11 +326,17 @@ function AppContent() {
             };
 
             const sucursalDetailsMatch = currentPath.match(/^\/sucursales\/(.+)$/);
+            const productoDetailsMatch = currentPath.match(/^\/productos\/(.+)$/);
 
             if (currentPath === '/dashboard') {
                 content = html`<${DashboardPage} ...${commonProps} />`;
             } else if (currentPath === '/terminal-venta') {
                 content = html`<${TerminalVentaPage} ...${commonProps} />`;
+            } else if (currentPath === '/productos') {
+                content = html`<${ProductosPage} ...${commonProps} />`;
+            } else if (productoDetailsMatch) {
+                const productoId = productoDetailsMatch[1];
+                content = html`<${ProductoDetailPage} productoId=${productoId} ...${commonProps} />`;
             } else if (currentPath === '/inventarios') {
                 content = html`<${InventariosPage} ...${commonProps} />`;
             } else if (currentPath === '/compras') {

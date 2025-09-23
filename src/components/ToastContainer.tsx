@@ -12,7 +12,7 @@ export const ToastContainer = () => {
     return html`
         <div 
             aria-live="assertive" 
-            class="fixed inset-0 flex items-end px-4 py-6 pointer-events-none sm:items-start sm:p-6 z-50"
+            class="fixed inset-0 flex items-end px-4 py-6 pointer-events-none sm:items-start sm:p-6 sm:pt-20 z-50"
         >
             <div class="flex w-full flex-col items-center space-y-4 sm:items-end">
                 ${toasts.map(toast => html`

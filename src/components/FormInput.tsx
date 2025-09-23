@@ -6,7 +6,7 @@ import { html } from 'htm/preact';
 import { useState } from 'preact/hooks';
 import { ICONS } from './Icons.js';
 
-export const FormInput = ({ label, name, type, required = true, value, onInput, error, disabled = false, theme = 'light' }) => {
+export const FormInput = ({ label, name, type, required = true, value, onInput, error, disabled = false }) => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   const finalType = type === 'password' && isPasswordVisible ? 'text' : type;
@@ -16,20 +16,13 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
   };
 
   const hasError = !!error;
-  const isDark = theme === 'dark';
 
-  const labelClasses = isDark ? 'text-gray-300' : 'text-gray-900';
-  
-  const baseRingClasses = isDark ? 'ring-gray-500 focus:ring-primary' : 'ring-gray-300 focus:ring-primary';
+  const labelClasses = 'text-gray-900';
+  const baseRingClasses = 'ring-gray-300 focus:ring-primary';
   const errorRingClasses = 'ring-red-500 focus:ring-red-500';
-  
-  const inputClasses = isDark 
-    ? 'bg-gray-700/50 text-white placeholder-gray-400' 
-    : 'bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500';
-  
+  const inputClasses = `bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500`;
   const disabledClasses = disabled ? 'cursor-not-allowed' : '';
-  
-  const buttonClasses = isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700';
+  const buttonClasses = 'text-gray-500 hover:text-gray-700';
 
   return html`
     <div>

@@ -1,0 +1,10 @@
+# Guía de Solución de Problemas
+
+Esta carpeta contiene documentos detallados sobre problemas técnicos específicos encontrados durante el desarrollo de ServiVENT, junto con sus causas y soluciones.
+
+## Índice de Problemas
+
+1.  **[Error: `stack depth limit exceeded` al iniciar sesión](./01_stack_depth_limit_exceeded.md)**
+    -   **Síntoma:** La aplicación se congela en la pantalla de carga.
+    -   **Causa:** Recursión infinita entre políticas RLS de Supabase.
+    -   **Solución:** Uso de una función RPC `get_user_profile_data` con `SECURITY DEFINER`.

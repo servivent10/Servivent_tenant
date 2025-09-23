@@ -79,3 +79,68 @@ Almacena las diferentes sucursales o puntos de venta de cada empresa.
 | `direccion` | `text` |
 | `telefono` | `text` |
 | `created_at` | `timestamptz` |
+
+---
+## **NUEVO:** Tablas de Productos e Inventario
+---
+
+## Tabla: `categorias`
+
+Clasificación de los productos.
+
+| Columna | Tipo |
+| --- | --- |
+| `id` | `uuid` |
+| `empresa_id` | `uuid` |
+| `nombre` | `text` |
+| `created_at` | `timestamptz` |
+
+---
+
+## Tabla: `productos`
+
+El catálogo maestro de todos los artículos que vende la empresa.
+
+| Columna | Tipo |
+| --- | --- |
+| `id` | `uuid` |
+| `empresa_id` | `uuid` |
+| `nombre` | `text` |
+| `sku` | `text` |
+| `marca` | `text` |
+| `modelo` | `text` |
+| `descripcion` | `text` |
+| `precio_venta`| `numeric` |
+| `precio_compra`| `numeric` |
+| `categoria_id` | `uuid` |
+| `unidad_medida`| `text` |
+| `created_at` | `timestamptz` |
+
+---
+
+## Tabla: `imagenes_productos`
+
+Galería de imágenes para cada producto.
+
+| Columna | Tipo |
+| --- | --- |
+| `id` | `uuid` |
+| `producto_id` | `uuid` |
+| `imagen_url` | `text` |
+| `orden` | `int` |
+| `created_at` | `timestamptz`|
+
+---
+
+## Tabla: `inventarios`
+
+El stock (cantidad) de cada producto en cada sucursal.
+
+| Columna | Tipo |
+| --- | --- |
+| `id` | `uuid` |
+| `producto_id` | `uuid` |
+| `sucursal_id` | `uuid` |
+| `cantidad` | `numeric` |
+| `stock_minimo` | `numeric` |
+| `updated_at` | `timestamptz` |
