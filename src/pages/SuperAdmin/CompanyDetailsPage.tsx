@@ -22,7 +22,7 @@ const UserList = ({ users = [], onResetPassword }) => {
     
     return html`
         <!-- Vista de tarjetas para móvil y tablet -->
-        <div class="space-y-4 sm:hidden">
+        <div class="space-y-4 lg:hidden">
             ${users.map(user => html`
                 <div class="bg-white p-4 rounded-lg shadow border">
                     <div class="flex justify-between items-start">
@@ -41,7 +41,7 @@ const UserList = ({ users = [], onResetPassword }) => {
         </div>
 
         <!-- Vista de tabla para escritorio -->
-        <div class="hidden sm:block mt-4 flow-root">
+        <div class="hidden lg:block mt-4 flow-root">
             <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
                 <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:-mx-8">
                     <table class="min-w-full divide-y divide-gray-300">
@@ -82,7 +82,7 @@ const BranchList = ({ branches = [] }) => {
     
     return html`
         <!-- Vista de tarjetas para móvil y tablet -->
-        <div class="space-y-4 sm:hidden">
+        <div class="space-y-4 lg:hidden">
             ${branches.map(branch => html`
                 <div class="bg-white p-4 rounded-lg shadow border">
                     <div class="font-bold text-gray-800">${branch.nombre}</div>
@@ -93,7 +93,7 @@ const BranchList = ({ branches = [] }) => {
         </div>
 
         <!-- Vista de tabla para escritorio -->
-        <div class="hidden sm:block mt-4 flow-root">
+        <div class="hidden lg:block mt-4 flow-root">
              <table class="min-w-full divide-y divide-gray-300">
                 <thead>
                     <tr>
@@ -122,7 +122,7 @@ const PaymentList = ({ payments = [] }) => {
     
     return html`
         <!-- Vista de tarjetas para móvil y tablet -->
-        <div class="space-y-4 sm:hidden">
+        <div class="space-y-4 lg:hidden">
             ${payments.map(payment => html`
                 <div class="bg-white p-4 rounded-lg shadow border">
                     <div class="flex justify-between items-center">
@@ -136,7 +136,7 @@ const PaymentList = ({ payments = [] }) => {
         </div>
 
         <!-- Vista de tabla para escritorio -->
-        <div class="hidden sm:block mt-4 flow-root">
+        <div class="hidden lg:block mt-4 flow-root">
             <table class="min-w-full divide-y divide-gray-300">
                 <thead>
                     <tr>
@@ -414,15 +414,15 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
                 ${activeTab === 'sucursales' && html`<${BranchList} branches=${branches} />`}
                 ${activeTab === 'pagos' && html`
                     <div>
-                        <div class="sm:flex sm:items-center sm:justify-between mb-4">
+                        <div class="lg:flex lg:items-center lg:justify-between mb-4">
                             <div>
                                 <h3 class="text-lg font-semibold text-gray-800">Historial de Pagos</h3>
                                 <p class="mt-1 text-sm text-gray-600">
                                     Monto total registrado: <span class="font-bold text-emerald-600">Bs ${totalPaid.toFixed(2)}</span>
                                 </p>
                             </div>
-                            <div class="mt-3 sm:ml-4 sm:mt-0">
-                                <button onClick=${() => setPaymentModalOpen(true)} class="hidden sm:flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover">
+                            <div class="mt-3 lg:ml-4 lg:mt-0">
+                                <button onClick=${() => setPaymentModalOpen(true)} class="hidden lg:flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover">
                                     ${ICONS.add} <span>Añadir Pago</span>
                                 </button>
                             </div>
@@ -433,7 +433,7 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
             </div>
             
             ${activeTab === 'pagos' && html`
-                <div class="sm:hidden">
+                <div class="lg:hidden">
                     <${FloatingActionButton} onClick=${() => setPaymentModalOpen(true)} label="Añadir Pago" />
                 </div>
             `}

@@ -25,6 +25,7 @@ export const ICONS = {
     credit_card: html`<${Icon} name="credit_card" />`,
     key: html`<${Icon} name="key" />`,
     upload_file: html`<${Icon} name="upload_file" />`,
+    download: html`<${Icon} name="download" />`,
     storefront: html`<${Icon} name="storefront" />`,
     drag_handle: html`<${Icon} name="drag_indicator" />`,
     search: html`<${Icon} name="search" />`,

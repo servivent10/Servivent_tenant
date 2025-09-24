@@ -435,7 +435,13 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
                 <div class="lg:col-span-1">
                     <div class="bg-white p-4 rounded-lg shadow-md border sticky top-6">
                         <div class="aspect-square bg-gray-100 rounded-md mb-4">
-                             <img src=${images[activeImage]?.imagen_url || 'https://picsum.photos/400/400'} alt="Producto" class="w-full h-full object-contain rounded-md" />
+                             ${images && images.length > 0 ? html`
+                                <img src=${images[activeImage]?.imagen_url} alt="Producto" class="w-full h-full object-contain rounded-md" />
+                             ` : html`
+                                <div class="w-full h-full flex items-center justify-center bg-slate-100 rounded-md">
+                                    <div class="text-slate-400 text-6xl">${ICONS.products}</div>
+                                </div>
+                             `}
                         </div>
                         ${images.length > 1 && html`
                             <div class="flex space-x-2 overflow-x-auto p-1">

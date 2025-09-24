@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabaseClient.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { useToast } from '../../hooks/useToast.js';
 import { useLoading } from '../../hooks/useLoading.js';
+import { FloatingActionButton } from '../../components/FloatingActionButton.js';
 
 const CompanyTable = ({ companies, onAction, onRowClick }) => {
     const getStatusPill = (status) => {
@@ -42,7 +43,41 @@ const CompanyTable = ({ companies, onAction, onRowClick }) => {
     };
 
     return html`
-        <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+        {/* Mobile/Tablet Card View */}
+        <div class="space-y-4 lg:hidden">
+            ${companies.map(company => html`
+                <div key=${company.id} class="bg-white p-4 rounded-lg shadow border cursor-pointer" onClick=${() => onRowClick(company)}>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-bold text-gray-800">${company.nombre}</div>
+                            <div class="text-sm text-gray-600">NIT: ${company.nit}</div>
+                        </div>
+                        <span class=${getStatusPill(company.estado_licencia)}>${company.estado_licencia}</span>
+                    </div>
+                    <div class="text-sm text-gray-500 mt-2">
+                        <p>Propietario: <span class="font-medium text-gray-700">${company.propietario_email}</span></p>
+                        <p>Plan: <span class="font-medium text-gray-700">${company.plan_actual}</span></p>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-gray-200 flex justify-between items-center">
+                        <div class="text-xs text-gray-400">
+                            Registrado: ${new Date(company.created_at).toLocaleDateString()}
+                        </div>
+                        <div class="flex items-center justify-end space-x-2">
+                             <button onClick=${(e) => handleActionClick(e, 'edit', company)} title="Editar" class="text-gray-400 hover:text-primary p-1 rounded-full hover:bg-gray-100">${ICONS.edit}</button>
+                             ${company.estado_licencia === 'Activa' ? html`
+                                 <button onClick=${(e) => handleActionClick(e, 'suspend', company)} title="Suspender" class="text-gray-400 hover:text-yellow-600 p-1 rounded-full hover:bg-gray-100">${ICONS.suspend}</button>
+                             ` : html`
+                                 <button onClick=${(e) => handleActionClick(e, 'activate', company)} title="Activar" class="text-gray-400 hover:text-green-600 p-1 rounded-full hover:bg-gray-100">${ICONS.activate}</button>
+                             `}
+                             <button onClick=${(e) => handleActionClick(e, 'delete', company)} title="Eliminar" class="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-gray-100">${ICONS.delete}</button>
+                        </div>
+                    </div>
+                </div>
+            `)}
+        </div>
+
+        {/* Desktop Table View */}
+        <div class="hidden lg:block overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
             <table class="min-w-full divide-y divide-gray-300">
                 <thead class="bg-gray-50">
                     <tr>
@@ -239,13 +274,17 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
                     <h1 class="text-2xl font-semibold text-gray-900">Gestión de Empresas</h1>
                     <p class="mt-1 text-sm text-gray-600">Supervisa, activa, suspende o elimina las empresas registradas en el sistema.</p>
                 </div>
-                <button onClick=${() => addToast({ message: 'Funcionalidad no implementada aún.', type: 'info' })} class="flex-shrink-0 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover">
+                <button onClick=${() => addToast({ message: 'Funcionalidad no implementada aún.', type: 'info' })} class="hidden lg:flex flex-shrink-0 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover">
                     Crear Nueva Empresa
                 </button>
             </div>
             
             <div class="mt-8">
                 <${CompanyTable} companies=${companies} onAction=${handleAction} onRowClick=${handleRowClick} />
+            </div>
+
+            <div class="lg:hidden">
+                <${FloatingActionButton} onClick=${() => addToast({ message: 'Funcionalidad no implementada aún.', type: 'info' })} label="Crear Nueva Empresa" />
             </div>
             
             <${ConfirmationModal}

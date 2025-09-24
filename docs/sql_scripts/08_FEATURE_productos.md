@@ -346,6 +346,91 @@ DROP TYPE IF EXISTS public.product_image_input CASCADE; CREATE TYPE public.produ
 CREATE OR REPLACE FUNCTION add_product_images(p_producto_id uuid, p_images product_image_input[]) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; img product_image_input; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF NOT EXISTS (SELECT 1 FROM public.productos WHERE id = p_producto_id AND empresa_id = caller_empresa_id) THEN RAISE EXCEPTION 'Producto no encontrado.'; END IF; FOREACH img IN ARRAY p_images LOOP INSERT INTO public.imagenes_productos(producto_id, imagen_url, orden) VALUES (p_producto_id, img.imagen_url, img.orden); END LOOP; END; $$;
 CREATE OR REPLACE FUNCTION delete_product(p_producto_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; total_stock numeric; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF NOT EXISTS (SELECT 1 FROM public.productos WHERE id = p_producto_id AND empresa_id = caller_empresa_id) THEN RAISE EXCEPTION 'Producto no encontrado.'; END IF; SELECT COALESCE(SUM(cantidad), 0) INTO total_stock FROM public.inventarios WHERE producto_id = p_producto_id; IF total_stock > 0 THEN RAISE EXCEPTION 'No se puede eliminar un producto que tiene stock registrado.'; END IF; DELETE FROM public.productos WHERE id = p_producto_id; END; $$;
 
+-- **NUEVO TIPO Y FUNCIÓN:** Para importación masiva de productos
+DROP TYPE IF EXISTS public.product_import_row CASCADE;
+CREATE TYPE public.product_import_row AS (
+    sku text,
+    nombre text,
+    marca text,
+    modelo text,
+    descripcion text,
+    categoria_nombre text,
+    unidad_medida text,
+    precio_base numeric
+);
+
+CREATE OR REPLACE FUNCTION import_products_in_bulk(p_products product_import_row[])
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    caller_empresa_id uuid;
+    prod_row product_import_row;
+    v_categoria_id uuid;
+    v_producto_id uuid;
+    v_default_price_list_id uuid;
+    created_count integer := 0;
+    updated_count integer := 0;
+    error_count integer := 0;
+    error_messages text[] := ARRAY[]::text[];
+BEGIN
+    caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid());
+    IF caller_empresa_id IS NULL THEN
+        RAISE EXCEPTION 'Usuario no encontrado o sin empresa asignada.';
+    END IF;
+
+    SELECT id INTO v_default_price_list_id FROM public.listas_precios WHERE empresa_id = caller_empresa_id AND es_predeterminada = true;
+    IF v_default_price_list_id IS NULL THEN
+        INSERT INTO public.listas_precios (empresa_id, nombre, es_predeterminada, descripcion)
+        VALUES (caller_empresa_id, 'General', true, 'Precio de venta estándar')
+        RETURNING id INTO v_default_price_list_id;
+    END IF;
+
+    FOREACH prod_row IN ARRAY p_products
+    LOOP
+        BEGIN
+            IF prod_row.nombre IS NULL OR trim(prod_row.nombre) = '' THEN
+                RAISE EXCEPTION 'El campo "nombre" no puede estar vacío.';
+            END IF;
+
+            IF prod_row.categoria_nombre IS NOT NULL AND trim(prod_row.categoria_nombre) <> '' THEN
+                SELECT id INTO v_categoria_id FROM public.categorias WHERE empresa_id = caller_empresa_id AND lower(nombre) = lower(trim(prod_row.categoria_nombre));
+                IF v_categoria_id IS NULL THEN
+                    INSERT INTO public.categorias (empresa_id, nombre) VALUES (caller_empresa_id, trim(prod_row.categoria_nombre)) RETURNING id INTO v_categoria_id;
+                END IF;
+            ELSE
+                v_categoria_id := NULL;
+            END IF;
+
+            v_producto_id := NULL;
+            IF prod_row.sku IS NOT NULL AND trim(prod_row.sku) <> '' THEN
+                SELECT id INTO v_producto_id FROM public.productos WHERE empresa_id = caller_empresa_id AND sku = trim(prod_row.sku);
+            END IF;
+
+            IF v_producto_id IS NOT NULL THEN
+                UPDATE public.productos SET nombre = trim(prod_row.nombre), marca = trim(prod_row.marca), modelo = trim(prod_row.modelo), descripcion = trim(prod_row.descripcion), categoria_id = v_categoria_id, unidad_medida = COALESCE(trim(prod_row.unidad_medida), 'Unidad') WHERE id = v_producto_id;
+                updated_count := updated_count + 1;
+            ELSE
+                INSERT INTO public.productos (empresa_id, sku, nombre, marca, modelo, descripcion, categoria_id, unidad_medida) VALUES (caller_empresa_id, NULLIF(trim(prod_row.sku), ''), trim(prod_row.nombre), trim(prod_row.marca), trim(prod_row.modelo), trim(prod_row.descripcion), v_categoria_id, COALESCE(trim(prod_row.unidad_medida), 'Unidad')) RETURNING id INTO v_producto_id;
+                created_count := created_count + 1;
+            END IF;
+
+            IF prod_row.precio_base IS NOT NULL AND prod_row.precio_base >= 0 THEN
+                INSERT INTO public.precios_productos (producto_id, lista_precio_id, precio) VALUES (v_producto_id, v_default_price_list_id, prod_row.precio_base) ON CONFLICT (producto_id, lista_precio_id) DO UPDATE SET precio = EXCLUDED.precio, updated_at = now();
+            END IF;
+
+        EXCEPTION WHEN OTHERS THEN
+            error_count := error_count + 1;
+            error_messages := array_append(error_messages, 'Fila ' || (created_count + updated_count + error_count) || ' (SKU: ' || COALESCE(prod_row.sku, 'N/A') || '): ' || SQLERRM);
+        END;
+    END LOOP;
+
+    RETURN json_build_object('created', created_count, 'updated', updated_count, 'errors', error_count, 'error_messages', error_messages);
+END;
+$$;
+
 -- =============================================================================
 -- Fin del script.
 -- =============================================================================

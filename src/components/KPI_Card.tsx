@@ -22,7 +22,7 @@ export function KPI_Card({ title, value, icon, subtext, color = 'primary' }) {
     return html`
         <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200/80">
             <div class="flex items-start justify-between">
-                <div class="flex-1">
+                <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-gray-500 truncate">${title}</p>
                     <div class="mt-1">
                         <p class="text-3xl font-bold ${valueColorClasses[color]}">${value}</p>
