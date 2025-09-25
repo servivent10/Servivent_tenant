@@ -17,7 +17,8 @@ export function ConfirmationModal({
     cancelText = 'Cancelar',
     confirmVariant = 'primary',
     maxWidthClass = 'max-w-lg',
-    isProcessing = false // Nueva propiedad para controlar el estado de carga
+    isProcessing = false,
+    customFooter = null
 }) {
     const [showModal, setShowModal] = useState(isOpen);
 
@@ -26,17 +27,14 @@ export function ConfirmationModal({
             setShowModal(true);
             document.body.style.overflow = 'hidden';
         } else {
-            // Cuando se solicita cerrar, esperamos a que termine la animación
-            // antes de ocultar completamente el componente del DOM.
             const timer = setTimeout(() => {
                 setShowModal(false);
                 document.body.style.overflow = 'auto';
-            }, 200); // Debe coincidir con la duración de la animación de salida
+            }, 200);
 
             return () => clearTimeout(timer);
         }
 
-        // Función de limpieza para re-habilitar el scroll si el componente se desmonta inesperadamente
         return () => {
             document.body.style.overflow = 'auto';
         };
@@ -78,18 +76,16 @@ export function ConfirmationModal({
         >
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
             
-            <div class="relative w-full ${maxWidthClass} rounded-xl bg-white text-gray-900 shadow-2xl ${modalAnimation}">
+            <div class="relative w-full ${maxWidthClass} rounded-xl bg-white text-gray-900 shadow-2xl ${modalAnimation} flex flex-col max-h-[90vh]">
                 
-                <!-- Header -->
-                <div class="flex items-start justify-between p-4 border-b border-gray-200">
+                <div class="flex-shrink-0 flex items-start justify-between p-4 border-b border-gray-200">
                     <h2 id="modal-title" class="text-lg font-semibold">${title}</h2>
                     <button onClick=${handleClose} class="p-1 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-colors" aria-label="Cerrar" disabled=${isProcessing}>
                         ${ICONS.close}
                     </button>
                 </div>
 
-                <!-- Body -->
-                <div class="p-6">
+                <div class="flex-grow p-6 overflow-y-auto">
                     <div class="flex items-start">
                         ${!isProcessing && icon && html`<div class="flex-shrink-0 mr-4">${icon}</div>`}
                         <div class="flex-1">
@@ -98,9 +94,8 @@ export function ConfirmationModal({
                     </div>
                 </div>
 
-                <!-- Footer -->
-                 ${!isProcessing && html`
-                    <div class="flex justify-end items-center p-4 bg-gray-50 rounded-b-xl space-x-3">
+                ${customFooter ? customFooter : !isProcessing && html`
+                    <div class="flex-shrink-0 flex justify-end items-center p-4 bg-gray-50 rounded-b-xl space-x-3 border-t border-gray-200">
                         <button 
                             type="button" 
                             onClick=${handleClose} 

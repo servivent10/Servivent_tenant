@@ -23,10 +23,9 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
     const [categories, setCategories] = useState([]);
     const [formData, setFormData] = useState({
         nombre: '', sku: '', marca: '', modelo: '',
-        descripcion: '', categoria_id: '', unidad_medida: 'Unidad',
-        precio_base: '0'
+        descripcion: '', categoria_id: '', unidad_medida: 'Unidad'
     });
-    const [errors, setErrors] = useState({ nombre: '', precio_base: '' });
+    const [errors, setErrors] = useState({ nombre: '' });
     
     const [imageFiles, setImageFiles] = useState([]);
     const [imagePreviews, setImagePreviews] = useState([]);
@@ -69,19 +68,17 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
                     marca: productToEdit.marca || '', modelo: productToEdit.modelo || '',
                     descripcion: productToEdit.descripcion || '',
                     categoria_id: productToEdit.categoria_id || '',
-                    unidad_medida: productToEdit.unidad_medida || 'Unidad',
-                    precio_base: productToEdit.precio_base?.toString() || '0'
+                    unidad_medida: productToEdit.unidad_medida || 'Unidad'
                 });
                 // TODO: Cargar imágenes existentes si estamos en modo edición.
             } else {
                  setFormData({
                     nombre: '', sku: '', marca: '', modelo: '',
-                    descripcion: '', categoria_id: '', unidad_medida: 'Unidad',
-                    precio_base: '0'
+                    descripcion: '', categoria_id: '', unidad_medida: 'Unidad'
                 });
             }
             // Reset states
-            setErrors({ nombre: '', precio_base: '' });
+            setErrors({ nombre: '' });
             setImageFiles([]);
             setImagePreviews([]);
             setIsAddingCategory(false);
@@ -94,9 +91,6 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
         setFormData(prev => ({ ...prev, [name]: value }));
         if (name === 'nombre' && errors.nombre) {
              setErrors(prev => ({ ...prev, nombre: '' }));
-        }
-        if (name === 'precio_base' && errors.precio_base) {
-             setErrors(prev => ({ ...prev, precio_base: '' }));
         }
     };
 
@@ -148,16 +142,12 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
     };
 
     const validateForm = () => {
-        const newErrors = { nombre: '', precio_base: '' };
+        const newErrors = { nombre: '' };
         if (!formData.nombre.trim()) {
             newErrors.nombre = 'El nombre del producto es obligatorio.';
         }
-        const price = parseFloat(formData.precio_base);
-        if (formData.precio_base === '' || isNaN(price) || price < 0) {
-            newErrors.precio_base = 'El precio base es obligatorio y debe ser >= 0.';
-        }
         setErrors(newErrors);
-        return !newErrors.nombre && !newErrors.precio_base;
+        return !newErrors.nombre;
     };
 
     const handleConfirm = async () => {
@@ -174,8 +164,7 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
                 p_modelo: formData.modelo || null,
                 p_descripcion: formData.descripcion || null,
                 p_categoria_id: formData.categoria_id || null,
-                p_unidad_medida: formData.unidad_medida,
-                p_precio_base: parseFloat(formData.precio_base)
+                p_unidad_medida: formData.unidad_medida
             });
             if (upsertError) throw upsertError;
 
@@ -261,10 +250,7 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
                                 <${FormInput} label="Marca" name="marca" type="text" value=${formData.marca} onInput=${handleInput} required=${false} />
                                 <${FormInput} label="Modelo" name="modelo" type="text" value=${formData.modelo} onInput=${handleInput} required=${false} />
                             </div>
-                             <div class="grid grid-cols-2 gap-4">
-                                <${FormInput} label="SKU (Código)" name="sku" type="text" value=${formData.sku} onInput=${handleInput} required=${false} />
-                                <${FormInput} label="Precio Base (General)" name="precio_base" type="number" value=${formData.precio_base} onInput=${handleInput} error=${errors.precio_base} />
-                            </div>
+                            <${FormInput} label="SKU (Código)" name="sku" type="text" value=${formData.sku} onInput=${handleInput} required=${false} />
                             
                             <div>
                                 <label for="categoria_id" class="block font-medium leading-6 text-gray-900">Categoría</label>

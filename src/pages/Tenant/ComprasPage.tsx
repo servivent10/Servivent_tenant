@@ -1,3 +1,5 @@
+
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -16,6 +18,8 @@ import { useLoading } from '../../hooks/useLoading.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { ProveedorFormModal } from '../../components/modals/ProveedorFormModal.js';
 import { ProductFormModal } from '../../components/modals/ProductFormModal.js';
+import { Tabs } from '../../components/Tabs.js';
+
 
 export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -180,118 +184,230 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
 
 // --- NEW PURCHASE WIZARD MODAL COMPONENTS ---
 
-function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exchangeRate, addToast }) {
-    // FIX: Add guard to ensure `item` is not null, which helps TypeScript infer its type correctly.
+function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exchangeRate, user, addToast }) {
     if (!isOpen || !item) return null;
+
+    const [activeTab, setActiveTab] = useState('inventory');
+    const [isLoading, setIsLoading] = useState(true);
+    const [productDetails, setProductDetails] = useState(null);
+    const [localItem, setLocalItem] = useState < any > (item);
     
-    const [localItem, setLocalItem] = useState(item);
-    // FIX: Provide an explicit type for the `errors` state to prevent type errors when accessing its properties.
-    const [errors, setErrors] = useState<{ cantidad?: string; costo_unitario?: string; }>({});
+    const [priceRules, setPriceRules] = useState([]); // Array of { lista_id, nombre, ..., tipo_ganancia, valor_ganancia }
+    const [calculatedPrices, setCalculatedPrices] = useState({}); // Map of { lista_id: calculated_price }
+    
+    const [errors, setErrors] = useState < { cantidad?: string; costo_unitario?: string; } > ({});
+
+    const stock_sucursal_actual = Number(item.stock_sucursal || 0);
+    const stock_total_actual = useMemo(() =>
+        productDetails?.inventory.reduce((sum, inv) => sum + Number(inv.cantidad), 0) || 0,
+        [productDetails]);
+
+    const capp_actual = Number(productDetails?.details.precio_compra || 0);
+    const cantidad_comprada = Number(localItem.cantidad || 0);
+    const costo_unitario_ingresado = Number(localItem.costo_unitario || 0);
+    const tasa_cambio = Number(exchangeRate || 1);
+    const costo_compra_bob = currency === 'USD' ? costo_unitario_ingresado * tasa_cambio : costo_unitario_ingresado;
+
+    const nuevo_stock_sucursal = stock_sucursal_actual + cantidad_comprada;
+    const nuevo_stock_total = stock_total_actual + cantidad_comprada;
+
+    const nuevo_capp = (stock_total_actual + cantidad_comprada) > 0
+        ? ((stock_total_actual * capp_actual) + (cantidad_comprada * costo_compra_bob)) / (stock_total_actual + cantidad_comprada)
+        : costo_compra_bob;
+
+    const recalculateAllPrices = (rules, cost) => {
+        const newCalculatedPrices = {};
+        rules.forEach(rule => {
+            const valor = Number(rule.valor_ganancia || 0);
+            let finalPrice = cost;
+            if (rule.tipo_ganancia === 'porcentaje') {
+                finalPrice = cost * (1 + valor / 100);
+            } else { // 'fijo'
+                finalPrice = cost + valor;
+            }
+            newCalculatedPrices[rule.lista_precio_id] = finalPrice.toFixed(2);
+        });
+        setCalculatedPrices(newCalculatedPrices);
+    };
+    
+    useEffect(() => {
+        const fetchDetails = async () => {
+            setIsLoading(true);
+            try {
+                const { data, error } = await supabase.rpc('get_product_details', { p_producto_id: item.producto_id });
+                if (error) throw error;
+                setProductDetails(data);
+                
+                const initialRules = data.prices.map(p => ({
+                    ...p,
+                    tipo_ganancia: p.tipo_ganancia || 'fijo',
+                    valor_ganancia: p.valor_ganancia || 0,
+                }));
+                setPriceRules(initialRules);
+            } catch (err) {
+                addToast({ message: `Error al cargar detalles: ${err.message}`, type: 'error' });
+                onClose();
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        if (isOpen) {
+            setLocalItem(item);
+            setActiveTab('inventory');
+            setErrors({});
+            fetchDetails();
+        }
+    }, [isOpen, item.producto_id]);
 
     useEffect(() => {
-        setLocalItem(item); // Sync with prop change
-        setErrors({});
-    }, [item]);
+        if (priceRules.length > 0) {
+            recalculateAllPrices(priceRules, nuevo_capp);
+        }
+    }, [priceRules, nuevo_capp]);
 
+
+    const tabs = [
+        { id: 'inventory', label: 'Compra e Inventario' },
+        { id: 'prices', label: 'Precios de Venta' },
+    ];
+    
     const handleItemChange = (field, value) => {
         setLocalItem(prev => ({ ...prev, [field]: value }));
     };
+    
+    const handleRuleChange = (listId, field, value) => {
+        setPriceRules(prevRules => {
+            const newRules = prevRules.map(rule => 
+                rule.lista_precio_id === listId ? { ...rule, [field]: value } : rule
+            );
+            
+            // Retro-cálculo si cambia el TIPO de ganancia
+            if (field === 'tipo_ganancia') {
+                const updatedRule = newRules.find(r => r.lista_precio_id === listId);
+                const currentPrice = Number(calculatedPrices[listId] || 0);
+                if (currentPrice > 0) {
+                    let newGainValue = '';
+                    if (value === 'fijo') { // changed to 'fijo'
+                        newGainValue = (currentPrice - nuevo_capp).toFixed(2);
+                    } else if (value === 'porcentaje' && nuevo_capp > 0) { // changed to 'porcentaje'
+                        newGainValue = (((currentPrice / nuevo_capp) - 1) * 100).toFixed(1);
+                    }
+                    updatedRule.valor_ganancia = newGainValue;
+                }
+            }
+            recalculateAllPrices(newRules, nuevo_capp);
+            return newRules;
+        });
+    };
 
     const handleSave = () => {
+        onSave({
+            ...localItem,
+            prices: priceRules.map(p => ({
+                lista_id: p.lista_precio_id,
+                tipo_ganancia: p.tipo_ganancia,
+                valor_ganancia: Number(p.valor_ganancia)
+            }))
+        });
+    };
+
+    const handleNextTab = () => {
         const newErrors: { cantidad?: string; costo_unitario?: string } = {};
-        const cantidad = Number(localItem.cantidad || 0);
-        const costo = Number(localItem.costo_unitario || 0);
-        
-        if (isNaN(cantidad) || cantidad <= 0) newErrors.cantidad = 'Debe ser > 0.';
-        if (isNaN(costo) || costo <= 0) newErrors.costo_unitario = 'Debe ser > 0.';
-        
+        if (Number(localItem.cantidad || 0) <= 0) newErrors.cantidad = 'Debe ser > 0.';
+        if (Number(localItem.costo_unitario || 0) <= 0) newErrors.costo_unitario = 'Debe ser > 0.';
         setErrors(newErrors);
 
-        if (Object.keys(newErrors).length > 0) {
-            addToast({ message: 'Revisa los campos marcados en rojo.', type: 'error' });
-            return;
-        }
-        onSave(localItem);
-    }
-    
-    const stock_actual = Number(localItem.stock_sucursal || 0);
-    const capp_actual = Number(localItem.precio_compra || 0);
-    const cantidad_comprada = Number(localItem.cantidad || 0);
-    
-    const costo_unitario_ingresado = Number(localItem.costo_unitario || 0);
-    const tasa_cambio_numerica = Number(exchangeRate || 1);
-    const costo_compra = currency === 'USD' ? costo_unitario_ingresado * tasa_cambio_numerica : costo_unitario_ingresado;
-    
-    const nuevo_stock = stock_actual + cantidad_comprada;
-    const nuevo_capp = (stock_actual + cantidad_comprada) > 0 ? ((stock_actual * capp_actual) + (cantidad_comprada * costo_compra)) / (stock_actual + cantidad_comprada) : costo_compra;
-    const nuevo_precio_base = Number(localItem.nuevo_precio_base);
-    const margen_ganancia = nuevo_capp > 0 && !isNaN(nuevo_precio_base) && nuevo_precio_base > 0 ? ((nuevo_precio_base - nuevo_capp) / nuevo_capp) * 100 : 0;
-    const margen_bs = isNaN(nuevo_precio_base) || isNaN(nuevo_capp) ? 0 : nuevo_precio_base - nuevo_capp;
+        if (Object.keys(newErrors).length > 0) return;
+        setActiveTab('prices');
+    };
 
     return html`
         <${ConfirmationModal}
             isOpen=${isOpen}
             onClose=${onClose}
-            onConfirm=${handleSave}
+            onConfirm=${activeTab === 'inventory' ? handleNextTab : handleSave}
             title="Detalle del Producto en Compra"
-            confirmText="Aceptar"
-            icon=${ICONS.edit_note}
-            maxWidthClass="max-w-2xl"
+            confirmText=${activeTab === 'inventory' ? 'Siguiente' : 'Aceptar'}
+            icon=${ICONS.inventory}
+            maxWidthClass="max-w-3xl"
         >
             <div class="space-y-4">
                 <div class="flex items-center gap-4 p-2 bg-slate-50 rounded-lg">
-                    ${localItem.imagen_principal ? html`<img src=${localItem.imagen_principal} class="h-14 w-14 rounded-md object-cover flex-shrink-0" />` : html`<div class="h-14 w-14 flex-shrink-0 rounded-md bg-white flex items-center justify-center text-slate-400">${ICONS.products}</div>`}
-                    <p class="font-bold text-lg text-gray-800">${localItem.producto_nombre}</p>
-                </div>
-
-                <div class="p-4 bg-white rounded-lg border space-y-4">
-                    <h4 class="text-base font-semibold text-gray-800">Datos de la Compra</h4>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <${FormInput} label="Cantidad a Comprar" name="cantidad" type="number" value=${localItem.cantidad} onInput=${e => handleItemChange('cantidad', e.target.value)} error=${errors.cantidad} />
-                        <${FormInput} label="Costo Unitario (${currency})" name="costo_unitario" type="number" value=${localItem.costo_unitario} onInput=${e => handleItemChange('costo_unitario', e.target.value)} error=${errors.costo_unitario} />
-                    </div>
-                </div>
-
-                <div class="p-4 bg-slate-50 rounded-lg border space-y-4">
-                    <h4 class="text-base font-semibold text-gray-800">Impacto en Inventario y Costos</h4>
-                    <div class="grid grid-cols-2 gap-4 text-center">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-500">Costo Actual (CAPP)</label>
-                            <p class="text-lg font-bold text-gray-700 mt-1">Bs ${capp_actual.toFixed(2)}</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-500">Stock Actual (Sucursal)</label>
-                            <p class="text-lg font-bold text-gray-700 mt-1">${stock_actual}</p>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4 text-center border-t border-slate-200 pt-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-600">Nuevo Costo Ponderado</label>
-                            <p class="text-lg font-bold text-primary mt-1">Bs ${nuevo_capp.toFixed(2)}</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-600">Nuevo Stock (Sucursal)</label>
-                            <p class="text-lg font-bold text-primary mt-1">${nuevo_stock}</p>
-                        </div>
-                    </div>
+                    <img src=${item.imagen_principal || 'https://via.placeholder.com/150'} class="h-14 w-14 rounded-md object-cover flex-shrink-0 bg-white" />
+                    <p class="font-bold text-lg text-gray-800">${item.producto_nombre}</p>
                 </div>
                 
-                <div class="p-4 bg-white rounded-lg border space-y-4">
-                    <h4 class="text-base font-semibold text-gray-800">Precio de Venta y Margen</h4>
-                    <div class="flex items-end gap-4">
-                        <div class="flex-grow">
-                            <label for="nuevo_precio_base" class="block text-sm font-medium text-gray-700">Nuevo Precio Base Venta</label>
-                            <input type="number" id="nuevo_precio_base" value=${localItem.nuevo_precio_base} onInput=${e => handleItemChange('nuevo_precio_base', e.target.value)} class="w-full block rounded-md border-0 mt-1 p-2 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset ring-gray-300 focus:ring-primary sm:text-sm bg-white" />
-                            ${(localItem.precio_base == null || localItem.precio_base <= 0) && html`<p class="text-xs text-amber-600 mt-1">⚠️ Sin precio base asignado.</p>`}
-                        </div>
-                        <div class="text-center">
-                            <label class="block text-sm font-medium text-gray-600">Margen Estimado</label>
-                            <p class=${`font-bold text-lg ${margen_ganancia < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                ${margen_ganancia.toFixed(1)}%
-                                <span class="font-normal text-sm text-gray-500 ml-1">(Bs ${margen_bs.toFixed(2)})</span>
-                            </p>
-                        </div>
-                    </div>
+                <${Tabs} tabs=${tabs} activeTab=${activeTab} onTabClick=${setActiveTab} />
+                
+                <div class="mt-4">
+                    ${isLoading ? html`<div class="flex justify-center items-center h-full min-h-[24rem]"><${Spinner}/></div>` : html`
+                        ${activeTab === 'inventory' && html`
+                            <div class="space-y-3 animate-fade-in-down">
+                                <div class="p-3 bg-white rounded-lg border space-y-3">
+                                    <h4 class="text-sm font-semibold text-gray-800">Datos de la Compra</h4>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <${FormInput} label="Cantidad a Comprar" name="cantidad" type="number" value=${localItem.cantidad} onInput=${e => handleItemChange('cantidad', e.target.value)} error=${errors.cantidad} />
+                                        <${FormInput} label="Costo Unitario (${currency})" name="costo_unitario" type="number" value=${localItem.costo_unitario} onInput=${e => handleItemChange('costo_unitario', e.target.value)} error=${errors.costo_unitario} />
+                                    </div>
+                                </div>
+                                <div class="p-3 bg-slate-50 rounded-lg border space-y-3">
+                                    <h4 class="text-sm font-semibold text-gray-800">Impacto en Inventario y Costos</h4>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div class="p-2 bg-white rounded border">
+                                            <h5 class="text-xs font-semibold text-gray-600 mb-1 text-center">Costo (Global)</h5>
+                                            <div class="flex justify-around text-center">
+                                                <div><label class="block text-xs font-medium text-gray-500">Actual (CAPP)</label><p class="text-sm font-bold text-gray-700 mt-1">Bs ${capp_actual.toFixed(2)}</p></div>
+                                                <div><label class="block text-xs font-medium text-gray-500">Nuevo</label><p class="text-sm font-bold text-primary mt-1">Bs ${nuevo_capp.toFixed(2)}</p></div>
+                                            </div>
+                                        </div>
+                                        <div class="p-2 bg-white rounded border">
+                                            <h5 class="text-xs font-semibold text-gray-600 mb-1 text-center">Stock (Total Empresa)</h5>
+                                            <div class="flex justify-around text-center">
+                                                <div><label class="block text-xs font-medium text-gray-500">Actual</label><p class="text-sm font-bold text-gray-700 mt-1">${stock_total_actual}</p></div>
+                                                <div><label class="block text-xs font-medium text-gray-500">Nuevo</label><p class="text-sm font-bold text-primary mt-1">${nuevo_stock_total}</p></div>
+                                            </div>
+                                        </div>
+                                         <div class="p-2 bg-white rounded border sm:col-span-2">
+                                            <h5 class="text-xs font-semibold text-gray-600 mb-1 text-center">Stock (Sucursal: ${user.sucursal})</h5>
+                                            <div class="flex justify-around text-center">
+                                                <div><label class="block text-xs font-medium text-gray-500">Actual</label><p class="text-sm font-bold text-gray-700 mt-1">${stock_sucursal_actual}</p></div>
+                                                <div><label class="block text-xs font-medium text-gray-500">Nuevo</label><p class="text-sm font-bold text-primary mt-1">${nuevo_stock_sucursal}</p></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `}
+                        ${activeTab === 'prices' && html`
+                            <div class="space-y-3 animate-fade-in-down">
+                                ${priceRules.map(p => html`
+                                    <div class="p-3 rounded-lg border ${p.es_predeterminada ? 'bg-blue-50/50' : 'bg-white'}">
+                                        <p class="font-semibold text-gray-800 text-sm">${p.lista_nombre} ${p.es_predeterminada ? '(General)' : ''}</p>
+                                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 items-end mt-2">
+                                            <div class="col-span-2 sm:col-span-2">
+                                                <label class="block text-xs font-medium text-gray-700">Ganancia</label>
+                                                <div class="mt-1 flex">
+                                                    <input type="number" value=${p.valor_ganancia} onInput=${e => handleRuleChange(p.lista_precio_id, 'valor_ganancia', e.target.value)} class="w-full block rounded-l-md border-0 p-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white" placeholder="0.00" />
+                                                    <div class="inline-flex rounded-r-md shadow-sm">
+                                                        <button onClick=${() => handleRuleChange(p.lista_precio_id, 'tipo_ganancia', 'porcentaje')} class=${`relative inline-flex items-center rounded-l-none rounded-r-sm px-2 py-1.5 text-xs font-semibold ring-1 ring-inset ring-gray-300 focus:z-10 transition-colors ${p.tipo_ganancia === 'porcentaje' ? 'bg-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>%</button>
+                                                        <button onClick=${() => handleRuleChange(p.lista_precio_id, 'tipo_ganancia', 'fijo')} class=${`relative -ml-px inline-flex items-center rounded-r-md px-2 py-1.5 text-xs font-semibold ring-1 ring-inset ring-gray-300 focus:z-10 transition-colors ${p.tipo_ganancia === 'fijo' ? 'bg-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>Bs</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="text-center col-span-1 sm:col-span-1">
+                                                <label class="block text-xs font-medium text-gray-500">Costo</label>
+                                                <p class="font-bold text-gray-800 text-base">Bs ${nuevo_capp.toFixed(2)}</p>
+                                            </div>
+                                            <div class="text-center col-span-1 sm:col-span-1">
+                                                <label class="block text-xs font-medium text-gray-500">Precio Venta</label>
+                                                <p class="font-bold text-primary text-base">Bs ${calculatedPrices[p.lista_precio_id] || '0.00'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `)}
+                            </div>
+                        `}
+                    `}
                 </div>
             </div>
         <//>
@@ -680,7 +796,7 @@ function NewPurchaseModal({ isOpen, onClose, onSave, user }) {
     const { addToast } = useToast();
     const [isProveedorFormOpen, setIsProveedorFormOpen] = useState(false);
     const [isProductFormOpen, setIsProductFormOpen] = useState(false);
-    const [itemDetail, setItemDetail] = useState(null); // State for the new item detail modal
+    const [itemDetail, setItemDetail] = useState(null);
 
     const [formData, setFormData] = useState({
         proveedor_id: '',
@@ -715,7 +831,6 @@ function NewPurchaseModal({ isOpen, onClose, onSave, user }) {
     useEffect(() => {
         if (isOpen) {
             fetchInitialData();
-            // Reset state
             setStep(1);
             setFormData({
                 proveedor_id: '', proveedor_nombre: '', sucursal_id: user.sucursal_id,
@@ -733,6 +848,10 @@ function NewPurchaseModal({ isOpen, onClose, onSave, user }) {
     const addedProductIds = useMemo(() => new Set(formData.items.map(item => item.producto_id)), [formData.items]);
     
     const handleNext = () => {
+        if (step === 1 && !formData.proveedor_id) {
+            addToast({ message: 'Debes seleccionar un proveedor.', type: 'warning' });
+            return;
+        }
         if (step === 2 && formData.items.length === 0) {
             addToast({ message: 'Debes añadir al menos un producto a la compra.', type: 'warning' });
             return;
@@ -756,8 +875,6 @@ function NewPurchaseModal({ isOpen, onClose, onSave, user }) {
             costo_unitario: '',
             stock_sucursal: product.stock_sucursal,
             precio_compra: product.precio_compra,
-            precio_base: product.precio_base,
-            nuevo_precio_base: product.precio_base?.toString() || ''
         });
     };
     
@@ -782,7 +899,7 @@ function NewPurchaseModal({ isOpen, onClose, onSave, user }) {
             }
             return { ...prev, items: newItems };
         });
-        setItemDetail(null); // Close modal
+        setItemDetail(null);
     };
 
     const handleRemoveItem = (index) => {
@@ -829,7 +946,7 @@ function NewPurchaseModal({ isOpen, onClose, onSave, user }) {
     const handleConfirmSave = async () => {
         setIsLoading(true);
         try {
-            const payload = {
+            const purchasePayload = {
                 p_compra: {
                     proveedor_id: formData.proveedor_id,
                     sucursal_id: user.sucursal_id,
@@ -846,12 +963,13 @@ function NewPurchaseModal({ isOpen, onClose, onSave, user }) {
                     producto_id: item.producto_id,
                     cantidad: Number(item.cantidad),
                     costo_unitario: Number(item.costo_unitario),
-                    nuevo_precio_base: item.nuevo_precio_base !== '' ? Number(item.nuevo_precio_base) : null
+                    precios: item.prices
                 }))
             };
 
-            const { error } = await supabase.rpc('registrar_compra', payload);
-            if (error) throw error;
+            const { error: compraError } = await supabase.rpc('registrar_compra', purchasePayload);
+            if (compraError) throw compraError;
+
             onSave();
         } catch(err) {
             addToast({ message: `Error al registrar la compra: ${err.message}`, type: 'error' });
@@ -866,12 +984,32 @@ function NewPurchaseModal({ isOpen, onClose, onSave, user }) {
         { name: 'Pago', status: step === 3 ? 'current' : 'upcoming' },
     ];
     
+    const footer = html`
+        <div class="flex-shrink-0 flex justify-between items-center w-full p-4 bg-gray-50 rounded-b-xl border-t border-gray-200">
+            <button 
+                type="button"
+                onClick=${step === 1 ? onClose : handleBack} 
+                class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+            >
+                ${step === 1 ? 'Cancelar' : 'Volver'}
+            </button>
+            <button 
+                type="button"
+                onClick=${step === 3 ? handleConfirmSave : handleNext}
+                disabled=${isLoading}
+                class="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400 min-w-[120px] flex justify-center"
+            >
+                ${isLoading ? html`<${Spinner}/>` : (step === 3 ? 'Guardar Compra' : 'Siguiente')}
+            </button>
+        </div>
+    `;
+
     return html`
         <${ConfirmationModal}
             isOpen=${isOpen}
             onClose=${onClose}
             title="Registrar Nueva Compra"
-            isProcessing=${true}
+            customFooter=${footer}
             maxWidthClass="max-w-4xl"
         >
             <div class="mb-8">
@@ -900,31 +1038,14 @@ function NewPurchaseModal({ isOpen, onClose, onSave, user }) {
                     </ol>
                 </nav>
             </div>
-
-            <div class="max-h-[65vh] overflow-y-auto -m-6 p-6">
+            
+            <div>
                  ${step === 1 && html`<${Step1} formData=${formData} handleInput=${handleInput} setFormData=${setFormData} proveedores=${proveedores} setIsProveedorFormOpen=${setIsProveedorFormOpen} />`}
                  ${step === 2 && html`<${Step2} formData=${formData} handleEditItem=${handleEditItem} handleRemoveItem=${handleRemoveItem} total=${total} productos=${productos} onProductSelected=${handleProductSelected} onAddedProductClick=${handleAddedProductClick} setIsProductFormOpen=${setIsProductFormOpen} addedProductIds=${addedProductIds} />`}
                  ${step === 3 && html`<${Step3} formData=${formData} handleInput=${handleInput} setFormData=${setFormData} total=${total} />`}
             </div>
 
-            <div class="flex justify-between items-center p-4 bg-gray-50 rounded-b-xl">
-                <button 
-                    type="button"
-                    onClick=${step === 1 ? onClose : handleBack} 
-                    class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                >
-                    ${step === 1 ? 'Cancelar' : 'Volver'}
-                </button>
-                <button 
-                    type="button"
-                    onClick=${step === 3 ? handleConfirmSave : handleNext}
-                    disabled=${isLoading}
-                    class="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400 min-w-[120px] flex justify-center"
-                >
-                    ${isLoading ? html`<${Spinner}/>` : (step === 3 ? 'Guardar Compra' : 'Siguiente')}
-                </button>
-            </div>
-             <${ProveedorFormModal} 
+            <${ProveedorFormModal} 
                 isOpen=${isProveedorFormOpen} 
                 onClose=${() => setIsProveedorFormOpen(false)} 
                 onSave=${handleSaveProveedor} 
@@ -942,6 +1063,7 @@ function NewPurchaseModal({ isOpen, onClose, onSave, user }) {
                 item=${itemDetail}
                 currency=${formData.moneda}
                 exchangeRate=${formData.tasa_cambio}
+                user=${user}
                 addToast=${addToast}
             />
         <//>

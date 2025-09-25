@@ -81,29 +81,70 @@ const InventoryBreakdown = ({ inventory = [], allBranches = [], user, onAdjust }
     `;
 };
 
-const PriceManagementTab = ({ details, initialPrices, productId }) => {
-    const [editablePrices, setEditablePrices] = useState(initialPrices || []);
+const PriceManagementTab = ({ details, initialPrices, productId, user, onPricesUpdated }) => {
+    const [priceRules, setPriceRules] = useState([]);
+    const [calculatedPrices, setCalculatedPrices] = useState({});
     const [isSaving, setIsSaving] = useState(false);
     const { addToast } = useToast();
+    const canEdit = user.role !== 'Empleado';
+    const cost = useMemo(() => Number(details.precio_compra || 0), [details.precio_compra]);
 
-    useEffect(() => {
-        setEditablePrices(initialPrices || []);
-    }, [initialPrices]);
-
-    const handlePriceChange = (listaId, value) => {
-        setEditablePrices(currentPrices =>
-            currentPrices.map(p =>
-                p.lista_precio_id === listaId ? { ...p, precio: value } : p
-            )
-        );
+    const recalculateAllPrices = (rules, currentCost) => {
+        const newCalculatedPrices = {};
+        rules.forEach(rule => {
+            const valor = Number(rule.valor_ganancia || 0);
+            let finalPrice = currentCost;
+            if (rule.tipo_ganancia === 'porcentaje') {
+                finalPrice = currentCost * (1 + valor / 100);
+            } else { // 'fijo'
+                finalPrice = currentCost + valor;
+            }
+            newCalculatedPrices[rule.lista_precio_id] = finalPrice.toFixed(2);
+        });
+        setCalculatedPrices(newCalculatedPrices);
     };
+    
+    useEffect(() => {
+        const initialRules = (initialPrices || []).map(p => ({
+            ...p,
+            tipo_ganancia: p.tipo_ganancia || 'fijo',
+            valor_ganancia: p.valor_ganancia || 0,
+        }));
+        setPriceRules(initialRules);
+        recalculateAllPrices(initialRules, cost);
+    }, [initialPrices, cost]);
 
+    const handleRuleChange = (listId, field, value) => {
+        setPriceRules(prevRules => {
+            const newRules = prevRules.map(rule => 
+                rule.lista_precio_id === listId ? { ...rule, [field]: value } : rule
+            );
+            
+            if (field === 'tipo_ganancia') {
+                const updatedRule = newRules.find(r => r.lista_precio_id === listId);
+                const currentPrice = Number(calculatedPrices[listId] || 0);
+                if (currentPrice > 0) {
+                    let newGainValue = '';
+                    if (value === 'fijo') {
+                        newGainValue = (currentPrice - cost).toFixed(2);
+                    } else if (value === 'porcentaje' && cost > 0) {
+                        newGainValue = (((currentPrice / cost) - 1) * 100).toFixed(1);
+                    }
+                    updatedRule.valor_ganancia = newGainValue;
+                }
+            }
+            recalculateAllPrices(newRules, cost);
+            return newRules;
+        });
+    };
+    
     const handleSaveChanges = async () => {
         setIsSaving(true);
         try {
-            const updates = editablePrices.map(p => ({
+            const updates = priceRules.map(p => ({
                 lista_id: p.lista_precio_id,
-                precio: p.precio === '' || p.precio === null ? null : Number(p.precio)
+                tipo_ganancia: p.tipo_ganancia,
+                valor_ganancia: Number(p.valor_ganancia)
             }));
 
             const { error } = await supabase.rpc('update_product_prices', {
@@ -113,6 +154,7 @@ const PriceManagementTab = ({ details, initialPrices, productId }) => {
 
             if (error) throw error;
             addToast({ message: 'Precios actualizados con éxito.', type: 'success' });
+            onPricesUpdated();
         } catch (err) {
             addToast({ message: `Error al guardar precios: ${err.message}`, type: 'error' });
         } finally {
@@ -127,49 +169,56 @@ const PriceManagementTab = ({ details, initialPrices, productId }) => {
                 <dl class="mt-2">
                     <div class="flex justify-between py-2 border-b">
                         <dt class="text-sm font-medium text-gray-500">Costo Promedio Ponderado (CAPP)</dt>
-                        <dd class="text-sm font-semibold text-gray-900">Bs ${Number(details.precio_compra || 0).toFixed(2)}</dd>
+                        <dd class="text-sm font-semibold text-gray-900">Bs ${cost.toFixed(2)}</dd>
                     </div>
                 </dl>
                 <p class="text-xs text-gray-500 mt-2">Este valor se actualiza automáticamente con cada compra registrada.</p>
             </div>
             <div class="bg-white p-6 rounded-lg shadow-md border">
                 <h3 class="text-lg font-semibold text-gray-800">Precios de Venta</h3>
-                <p class="text-sm text-gray-600 mt-1">Asigna un precio a este producto para cada una de tus listas.</p>
+                <p class="text-sm text-gray-600 mt-1">Define tu ganancia y el sistema calculará el precio de venta final.</p>
                 <div class="mt-4 flow-root">
                     <div class="space-y-4">
-                        ${editablePrices.map(p => html`
-                            <div key=${p.lista_precio_id}>
-                                <label for="price-${p.lista_precio_id}" class="block text-sm font-medium text-gray-700">
-                                    ${p.lista_nombre} ${p.es_predeterminada ? html`<span class="text-xs text-gray-500">(General)</span>` : ''}
-                                </label>
-                                <div class="relative mt-1">
-                                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                        <span class="text-gray-500 sm:text-sm">Bs</span>
-                                    </div>
-                                    <input
-                                        type="number"
-                                        id="price-${p.lista_precio_id}"
-                                        class="block w-full rounded-md border-gray-300 pl-8 pr-3 py-2 focus:border-primary focus:ring-primary sm:text-sm ${p.es_predeterminada ? 'bg-gray-200 text-gray-700 cursor-not-allowed' : 'bg-white text-gray-900'}"
-                                        placeholder="0.00"
-                                        value=${p.precio}
-                                        onInput=${(e) => handlePriceChange(p.lista_precio_id, e.target.value)}
-                                        disabled=${p.es_predeterminada}
-                                    />
-                                    ${p.es_predeterminada && html`
-                                        <div class="absolute inset-y-0 right-0 flex items-center pr-3">
-                                            <span class="text-gray-500 text-xs italic">Se edita desde el formulario principal</span>
+                        ${priceRules.map(p => html`
+                            <div key=${p.lista_precio_id} class="p-4 rounded-lg border ${p.es_predeterminada ? 'bg-blue-50/50' : 'bg-white'}">
+                                <p class="font-semibold text-gray-800">${p.lista_nombre} ${p.es_predeterminada ? '(General)' : ''}</p>
+                                <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end mt-2">
+                                    <div class="sm:col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700">Ganancia</label>
+                                        <div class="mt-1 flex">
+                                            <input 
+                                                type="number" 
+                                                value=${p.valor_ganancia} 
+                                                onInput=${(e) => handleRuleChange(p.lista_precio_id, 'valor_ganancia', e.target.value)} 
+                                                class="w-full block rounded-l-md border-0 p-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white" placeholder="0.00"
+                                                disabled=${!canEdit}
+                                            />
+                                            <div class="inline-flex rounded-r-md shadow-sm">
+                                                <button onClick=${() => handleRuleChange(p.lista_precio_id, 'tipo_ganancia', 'porcentaje')} disabled=${!canEdit} class=${`relative inline-flex items-center rounded-l-none rounded-r-sm px-2 py-2 text-xs font-semibold ring-1 ring-inset ring-gray-300 focus:z-10 transition-colors ${p.tipo_ganancia === 'porcentaje' ? 'bg-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>%</button>
+                                                <button onClick=${() => handleRuleChange(p.lista_precio_id, 'tipo_ganancia', 'fijo')} disabled=${!canEdit} class=${`relative -ml-px inline-flex items-center rounded-r-md px-2 py-2 text-xs font-semibold ring-1 ring-inset ring-gray-300 focus:z-10 transition-colors ${p.tipo_ganancia === 'fijo' ? 'bg-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>Bs</button>
+                                            </div>
                                         </div>
-                                    `}
+                                    </div>
+                                    <div class="text-center">
+                                        <label class="block text-sm font-medium text-gray-500">Costo</label>
+                                        <p class="font-bold text-gray-800 text-lg">Bs ${cost.toFixed(2)}</p>
+                                    </div>
+                                    <div class="text-center">
+                                        <label class="block text-sm font-medium text-gray-500">Precio Venta</label>
+                                        <p class="font-bold text-primary text-lg">Bs ${calculatedPrices[p.lista_precio_id] || '0.00'}</p>
+                                    </div>
                                 </div>
                             </div>
                         `)}
                     </div>
                 </div>
-                <div class="mt-6 flex justify-end">
-                    <button onClick=${handleSaveChanges} disabled=${isSaving} class="min-w-[150px] flex justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400">
-                        ${isSaving ? html`<${Spinner}/>` : 'Guardar Precios'}
-                    </button>
-                </div>
+                ${canEdit && html`
+                    <div class="mt-6 flex justify-end">
+                        <button onClick=${handleSaveChanges} disabled=${isSaving} class="min-w-[150px] flex justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400">
+                            ${isSaving ? html`<${Spinner}/>` : 'Guardar Precios'}
+                        </button>
+                    </div>
+                `}
             </div>
         </div>
     `;
@@ -501,7 +550,7 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
                     
                     <div class="mt-6">
                         ${activeTab === 'inventario' && html`<${InventoryBreakdown} inventory=${inventory} allBranches=${all_branches} user=${user} onAdjust=${handleOpenAdjustModal} />`}
-                        ${activeTab === 'precios' && html`<${PriceManagementTab} details=${details} initialPrices=${prices} productId=${productoId} />`}
+                        ${activeTab === 'precios' && html`<${PriceManagementTab} details=${details} initialPrices=${prices} productId=${productoId} user=${user} onPricesUpdated=${fetchData} />`}
                         ${activeTab === 'detalles' && html`
                              <div class="bg-white p-6 rounded-lg shadow-md border">
                                 <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-6">

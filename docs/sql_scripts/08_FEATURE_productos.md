@@ -1,210 +1,69 @@
 -- =============================================================================
--- PRODUCTOS, INVENTARIOS & PRECIOS - DATABASE SETUP (v6 - Inventory Adjust)
+-- PRODUCTOS, INVENTARIOS & PRECIOS - DATABASE SETUP (v8 - Ganancia Fija)
 -- =============================================================================
--- Este script crea y actualiza toda la estructura de base de datos y la lógica
--- de negocio para los módulos de Productos, Inventarios y la nueva gestión
--- avanzada de precios, incluyendo el ordenamiento manual de listas.
+-- Este script implementa una reestructuración fundamental de la lógica de precios.
+-- Ahora, la base de datos almacena la REGLA DE GANANCIA (tipo y valor) en lugar
+-- del precio final. Un trigger automático se encarga de recalcular el precio de
+-- venta cada vez que el costo del producto cambia, asegurando que los márgenes
+-- de ganancia definidos se mantengan constantes.
 --
 -- **INSTRUCCIONES:**
--- 1. Crea un nuevo Bucket en Supabase Storage llamado `productos` y márcalo como público.
--- 2. Ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
+-- 1. Ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- Paso 1: Creación y Modificación de Tablas
+-- Paso 1: Modificación de Tablas y Creación de Trigger
 -- -----------------------------------------------------------------------------
+-- Añadir columnas para almacenar la regla de ganancia
+ALTER TABLE public.precios_productos ADD COLUMN IF NOT EXISTS tipo_ganancia TEXT NOT NULL DEFAULT 'fijo';
+ALTER TABLE public.precios_productos ADD COLUMN IF NOT EXISTS valor_ganancia NUMERIC(10, 2) NOT NULL DEFAULT 0;
 
--- Tabla de Categorías
-CREATE TABLE IF NOT EXISTS public.categorias (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    empresa_id uuid NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
-    nombre text NOT NULL,
-    created_at timestamptz DEFAULT now() NOT NULL
-);
-ALTER TABLE public.categorias ENABLE ROW LEVEL SECURITY;
-
--- Tabla de Productos (Catálogo Maestro)
-CREATE TABLE IF NOT EXISTS public.productos (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    empresa_id uuid NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
-    nombre text NOT NULL,
-    sku text,
-    marca text,
-    modelo text,
-    descripcion text,
-    precio_compra numeric(10, 2) DEFAULT 0, -- Almacena el Costo Promedio Ponderado (CAPP)
-    categoria_id uuid REFERENCES public.categorias(id) ON DELETE SET NULL,
-    unidad_medida text DEFAULT 'Unidad'::text NOT NULL,
-    created_at timestamptz DEFAULT now() NOT NULL,
-    CONSTRAINT productos_sku_empresa_id_key UNIQUE (sku, empresa_id)
-);
-ALTER TABLE public.productos DROP COLUMN IF EXISTS precio_venta;
-ALTER TABLE public.productos ENABLE ROW LEVEL SECURITY;
-
--- Tabla de Imágenes de Productos
-CREATE TABLE IF NOT EXISTS public.imagenes_productos (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    producto_id uuid NOT NULL REFERENCES public.productos(id) ON DELETE CASCADE,
-    imagen_url text NOT NULL,
-    orden integer DEFAULT 0,
-    created_at timestamptz DEFAULT now()
-);
-ALTER TABLE public.imagenes_productos ENABLE ROW LEVEL SECURITY;
-
--- Tabla de Inventarios (Stock por Sucursal)
-CREATE TABLE IF NOT EXISTS public.inventarios (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    producto_id uuid NOT NULL REFERENCES public.productos(id) ON DELETE CASCADE,
-    sucursal_id uuid NOT NULL REFERENCES public.sucursales(id) ON DELETE CASCADE,
-    cantidad numeric(10, 2) DEFAULT 0 NOT NULL,
-    stock_minimo numeric(10, 2) DEFAULT 0,
-    updated_at timestamptz DEFAULT now(),
-    CONSTRAINT inventarios_producto_id_sucursal_id_key UNIQUE (producto_id, sucursal_id)
-);
-ALTER TABLE public.inventarios ENABLE ROW LEVEL SECURITY;
-
--- **NUEVO:** Tabla de Movimientos de Inventario (para auditoría)
-CREATE TABLE IF NOT EXISTS public.movimientos_inventario (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    producto_id uuid NOT NULL REFERENCES public.productos(id) ON DELETE CASCADE,
-    sucursal_id uuid NOT NULL REFERENCES public.sucursales(id) ON DELETE CASCADE,
-    usuario_id uuid REFERENCES public.usuarios(id) ON DELETE SET NULL,
-    tipo_movimiento text NOT NULL, -- Ej: 'Ajuste Manual', 'Venta', 'Compra', 'Traspaso Entrada', 'Traspaso Salida'
-    cantidad_ajustada numeric(10, 2) NOT NULL,
-    stock_anterior numeric(10, 2) NOT NULL,
-    stock_nuevo numeric(10, 2) NOT NULL,
-    motivo text,
-    referencia_id uuid, -- Para vincular a una venta, compra, traspaso, etc.
-    created_at timestamptz DEFAULT now() NOT NULL
-);
-ALTER TABLE public.movimientos_inventario ENABLE ROW LEVEL SECURITY;
-
-
--- **NUEVO:** Tabla de Listas de Precios (con columna de orden)
-CREATE TABLE IF NOT EXISTS public.listas_precios (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    empresa_id uuid NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
-    nombre text NOT NULL,
-    descripcion text,
-    es_predeterminada boolean DEFAULT false NOT NULL,
-    orden integer NOT NULL DEFAULT 0,
-    created_at timestamptz DEFAULT now() NOT NULL
-);
-ALTER TABLE public.listas_precios ADD COLUMN IF NOT EXISTS orden integer NOT NULL DEFAULT 0;
-ALTER TABLE public.listas_precios ENABLE ROW LEVEL SECURITY;
-
--- **NUEVO:** Tabla de Precios de Productos
-CREATE TABLE IF NOT EXISTS public.precios_productos (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    producto_id uuid NOT NULL REFERENCES public.productos(id) ON DELETE CASCADE,
-    lista_precio_id uuid NOT NULL REFERENCES public.listas_precios(id) ON DELETE CASCADE,
-    precio numeric(10, 2) NOT NULL,
-    updated_at timestamptz DEFAULT now() NOT NULL,
-    CONSTRAINT precios_productos_producto_id_lista_precio_id_key UNIQUE (producto_id, lista_precio_id)
-);
-ALTER TABLE public.precios_productos ENABLE ROW LEVEL SECURITY;
-
-
--- -----------------------------------------------------------------------------
--- Paso 2: Políticas de Seguridad a Nivel de Fila (RLS)
--- -----------------------------------------------------------------------------
-DROP POLICY IF EXISTS "Enable all for own company" ON public.categorias;
-CREATE POLICY "Enable all for own company" ON public.categorias FOR ALL USING (empresa_id = (SELECT empresa_id FROM public.usuarios WHERE id = auth.uid()));
-DROP POLICY IF EXISTS "Enable all for own company" ON public.productos;
-CREATE POLICY "Enable all for own company" ON public.productos FOR ALL USING (empresa_id = (SELECT empresa_id FROM public.usuarios WHERE id = auth.uid()));
-DROP POLICY IF EXISTS "Enable all actions for own company" ON public.imagenes_productos;
-CREATE POLICY "Enable all actions for own company" ON public.imagenes_productos FOR ALL USING (producto_id IN (SELECT id FROM public.productos WHERE empresa_id = (SELECT empresa_id FROM public.usuarios WHERE id = auth.uid())));
-DROP POLICY IF EXISTS "Enable all actions for own company" ON public.inventarios;
-CREATE POLICY "Enable all actions for own company" ON public.inventarios FOR ALL USING (producto_id IN (SELECT id FROM public.productos WHERE empresa_id = (SELECT empresa_id FROM public.usuarios WHERE id = auth.uid())));
-DROP POLICY IF EXISTS "Enable all for own company" ON public.movimientos_inventario;
-CREATE POLICY "Enable all for own company" ON public.movimientos_inventario FOR ALL USING (producto_id IN (SELECT id FROM public.productos WHERE empresa_id = (SELECT empresa_id FROM public.usuarios WHERE id = auth.uid())));
-DROP POLICY IF EXISTS "Enable all for own company" ON public.listas_precios;
-CREATE POLICY "Enable all for own company" ON public.listas_precios FOR ALL USING (empresa_id = (SELECT empresa_id FROM public.usuarios WHERE id = auth.uid()));
-DROP POLICY IF EXISTS "Enable all for own company" ON public.precios_productos;
-CREATE POLICY "Enable all for own company" ON public.precios_productos FOR ALL USING (producto_id IN (SELECT id FROM public.productos WHERE empresa_id = (SELECT empresa_id FROM public.usuarios WHERE id = auth.uid())));
-DROP POLICY IF EXISTS "Unified Storage Policy - Productos INSERT" ON storage.objects;
-CREATE POLICY "Unified Storage Policy - Productos INSERT" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'productos' AND auth.role() = 'authenticated' AND (storage.foldername(name))[1] = get_my_empresa_id_securely()::text);
-DROP POLICY IF EXISTS "Unified Storage Policy - Productos UPDATE" ON storage.objects;
-CREATE POLICY "Unified Storage Policy - Productos UPDATE" ON storage.objects FOR UPDATE USING (bucket_id = 'productos' AND auth.role() = 'authenticated' AND (storage.foldername(name))[1] = get_my_empresa_id_securely()::text);
-
-
--- -----------------------------------------------------------------------------
--- Paso 3: Funciones RPC (Lógica de Negocio)
--- -----------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION get_company_products_with_stock() RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; products_list json; kpis json; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF caller_empresa_id IS NULL THEN RAISE EXCEPTION 'Usuario no encontrado.'; END IF; SELECT json_agg(p_info) INTO products_list FROM ( SELECT p.id, p.nombre, p.sku, p.marca, p.modelo, p.categoria_id, p.unidad_medida, p.descripcion, c.nombre as categoria_nombre, COALESCE(i.stock_total, 0) as stock_total, COALESCE(pp.precio, 0) as precio_base, (SELECT img.imagen_url FROM public.imagenes_productos img WHERE img.producto_id = p.id ORDER BY img.orden, img.created_at LIMIT 1) as imagen_principal FROM public.productos p LEFT JOIN public.categorias c ON p.categoria_id = c.id LEFT JOIN ( SELECT inv.producto_id, SUM(inv.cantidad) as stock_total FROM public.inventarios inv GROUP BY inv.producto_id ) i ON p.id = i.producto_id LEFT JOIN public.listas_precios lp ON lp.empresa_id = p.empresa_id AND lp.es_predeterminada = true LEFT JOIN public.precios_productos pp ON pp.producto_id = p.id AND pp.lista_precio_id = lp.id WHERE p.empresa_id = caller_empresa_id ORDER BY p.created_at DESC ) AS p_info; SELECT json_build_object( 'total_products', (SELECT COUNT(*) FROM public.productos WHERE empresa_id = caller_empresa_id), 'total_stock_items', COALESCE((SELECT SUM(cantidad) FROM public.inventarios inv JOIN public.productos pr ON inv.producto_id = pr.id WHERE pr.empresa_id = caller_empresa_id), 0), 'products_without_stock', (SELECT COUNT(*) FROM public.productos p WHERE p.empresa_id = caller_empresa_id AND COALESCE((SELECT SUM(inv.cantidad) FROM public.inventarios inv WHERE inv.producto_id = p.id), 0) <= 0) ) INTO kpis; RETURN json_build_object('products', COALESCE(products_list, '[]'::json), 'kpis', kpis); END; $$;
-CREATE OR REPLACE FUNCTION get_product_details(p_producto_id uuid) RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; details jsonb; images json; inventory json; prices json; all_branches json; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF NOT EXISTS (SELECT 1 FROM public.productos WHERE id = p_producto_id AND empresa_id = caller_empresa_id) THEN RAISE EXCEPTION 'Producto no encontrado o no pertenece a tu empresa.'; END IF; SELECT to_jsonb(p) || jsonb_build_object('categoria_nombre', c.nombre) INTO details FROM public.productos p LEFT JOIN public.categorias c ON p.categoria_id = c.id WHERE p.id = p_producto_id; SELECT json_agg(i ORDER BY i.orden) INTO images FROM public.imagenes_productos i WHERE i.producto_id = p_producto_id; SELECT json_agg(inv) INTO inventory FROM ( SELECT i.sucursal_id, i.cantidad, i.stock_minimo, s.nombre as sucursal_nombre FROM public.inventarios i JOIN public.sucursales s ON i.sucursal_id = s.id WHERE i.producto_id = p_producto_id ) inv; SELECT json_agg(pr) INTO prices FROM ( SELECT lp.id as lista_precio_id, lp.nombre as lista_nombre, lp.es_predeterminada, pp.precio FROM public.listas_precios lp LEFT JOIN public.precios_productos pp ON lp.id = pp.lista_precio_id AND pp.producto_id = p_producto_id WHERE lp.empresa_id = caller_empresa_id ORDER BY lp.es_predeterminada DESC, lp.orden ASC, lp.nombre ASC ) pr; SELECT json_agg(b) INTO all_branches FROM (SELECT id, nombre FROM public.sucursales WHERE empresa_id = caller_empresa_id ORDER BY nombre) b; RETURN json_build_object('details', details, 'images', COALESCE(images, '[]'::json), 'inventory', COALESCE(inventory, '[]'::json), 'prices', COALESCE(prices, '[]'::json), 'all_branches', COALESCE(all_branches, '[]'::json)); END; $$;
-CREATE OR REPLACE FUNCTION upsert_product( p_id uuid, p_nombre text, p_sku text, p_marca text, p_modelo text, p_descripcion text, p_categoria_id uuid, p_unidad_medida text, p_precio_base numeric ) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; v_producto_id uuid; v_default_price_list_id uuid; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF caller_empresa_id IS NULL THEN RAISE EXCEPTION 'Usuario no encontrado.'; END IF; SELECT id INTO v_default_price_list_id FROM public.listas_precios WHERE empresa_id = caller_empresa_id AND es_predeterminada = true; IF v_default_price_list_id IS NULL THEN INSERT INTO public.listas_precios (empresa_id, nombre, es_predeterminada, descripcion) VALUES (caller_empresa_id, 'General', true, 'Precio de venta estándar') RETURNING id INTO v_default_price_list_id; END IF; IF p_id IS NULL THEN INSERT INTO public.productos(empresa_id, nombre, sku, marca, modelo, descripcion, categoria_id, unidad_medida) VALUES (caller_empresa_id, p_nombre, p_sku, p_marca, p_modelo, p_descripcion, p_categoria_id, p_unidad_medida) RETURNING id INTO v_producto_id; ELSE UPDATE public.productos SET nombre = p_nombre, sku = p_sku, marca = p_marca, modelo = p_modelo, descripcion = p_descripcion, categoria_id = p_categoria_id, unidad_medida = p_unidad_medida WHERE id = p_id AND empresa_id = caller_empresa_id; v_producto_id := p_id; END IF; INSERT INTO public.precios_productos(producto_id, lista_precio_id, precio) VALUES(v_producto_id, v_default_price_list_id, p_precio_base) ON CONFLICT (producto_id, lista_precio_id) DO UPDATE SET precio = EXCLUDED.precio, updated_at = now(); RETURN v_producto_id; END; $$;
-DROP TYPE IF EXISTS public.price_update CASCADE; CREATE TYPE public.price_update AS ( lista_id uuid, precio numeric );
-CREATE OR REPLACE FUNCTION update_product_prices( p_producto_id uuid, p_precios price_update[] ) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; price_item price_update; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF NOT EXISTS (SELECT 1 FROM public.productos WHERE id = p_producto_id AND empresa_id = caller_empresa_id) THEN RAISE EXCEPTION 'Producto no encontrado o no pertenece a tu empresa.'; END IF; FOREACH price_item IN ARRAY p_precios LOOP IF EXISTS (SELECT 1 FROM public.listas_precios WHERE id = price_item.lista_id AND es_predeterminada = true) THEN CONTINUE; END IF; IF price_item.precio IS NOT NULL AND price_item.precio >= 0 THEN INSERT INTO public.precios_productos(producto_id, lista_precio_id, precio) VALUES(p_producto_id, price_item.lista_id, price_item.precio) ON CONFLICT (producto_id, lista_precio_id) DO UPDATE SET precio = EXCLUDED.precio, updated_at = now(); ELSE DELETE FROM public.precios_productos WHERE producto_id = p_producto_id AND lista_precio_id = price_item.lista_id; END IF; END LOOP; END; $$;
-
--- Función para obtener listas de precios (ordenada por `orden`)
-CREATE OR REPLACE FUNCTION get_price_lists()
-RETURNS TABLE (id uuid, nombre text, descripcion text, es_predeterminada boolean)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
-AS $$
-BEGIN
-    RETURN QUERY SELECT lp.id, lp.nombre, lp.descripcion, lp.es_predeterminada
-    FROM public.listas_precios lp
-    WHERE lp.empresa_id = (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid())
-    ORDER BY lp.es_predeterminada DESC, lp.orden ASC, lp.nombre ASC;
-END;
-$$;
-
--- Función para insertar/actualizar una lista de precios (asignando `orden`)
-CREATE OR REPLACE FUNCTION upsert_price_list(p_id uuid, p_nombre text, p_descripcion text)
-RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
-AS $$
+-- Función del Trigger: Recalcula precios cuando el costo (CAPP) de un producto cambia
+CREATE OR REPLACE FUNCTION recalculate_prices_on_cost_change()
+RETURNS TRIGGER AS $$
 DECLARE
-    caller_empresa_id uuid;
-    v_list_id uuid;
-    v_new_order integer;
+    price_rule RECORD;
+    new_price NUMERIC;
 BEGIN
-    caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid());
-    IF p_id IS NULL THEN
-        -- Asignar el siguiente número de orden al crear
-        SELECT COALESCE(MAX(orden), -1) + 1 INTO v_new_order FROM public.listas_precios WHERE empresa_id = caller_empresa_id AND es_predeterminada = false;
-        INSERT INTO public.listas_precios(empresa_id, nombre, descripcion, orden) VALUES (caller_empresa_id, p_nombre, p_descripcion, v_new_order) RETURNING id INTO v_list_id;
-    ELSE
-        UPDATE public.listas_precios SET nombre = p_nombre, descripcion = p_descripcion WHERE id = p_id AND empresa_id = caller_empresa_id;
-        v_list_id := p_id;
-    END IF;
-    RETURN v_list_id;
+    -- Itera sobre todas las reglas de precio para el producto cuyo costo ha cambiado.
+    FOR price_rule IN
+        SELECT id, tipo_ganancia, valor_ganancia
+        FROM public.precios_productos
+        WHERE producto_id = NEW.id
+    LOOP
+        -- Aplica la regla de ganancia para calcular el nuevo precio de venta.
+        IF price_rule.tipo_ganancia = 'porcentaje' THEN
+            new_price := NEW.precio_compra * (1 + price_rule.valor_ganancia / 100.0);
+        ELSE -- 'fijo'
+            new_price := NEW.precio_compra + price_rule.valor_ganancia;
+        END IF;
+
+        -- Actualiza el precio calculado en la tabla.
+        UPDATE public.precios_productos
+        SET precio = new_price
+        WHERE id = price_rule.id;
+    END LOOP;
+    
+    RETURN NEW;
 END;
-$$;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- **NUEVA FUNCIÓN:** Actualizar el orden de las listas de precios
-CREATE OR REPLACE FUNCTION update_price_list_order(p_list_ids uuid[])
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    caller_empresa_id uuid;
-BEGIN
-    caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid());
-    IF caller_empresa_id IS NULL THEN RAISE EXCEPTION 'Acceso denegado.'; END IF;
+-- Creación del Trigger
+DROP TRIGGER IF EXISTS on_product_cost_change ON public.productos;
+CREATE TRIGGER on_product_cost_change
+AFTER UPDATE OF precio_compra ON public.productos
+FOR EACH ROW
+WHEN (OLD.precio_compra IS DISTINCT FROM NEW.precio_compra)
+EXECUTE FUNCTION recalculate_prices_on_cost_change();
 
-    -- Actualiza el campo 'orden' para cada ID en el array, basado en su posición
-    WITH new_order AS (
-        SELECT
-            id,
-            -- row_number() es 1-based, restamos 1 para que el orden sea 0-based
-            (row_number() OVER ()) - 1 AS orden
-        FROM unnest(p_list_ids) as id
-    )
-    UPDATE public.listas_precios lp
-    SET orden = new_order.orden
-    FROM new_order
-    WHERE lp.id = new_order.id AND lp.empresa_id = caller_empresa_id;
-END;
-$$;
 
--- **FUNCIÓN ACTUALIZADA:** Obtener datos para el Punto de Venta (POS)
--- **CAMBIO:** Ahora incluye el stock en TODAS las sucursales para cada producto.
-CREATE OR REPLACE FUNCTION get_pos_data()
+-- -----------------------------------------------------------------------------
+-- Paso 2: Funciones RPC (Lógica de Negocio) - **ACTUALIZADO**
+-- -----------------------------------------------------------------------------
+
+-- **FUNCIÓN ACTUALIZADA:** `get_product_details`
+-- **CAMBIO:** Ahora devuelve `tipo_ganancia` y `valor_ganancia` para cada lista de precios.
+CREATE OR REPLACE FUNCTION get_product_details(p_producto_id uuid)
 RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -212,79 +71,61 @@ SET search_path = public
 AS $$
 DECLARE
     caller_empresa_id uuid;
-    caller_sucursal_id uuid;
-    products_list json;
-    price_lists_list json;
+    details jsonb;
+    images json;
+    inventory json;
+    prices json;
+    all_branches json;
 BEGIN
-    -- 1. Obtener la información del usuario que realiza la llamada
-    SELECT u.empresa_id, u.sucursal_id INTO caller_empresa_id, caller_sucursal_id
-    FROM public.usuarios u WHERE u.id = auth.uid();
-
-    IF caller_empresa_id IS NULL OR caller_sucursal_id IS NULL THEN
-        RAISE EXCEPTION 'Usuario no encontrado o no asignado a una sucursal.';
+    caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid());
+    IF NOT EXISTS (SELECT 1 FROM public.productos WHERE id = p_producto_id AND empresa_id = caller_empresa_id) THEN
+        RAISE EXCEPTION 'Producto no encontrado o no pertenece a tu empresa.';
     END IF;
 
-    -- 2. Obtener todas las listas de precios de la empresa
-    SELECT json_agg(pl_info) INTO price_lists_list FROM (
-        SELECT id, nombre, es_predeterminada
-        FROM public.listas_precios
-        WHERE empresa_id = caller_empresa_id
-        ORDER BY es_predeterminada DESC, orden ASC, nombre ASC
-    ) AS pl_info;
+    SELECT to_jsonb(p) || jsonb_build_object('categoria_nombre', c.nombre) INTO details
+    FROM public.productos p LEFT JOIN public.categorias c ON p.categoria_id = c.id WHERE p.id = p_producto_id;
 
-    -- 3. Obtener todos los productos con su stock y precios
-    SELECT json_agg(p_info) INTO products_list FROM (
+    SELECT json_agg(i ORDER BY i.orden) INTO images FROM public.imagenes_productos i WHERE i.producto_id = p_producto_id;
+
+    SELECT json_agg(inv) INTO inventory FROM (
+        SELECT i.sucursal_id, i.cantidad, i.stock_minimo, s.nombre as sucursal_nombre
+        FROM public.inventarios i JOIN public.sucursales s ON i.sucursal_id = s.id
+        WHERE i.producto_id = p_producto_id
+    ) inv;
+
+    SELECT json_agg(pr) INTO prices FROM (
         SELECT
-            p.id,
-            p.nombre,
-            p.sku,
-            p.marca,
-            p.unidad_medida,
-            c.nombre as categoria_nombre,
-            (SELECT img.imagen_url FROM public.imagenes_productos img WHERE img.producto_id = p.id ORDER BY img.orden, img.created_at LIMIT 1) as imagen_principal,
-            -- Obtener el stock SÓLO para la sucursal del usuario
-            COALESCE((SELECT i.cantidad FROM public.inventarios i WHERE i.producto_id = p.id AND i.sucursal_id = caller_sucursal_id), 0) as stock_sucursal,
-            -- **NUEVO:** Obtener el stock en TODAS las sucursales
-            (
-                SELECT json_agg(json_build_object('sucursal_id', s.id, 'sucursal_nombre', s.nombre, 'cantidad', COALESCE(i.cantidad, 0)))
-                FROM public.sucursales s
-                LEFT JOIN public.inventarios i ON s.id = i.sucursal_id AND i.producto_id = p.id
-                WHERE s.empresa_id = caller_empresa_id
-            ) as all_branch_stock,
-            -- Agregar todos los precios del producto en un único objeto JSON
-            (
-                SELECT json_object_agg(pp.lista_precio_id, pp.precio)
-                FROM public.precios_productos pp
-                WHERE pp.producto_id = p.id
-            ) as prices
-        FROM
-            public.productos p
-        LEFT JOIN public.categorias c ON p.categoria_id = c.id
-        WHERE
-            p.empresa_id = caller_empresa_id
-        ORDER BY
-            p.nombre ASC
-    ) AS p_info;
+            lp.id as lista_precio_id,
+            lp.nombre as lista_nombre,
+            lp.es_predeterminada,
+            pp.precio,
+            pp.tipo_ganancia,
+            pp.valor_ganancia
+        FROM public.listas_precios lp
+        LEFT JOIN public.precios_productos pp ON lp.id = pp.lista_precio_id AND pp.producto_id = p_producto_id
+        WHERE lp.empresa_id = caller_empresa_id
+        ORDER BY lp.es_predeterminada DESC, lp.orden ASC, lp.nombre ASC
+    ) pr;
 
-    -- 4. Devolver el objeto JSON combinado
-    RETURN json_build_object(
-        'products', COALESCE(products_list, '[]'::json),
-        'price_lists', COALESCE(price_lists_list, '[]'::json)
-    );
+    SELECT json_agg(b) INTO all_branches FROM (SELECT id, nombre FROM public.sucursales WHERE empresa_id = caller_empresa_id ORDER BY nombre) b;
+
+    RETURN json_build_object('details', details, 'images', COALESCE(images, '[]'::json), 'inventory', COALESCE(inventory, '[]'::json), 'prices', COALESCE(prices, '[]'::json), 'all_branches', COALESCE(all_branches, '[]'::json));
 END;
 $$;
 
--- **NUEVO TIPO Y FUNCIÓN:** Para ajustes de inventario
-DROP TYPE IF EXISTS public.inventory_adjustment CASCADE;
-CREATE TYPE public.inventory_adjustment AS (
-    sucursal_id uuid,
-    cantidad_ajuste numeric
+-- **FUNCIÓN ACTUALIZADA:** `update_product_prices`
+-- **CAMBIO:** Ahora acepta las reglas de ganancia como entrada, calcula el precio
+-- y guarda tanto la regla como el precio resultante.
+DROP TYPE IF EXISTS public.price_rule_input CASCADE;
+CREATE TYPE public.price_rule_input AS (
+    lista_id uuid,
+    tipo_ganancia text,
+    valor_ganancia numeric
 );
 
-CREATE OR REPLACE FUNCTION ajustar_inventario_lote(
+CREATE OR REPLACE FUNCTION update_product_prices(
     p_producto_id uuid,
-    p_ajustes inventory_adjustment[],
-    p_motivo text
+    p_precios price_rule_input[]
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -292,145 +133,192 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-    caller_user_id uuid := auth.uid();
     caller_empresa_id uuid;
-    caller_rol text;
-    ajuste inventory_adjustment;
-    stock_anterior numeric;
-    stock_nuevo numeric;
+    product_cost numeric;
+    new_price numeric;
+    price_item price_rule_input;
 BEGIN
-    -- 1. Validar permisos del usuario
-    SELECT empresa_id, rol INTO caller_empresa_id, caller_rol FROM public.usuarios WHERE id = caller_user_id;
-    IF caller_rol NOT IN ('Propietario', 'Administrador') THEN
-        RAISE EXCEPTION 'Acceso denegado. Se requiere rol de Propietario o Administrador.';
-    END IF;
+    caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid());
     IF NOT EXISTS (SELECT 1 FROM public.productos WHERE id = p_producto_id AND empresa_id = caller_empresa_id) THEN
         RAISE EXCEPTION 'Producto no encontrado o no pertenece a tu empresa.';
     END IF;
 
-    -- 2. Iterar sobre cada ajuste en el array
-    FOREACH ajuste IN ARRAY p_ajustes
-    LOOP
-        -- 2.1. Obtener el stock actual y calcular el nuevo
-        SELECT cantidad INTO stock_anterior FROM public.inventarios
-        WHERE producto_id = p_producto_id AND sucursal_id = ajuste.sucursal_id;
-        
-        stock_anterior := COALESCE(stock_anterior, 0);
-        stock_nuevo := stock_anterior + ajuste.cantidad_ajuste;
+    SELECT precio_compra INTO product_cost FROM public.productos WHERE id = p_producto_id;
+    product_cost := COALESCE(product_cost, 0);
 
-        -- 2.2. Actualizar (o insertar) el registro en la tabla de inventarios
-        INSERT INTO public.inventarios (producto_id, sucursal_id, cantidad, updated_at)
-        VALUES (p_producto_id, ajuste.sucursal_id, stock_nuevo, now())
-        ON CONFLICT (producto_id, sucursal_id)
+    FOREACH price_item IN ARRAY p_precios LOOP
+        IF price_item.tipo_ganancia = 'porcentaje' THEN
+            new_price := product_cost * (1 + price_item.valor_ganancia / 100.0);
+        ELSE -- 'fijo'
+            new_price := product_cost + price_item.valor_ganancia;
+        END IF;
+
+        INSERT INTO public.precios_productos(producto_id, lista_precio_id, tipo_ganancia, valor_ganancia, precio)
+        VALUES(p_producto_id, price_item.lista_id, price_item.tipo_ganancia, price_item.valor_ganancia, new_price)
+        ON CONFLICT (producto_id, lista_precio_id)
         DO UPDATE SET
-            cantidad = EXCLUDED.cantidad,
-            updated_at = EXCLUDED.updated_at;
-
-        -- 2.3. Registrar el movimiento para auditoría
-        INSERT INTO public.movimientos_inventario (
-            producto_id, sucursal_id, usuario_id, tipo_movimiento,
-            cantidad_ajustada, stock_anterior, stock_nuevo, motivo
-        ) VALUES (
-            p_producto_id, ajuste.sucursal_id, caller_user_id, 'Ajuste Manual',
-            ajuste.cantidad_ajuste, stock_anterior, stock_nuevo, p_motivo
-        );
+            tipo_ganancia = EXCLUDED.tipo_ganancia,
+            valor_ganancia = EXCLUDED.valor_ganancia,
+            precio = EXCLUDED.precio,
+            updated_at = now();
     END LOOP;
 END;
 $$;
 
-
-CREATE OR REPLACE FUNCTION delete_price_list(p_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF EXISTS (SELECT 1 FROM public.listas_precios WHERE id = p_id AND empresa_id = caller_empresa_id AND es_predeterminada = true) THEN RAISE EXCEPTION 'No se puede eliminar la lista de precios predeterminada.'; END IF; DELETE FROM public.listas_precios WHERE id = p_id AND empresa_id = caller_empresa_id; END; $$;
-CREATE OR REPLACE FUNCTION get_all_categories() RETURNS TABLE (id uuid, nombre text) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ BEGIN RETURN QUERY SELECT c.id, c.nombre FROM public.categorias c WHERE c.empresa_id = (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()) ORDER BY c.nombre; END; $$;
-CREATE OR REPLACE FUNCTION create_category(p_nombre text) RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE new_category record; BEGIN INSERT INTO public.categorias(empresa_id, nombre) VALUES ((SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()), p_nombre) RETURNING id, nombre INTO new_category; RETURN json_build_object('id', new_category.id, 'nombre', new_category.nombre); END; $$;
-DROP TYPE IF EXISTS public.product_image_input CASCADE; CREATE TYPE public.product_image_input AS (imagen_url text, orden integer);
-CREATE OR REPLACE FUNCTION add_product_images(p_producto_id uuid, p_images product_image_input[]) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; img product_image_input; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF NOT EXISTS (SELECT 1 FROM public.productos WHERE id = p_producto_id AND empresa_id = caller_empresa_id) THEN RAISE EXCEPTION 'Producto no encontrado.'; END IF; FOREACH img IN ARRAY p_images LOOP INSERT INTO public.imagenes_productos(producto_id, imagen_url, orden) VALUES (p_producto_id, img.imagen_url, img.orden); END LOOP; END; $$;
-CREATE OR REPLACE FUNCTION delete_product(p_producto_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; total_stock numeric; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF NOT EXISTS (SELECT 1 FROM public.productos WHERE id = p_producto_id AND empresa_id = caller_empresa_id) THEN RAISE EXCEPTION 'Producto no encontrado.'; END IF; SELECT COALESCE(SUM(cantidad), 0) INTO total_stock FROM public.inventarios WHERE producto_id = p_producto_id; IF total_stock > 0 THEN RAISE EXCEPTION 'No se puede eliminar un producto que tiene stock registrado.'; END IF; DELETE FROM public.productos WHERE id = p_producto_id; END; $$;
-
--- **NUEVO TIPO Y FUNCIÓN:** Para importación masiva de productos
-DROP TYPE IF EXISTS public.product_import_row CASCADE;
-CREATE TYPE public.product_import_row AS (
-    sku text,
-    nombre text,
-    marca text,
-    modelo text,
-    descripcion text,
-    categoria_nombre text,
-    unidad_medida text,
-    precio_base numeric
+-- **FUNCIÓN ACTUALIZADA:** `registrar_compra`
+-- **CAMBIO:** Se refactoriza para ser una operación transaccional única. Ahora
+-- acepta las nuevas reglas de precios definidas durante la compra y las guarda.
+-- La actualización del inventario y el costo (CAPP) disparará automáticamente
+-- el trigger para recalcular todos los demás precios.
+DROP TYPE IF EXISTS public.compra_item_input CASCADE;
+CREATE TYPE public.compra_item_input AS (
+    producto_id uuid,
+    cantidad numeric,
+    costo_unitario numeric,
+    precios price_rule_input[]
 );
 
-CREATE OR REPLACE FUNCTION import_products_in_bulk(p_products product_import_row[])
-RETURNS json
+DROP TYPE IF EXISTS public.compra_input CASCADE;
+CREATE TYPE public.compra_input AS (
+    proveedor_id uuid,
+    sucursal_id uuid,
+    fecha date,
+    moneda text,
+    tasa_cambio numeric,
+    tipo_pago text,
+    n_factura text,
+    fecha_vencimiento date,
+    abono_inicial numeric,
+    metodo_abono text
+);
+
+CREATE OR REPLACE FUNCTION registrar_compra(p_compra compra_input, p_items compra_item_input[])
+RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-    caller_empresa_id uuid;
-    prod_row product_import_row;
-    v_categoria_id uuid;
-    v_producto_id uuid;
-    v_default_price_list_id uuid;
-    created_count integer := 0;
-    updated_count integer := 0;
-    error_count integer := 0;
-    error_messages text[] := ARRAY[]::text[];
+    caller_empresa_id uuid := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid());
+    caller_user_id uuid := auth.uid();
+    new_compra_id uuid;
+    item compra_item_input;
+    price_rule price_rule_input;
+    total_compra numeric := 0;
+    total_compra_bob numeric;
+    saldo_final numeric;
+    estado_final text;
+    stock_total_actual numeric;
+    capp_actual numeric;
+    nuevo_capp numeric;
+    costo_unitario_bob numeric;
+    new_price numeric;
 BEGIN
-    caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid());
-    IF caller_empresa_id IS NULL THEN
-        RAISE EXCEPTION 'Usuario no encontrado o sin empresa asignada.';
+    -- 1. Calcular totales, saldos y estados
+    FOREACH item IN ARRAY p_items LOOP
+        total_compra := total_compra + (item.cantidad * item.costo_unitario);
+    END LOOP;
+
+    total_compra_bob := CASE WHEN p_compra.moneda = 'USD' THEN total_compra * p_compra.tasa_cambio ELSE total_compra END;
+
+    IF p_compra.tipo_pago = 'Contado' THEN
+        saldo_final := 0;
+        estado_final := 'Pagada';
+    ELSE
+        saldo_final := total_compra - COALESCE(p_compra.abono_inicial, 0);
+        IF saldo_final <= 0.005 THEN
+            estado_final := 'Pagada';
+            saldo_final := 0;
+        ELSIF COALESCE(p_compra.abono_inicial, 0) > 0 THEN
+            estado_final := 'Abono Parcial';
+        ELSE
+            estado_final := 'Pendiente';
+        END IF;
     END IF;
 
-    SELECT id INTO v_default_price_list_id FROM public.listas_precios WHERE empresa_id = caller_empresa_id AND es_predeterminada = true;
-    IF v_default_price_list_id IS NULL THEN
-        INSERT INTO public.listas_precios (empresa_id, nombre, es_predeterminada, descripcion)
-        VALUES (caller_empresa_id, 'General', true, 'Precio de venta estándar')
-        RETURNING id INTO v_default_price_list_id;
-    END IF;
+    -- 2. Insertar la cabecera de la compra
+    INSERT INTO public.compras (empresa_id, sucursal_id, proveedor_id, folio, fecha, moneda, tasa_cambio, total, total_bob, tipo_pago, estado_pago, saldo_pendiente, n_factura, fecha_vencimiento)
+    VALUES (caller_empresa_id, p_compra.sucursal_id, p_compra.proveedor_id, 'COMP-' || lpad(nextval('compra_folio_seq')::text, 5, '0'), p_compra.fecha, p_compra.moneda, p_compra.tasa_cambio, total_compra, total_compra_bob, p_compra.tipo_pago, estado_final, saldo_final, p_compra.n_factura, p_compra.fecha_vencimiento)
+    RETURNING id INTO new_compra_id;
 
-    FOREACH prod_row IN ARRAY p_products
-    LOOP
-        BEGIN
-            IF prod_row.nombre IS NULL OR trim(prod_row.nombre) = '' THEN
-                RAISE EXCEPTION 'El campo "nombre" no puede estar vacío.';
-            END IF;
+    -- 3. Procesar cada item
+    FOREACH item IN ARRAY p_items LOOP
+        INSERT INTO public.compra_items (compra_id, producto_id, cantidad, costo_unitario)
+        VALUES (new_compra_id, item.producto_id, item.cantidad, item.costo_unitario);
 
-            IF prod_row.categoria_nombre IS NOT NULL AND trim(prod_row.categoria_nombre) <> '' THEN
-                SELECT id INTO v_categoria_id FROM public.categorias WHERE empresa_id = caller_empresa_id AND lower(nombre) = lower(trim(prod_row.categoria_nombre));
-                IF v_categoria_id IS NULL THEN
-                    INSERT INTO public.categorias (empresa_id, nombre) VALUES (caller_empresa_id, trim(prod_row.categoria_nombre)) RETURNING id INTO v_categoria_id;
+        costo_unitario_bob := CASE WHEN p_compra.moneda = 'USD' THEN item.costo_unitario * p_compra.tasa_cambio ELSE item.costo_unitario END;
+
+        -- Calcular CAPP
+        SELECT COALESCE(SUM(i.cantidad), 0), p.precio_compra INTO stock_total_actual, capp_actual
+        FROM public.productos p
+        LEFT JOIN public.inventarios i ON p.id = i.producto_id
+        WHERE p.id = item.producto_id
+        GROUP BY p.id;
+        capp_actual := COALESCE(capp_actual, 0);
+
+        IF (stock_total_actual + item.cantidad) > 0 THEN
+            nuevo_capp := ((stock_total_actual * capp_actual) + (item.cantidad * costo_unitario_bob)) / (stock_total_actual + item.cantidad);
+        ELSE
+            nuevo_capp := costo_unitario_bob;
+        END IF;
+        
+        -- Guardar las nuevas reglas de precios (si se definieron)
+        IF item.precios IS NOT NULL AND array_length(item.precios, 1) > 0 THEN
+            FOREACH price_rule IN ARRAY item.precios LOOP
+                -- Se recalcula el precio con el NUEVO CAPP y la nueva regla de ganancia.
+                IF price_rule.tipo_ganancia = 'porcentaje' THEN
+                    new_price := nuevo_capp * (1 + price_rule.valor_ganancia / 100.0);
+                ELSE -- 'fijo'
+                    new_price := nuevo_capp + price_rule.valor_ganancia;
                 END IF;
-            ELSE
-                v_categoria_id := NULL;
-            END IF;
+                
+                INSERT INTO public.precios_productos(producto_id, lista_precio_id, tipo_ganancia, valor_ganancia, precio)
+                VALUES(item.producto_id, price_rule.lista_id, price_rule.tipo_ganancia, price_rule.valor_ganancia, new_price)
+                ON CONFLICT (producto_id, lista_precio_id) DO UPDATE SET
+                    tipo_ganancia = EXCLUDED.tipo_ganancia,
+                    valor_ganancia = EXCLUDED.valor_ganancia,
+                    precio = EXCLUDED.precio,
+                    updated_at = now();
+            END LOOP;
+        END IF;
+        
+        -- Actualizar el CAPP en la tabla productos. ESTO DISPARARÁ EL TRIGGER que recalculará todos los precios.
+        UPDATE public.productos SET precio_compra = nuevo_capp WHERE id = item.producto_id;
 
-            v_producto_id := NULL;
-            IF prod_row.sku IS NOT NULL AND trim(prod_row.sku) <> '' THEN
-                SELECT id INTO v_producto_id FROM public.productos WHERE empresa_id = caller_empresa_id AND sku = trim(prod_row.sku);
-            END IF;
+        -- Actualizar inventario y registrar movimiento
+        DECLARE
+            stock_sucursal_anterior numeric;
+        BEGIN
+            SELECT cantidad INTO stock_sucursal_anterior FROM public.inventarios WHERE producto_id = item.producto_id AND sucursal_id = p_compra.sucursal_id;
+            stock_sucursal_anterior := COALESCE(stock_sucursal_anterior, 0);
 
-            IF v_producto_id IS NOT NULL THEN
-                UPDATE public.productos SET nombre = trim(prod_row.nombre), marca = trim(prod_row.marca), modelo = trim(prod_row.modelo), descripcion = trim(prod_row.descripcion), categoria_id = v_categoria_id, unidad_medida = COALESCE(trim(prod_row.unidad_medida), 'Unidad') WHERE id = v_producto_id;
-                updated_count := updated_count + 1;
-            ELSE
-                INSERT INTO public.productos (empresa_id, sku, nombre, marca, modelo, descripcion, categoria_id, unidad_medida) VALUES (caller_empresa_id, NULLIF(trim(prod_row.sku), ''), trim(prod_row.nombre), trim(prod_row.marca), trim(prod_row.modelo), trim(prod_row.descripcion), v_categoria_id, COALESCE(trim(prod_row.unidad_medida), 'Unidad')) RETURNING id INTO v_producto_id;
-                created_count := created_count + 1;
-            END IF;
+            INSERT INTO public.inventarios (producto_id, sucursal_id, cantidad) VALUES (item.producto_id, p_compra.sucursal_id, stock_sucursal_anterior + item.cantidad)
+            ON CONFLICT (producto_id, sucursal_id) DO UPDATE SET cantidad = public.inventarios.cantidad + item.cantidad, updated_at = now();
 
-            IF prod_row.precio_base IS NOT NULL AND prod_row.precio_base >= 0 THEN
-                INSERT INTO public.precios_productos (producto_id, lista_precio_id, precio) VALUES (v_producto_id, v_default_price_list_id, prod_row.precio_base) ON CONFLICT (producto_id, lista_precio_id) DO UPDATE SET precio = EXCLUDED.precio, updated_at = now();
-            END IF;
-
-        EXCEPTION WHEN OTHERS THEN
-            error_count := error_count + 1;
-            error_messages := array_append(error_messages, 'Fila ' || (created_count + updated_count + error_count) || ' (SKU: ' || COALESCE(prod_row.sku, 'N/A') || '): ' || SQLERRM);
+            INSERT INTO public.movimientos_inventario (producto_id, sucursal_id, usuario_id, tipo_movimiento, cantidad_ajustada, stock_anterior, stock_nuevo, referencia_id)
+            VALUES (item.producto_id, p_compra.sucursal_id, caller_user_id, 'Compra', item.cantidad, stock_sucursal_anterior, stock_sucursal_anterior + item.cantidad, new_compra_id);
         END;
     END LOOP;
 
-    RETURN json_build_object('created', created_count, 'updated', updated_count, 'errors', error_count, 'error_messages', error_messages);
+    -- 4. Registrar pago inicial
+    IF p_compra.tipo_pago = 'Contado' THEN
+        INSERT INTO public.pagos_compras (compra_id, monto, metodo_pago) VALUES (new_compra_id, total_compra, 'Contado');
+    ELSIF p_compra.tipo_pago = 'Crédito' AND COALESCE(p_compra.abono_inicial, 0) > 0 THEN
+        INSERT INTO public.pagos_compras (compra_id, monto, metodo_pago) VALUES (new_compra_id, p_compra.abono_inicial, COALESCE(p_compra.metodo_abono, 'Abono Inicial'));
+    END IF;
 END;
 $$;
 
+
+-- -----------------------------------------------------------------------------
+-- Se mantienen las demás funciones sin cambios relevantes
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION upsert_product( p_id uuid, p_nombre text, p_sku text, p_marca text, p_modelo text, p_descripcion text, p_categoria_id uuid, p_unidad_medida text ) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; v_producto_id uuid; v_default_price_list_id uuid; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF caller_empresa_id IS NULL THEN RAISE EXCEPTION 'Usuario no encontrado.'; END IF; SELECT id INTO v_default_price_list_id FROM public.listas_precios WHERE empresa_id = caller_empresa_id AND es_predeterminada = true; IF v_default_price_list_id IS NULL THEN INSERT INTO public.listas_precios (empresa_id, nombre, es_predeterminada, descripcion) VALUES (caller_empresa_id, 'General', true, 'Precio de venta estándar') RETURNING id INTO v_default_price_list_id; END IF; IF p_id IS NULL THEN INSERT INTO public.productos(empresa_id, nombre, sku, marca, modelo, descripcion, categoria_id, unidad_medida) VALUES (caller_empresa_id, p_nombre, p_sku, p_marca, p_modelo, p_descripcion, p_categoria_id, p_unidad_medida) RETURNING id INTO v_producto_id; INSERT INTO public.precios_productos(producto_id, lista_precio_id, precio, tipo_ganancia, valor_ganancia) VALUES(v_producto_id, v_default_price_list_id, 0, 'fijo', 0); ELSE UPDATE public.productos SET nombre = p_nombre, sku = p_sku, marca = p_marca, modelo = p_modelo, descripcion = p_descripcion, categoria_id = p_categoria_id, unidad_medida = p_unidad_medida WHERE id = p_id AND empresa_id = caller_empresa_id; v_producto_id := p_id; END IF; RETURN v_producto_id; END; $$;
+CREATE OR REPLACE FUNCTION get_company_products_with_stock() RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; products_list json; kpis json; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF caller_empresa_id IS NULL THEN RAISE EXCEPTION 'Usuario no encontrado.'; END IF; SELECT json_agg(p_info) INTO products_list FROM ( SELECT p.id, p.nombre, p.sku, p.marca, p.modelo, p.categoria_id, p.unidad_medida, p.descripcion, c.nombre as categoria_nombre, COALESCE(i.stock_total, 0) as stock_total, COALESCE(pp.precio, 0) as precio_base, (SELECT img.imagen_url FROM public.imagenes_productos img WHERE img.producto_id = p.id ORDER BY img.orden, img.created_at LIMIT 1) as imagen_principal FROM public.productos p LEFT JOIN public.categorias c ON p.categoria_id = c.id LEFT JOIN ( SELECT inv.producto_id, SUM(inv.cantidad) as stock_total FROM public.inventarios inv GROUP BY inv.producto_id ) i ON p.id = i.producto_id LEFT JOIN public.listas_precios lp ON lp.empresa_id = p.empresa_id AND lp.es_predeterminada = true LEFT JOIN public.precios_productos pp ON pp.producto_id = p.id AND pp.lista_precio_id = lp.id WHERE p.empresa_id = caller_empresa_id ORDER BY p.created_at DESC ) AS p_info; SELECT json_build_object( 'total_products', (SELECT COUNT(*) FROM public.productos WHERE empresa_id = caller_empresa_id), 'total_stock_items', COALESCE((SELECT SUM(cantidad) FROM public.inventarios inv JOIN public.productos pr ON inv.producto_id = pr.id WHERE pr.empresa_id = caller_empresa_id), 0), 'products_without_stock', (SELECT COUNT(*) FROM public.productos p WHERE p.empresa_id = caller_empresa_id AND COALESCE((SELECT SUM(inv.cantidad) FROM public.inventarios inv WHERE inv.producto_id = p.id), 0) <= 0) ) INTO kpis; RETURN json_build_object('products', COALESCE(products_list, '[]'::json), 'kpis', kpis); END; $$;
+CREATE OR REPLACE FUNCTION get_price_lists() RETURNS TABLE (id uuid, nombre text, descripcion text, es_predeterminada boolean) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ BEGIN RETURN QUERY SELECT lp.id, lp.nombre, lp.descripcion, lp.es_predeterminada FROM public.listas_precios lp WHERE lp.empresa_id = (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()) ORDER BY lp.es_predeterminada DESC, lp.orden ASC, lp.nombre ASC; END; $$;
+CREATE OR REPLACE FUNCTION upsert_price_list(p_id uuid, p_nombre text, p_descripcion text) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; v_list_id uuid; v_new_order integer; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF p_id IS NULL THEN SELECT COALESCE(MAX(orden), -1) + 1 INTO v_new_order FROM public.listas_precios WHERE empresa_id = caller_empresa_id AND es_predeterminada = false; INSERT INTO public.listas_precios(empresa_id, nombre, descripcion, orden) VALUES (caller_empresa_id, p_nombre, p_descripcion, v_new_order) RETURNING id INTO v_list_id; ELSE UPDATE public.listas_precios SET nombre = p_nombre, descripcion = p_descripcion WHERE id = p_id AND empresa_id = caller_empresa_id; v_list_id := p_id; END IF; RETURN v_list_id; END; $$;
+CREATE OR REPLACE FUNCTION update_price_list_order(p_list_ids uuid[]) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF caller_empresa_id IS NULL THEN RAISE EXCEPTION 'Acceso denegado.'; END IF; WITH new_order AS ( SELECT id, (row_number() OVER ()) - 1 AS orden FROM unnest(p_list_ids) as id ) UPDATE public.listas_precios lp SET orden = new_order.orden FROM new_order WHERE lp.id = new_order.id AND lp.empresa_id = caller_empresa_id; END; $$;
+CREATE OR REPLACE FUNCTION get_pos_data() RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; caller_sucursal_id uuid; products_list json; price_lists_list json; BEGIN SELECT u.empresa_id, u.sucursal_id INTO caller_empresa_id, caller_sucursal_id FROM public.usuarios u WHERE u.id = auth.uid(); IF caller_empresa_id IS NULL OR caller_sucursal_id IS NULL THEN RAISE EXCEPTION 'Usuario no encontrado o no asignado a una sucursal.'; END IF; SELECT json_agg(pl_info) INTO price_lists_list FROM ( SELECT id, nombre, es_predeterminada FROM public.listas_precios WHERE empresa_id = caller_empresa_id ORDER BY es_predeterminada DESC, orden ASC, nombre ASC ) AS pl_info; SELECT json_agg(p_info) INTO products_list FROM ( SELECT p.id, p.nombre, p.sku, p.marca, p.unidad_medida, c.nombre as categoria_nombre, (SELECT img.imagen_url FROM public.imagenes_productos img WHERE img.producto_id = p.id ORDER BY img.orden, img.created_at LIMIT 1) as imagen_principal, COALESCE((SELECT i.cantidad FROM public.inventarios i WHERE i.producto_id = p.id AND i.sucursal_id = caller_sucursal_id), 0) as stock_sucursal, ( SELECT json_agg(json_build_object('sucursal_id', s.id, 'sucursal_nombre', s.nombre, 'cantidad', COALESCE(i.cantidad, 0))) FROM public.sucursales s LEFT JOIN public.inventarios i ON s.id = i.sucursal_id AND i.producto_id = p.id WHERE s.empresa_id = caller_empresa_id ) as all_branch_stock, ( SELECT json_object_agg(pp.lista_precio_id, pp.precio) FROM public.precios_productos pp WHERE pp.producto_id = p.id ) as prices FROM public.productos p LEFT JOIN public.categorias c ON p.categoria_id = c.id WHERE p.empresa_id = caller_empresa_id ORDER BY p.nombre ASC ) AS p_info; RETURN json_build_object( 'products', COALESCE(products_list, '[]'::json), 'price_lists', COALESCE(price_lists_list, '[]'::json) ); END; $$;
 -- =============================================================================
 -- Fin del script.
 -- =============================================================================
