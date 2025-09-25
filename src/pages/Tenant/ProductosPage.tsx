@@ -78,7 +78,9 @@ const ProductCard = ({ product, navigate, onEdit, onDelete }) => {
                     </p>
                 </div>
                 <div class="mt-2 flex items-end justify-between">
-                    <p class="text-lg font-semibold text-gray-900">Bs ${Number(product.precio_base).toFixed(2)}</p>
+                    <p class="text-lg font-semibold text-gray-900">
+                        ${Number(product.precio_base) > 0 ? `Bs ${Number(product.precio_base).toFixed(2)}` : html`<span class="text-sm text-amber-600 font-medium">Precio no asignado</span>`}
+                    </p>
                     <${StockPill} stock=${product.stock_total} />
                 </div>
             </div>
@@ -126,7 +128,9 @@ const ProductTable = ({ products, navigate, onEdit, onDelete }) => {
                         </td>
                         <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${p.sku}</td>
                         <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${p.categoria_nombre}</td>
-                        <td class="whitespace-nowrap px-3 py-4 text-sm font-semibold text-gray-800">Bs ${Number(p.precio_base).toFixed(2)}</td>
+                        <td class="whitespace-nowrap px-3 py-4 text-sm font-semibold text-gray-800">
+                             ${Number(p.precio_base) > 0 ? `Bs ${Number(p.precio_base).toFixed(2)}` : html`<span class="text-xs text-amber-600 font-medium">Precio no asignado</span>`}
+                        </td>
                         <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                              <${StockPill} stock=${p.stock_total} />
                         </td>

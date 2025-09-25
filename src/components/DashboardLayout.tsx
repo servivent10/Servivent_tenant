@@ -70,8 +70,11 @@ export function DashboardLayout({ user, onLogout, onProfileUpdate, sidebarLinks,
     const supportRef = useRef(null);
     const systemRef = useRef(null);
     
-    // Determine the links to render. Use passed-in links for SuperAdmin, otherwise generate for Tenant.
-    const finalSidebarLinks = sidebarLinks || getTenantSidebarLinks(user.role);
+    // Fallback for shell rendering during initial load
+    const safeUser = user || { name: ' ', role: '', sucursal: ' ' };
+    const safeCompanyInfo = companyInfo || { name: ' ', licenseStatus: '' };
+
+    const finalSidebarLinks = sidebarLinks || getTenantSidebarLinks(safeUser.role);
     const finalFooterLinks = footerLinks || TENANT_FOOTER_LINKS;
 
     useEffect(() => {
@@ -152,22 +155,22 @@ export function DashboardLayout({ user, onLogout, onProfileUpdate, sidebarLinks,
                     </nav>
                 `}
 
-                ${companyInfo && (user.role === 'Propietario' || user.role === 'Administrador') && html`
+                ${companyInfo && (safeUser.role === 'Propietario' || safeUser.role === 'Administrador') && html`
                     <div class="flex-shrink-0 border-t border-slate-700/50 p-4">
                         <a href="#/licencia" onClick=${(e) => { e.preventDefault(); if(!disableNavigation) window.location.hash = '/licencia'; }} class="block w-full rounded-md p-2 -m-2 ${!disableNavigation ? 'hover:bg-slate-700/50' : 'cursor-not-allowed'} transition-colors" aria-label="Ir a Licencia y Facturación" role="button">
                             <div class="flex items-center">
                                 <div class="flex-shrink-0 h-10 w-10 rounded-md bg-slate-600 flex items-center justify-center">
-                                    ${companyInfo.logo ? html`
-                                        <img class="h-10 w-10 rounded-md object-cover" src=${companyInfo.logo} alt="Logo de la empresa" />
+                                    ${safeCompanyInfo.logo ? html`
+                                        <img class="h-10 w-10 rounded-md object-cover" src=${safeCompanyInfo.logo} alt="Logo de la empresa" />
                                     ` : html`
                                         <div class="text-white text-2xl">${ICONS.business}</div>
                                     `}
                                 </div>
                                 <div class="ml-3 flex-1 min-w-0">
-                                    <p class="text-sm font-semibold text-white truncate group-hover:underline" title=${companyInfo.name}>${companyInfo.name}</p>
+                                    <p class="text-sm font-semibold text-white truncate group-hover:underline" title=${safeCompanyInfo.name}>${safeCompanyInfo.name}</p>
                                     <div class="flex items-center mt-1">
-                                        <div class=${`h-2 w-2 rounded-full ${companyInfo.licenseStatus === 'Activa' ? 'bg-emerald-400' : 'bg-red-500'}`}></div>
-                                        <p class="ml-1.5 text-xs text-gray-300">${companyInfo.licenseStatus}</p>
+                                        <div class=${`h-2 w-2 rounded-full ${safeCompanyInfo.licenseStatus === 'Activa' ? 'bg-emerald-400' : 'bg-red-500'}`}></div>
+                                        <p class="ml-1.5 text-xs text-gray-300">${safeCompanyInfo.licenseStatus}</p>
                                     </div>
                                 </div>
                                 <div class="ml-2 flex-shrink-0 relative" ref=${supportRef}>
@@ -182,14 +185,14 @@ export function DashboardLayout({ user, onLogout, onProfileUpdate, sidebarLinks,
 
             <div class="flex-shrink-0 border-t border-slate-700 p-4">
                 <div class="flex w-full items-center justify-between">
-                    <button onClick=${() => setProfileModalOpen(true)} class="flex flex-1 items-center min-w-0 group rounded-md p-2 -m-2 text-left ${!disableNavigation ? 'hover:bg-slate-700/50' : 'cursor-not-allowed'} transition-colors" aria-label="Abrir perfil de usuario" role="button">
+                    <button onClick=${() => user && setProfileModalOpen(true)} class="flex flex-1 items-center min-w-0 group rounded-md p-2 -m-2 text-left ${!disableNavigation ? 'hover:bg-slate-700/50' : 'cursor-not-allowed'} transition-colors" aria-label="Abrir perfil de usuario" role="button">
                         <div class="flex-shrink-0">
-                            <${Avatar} name=${user.name} avatarUrl=${user.avatar} />
+                            <${Avatar} name=${safeUser.name} avatarUrl=${safeUser.avatar} />
                         </div>
                         <div class="ml-3 flex-1 min-w-0">
-                            <p class="text-sm font-medium text-white truncate group-hover:underline" title=${user.name}>${user.name}</p>
-                            <p class="text-xs text-gray-400 truncate" title=${`${user.sucursal} - ${user.role}`}>
-                                ${user.sucursal} - ${user.role}
+                            <p class="text-sm font-medium text-white truncate group-hover:underline" title=${safeUser.name}>${safeUser.name}</p>
+                            <p class="text-xs text-gray-400 truncate" title=${`${safeUser.sucursal} - ${safeUser.role}`}>
+                                ${safeUser.sucursal} - ${safeUser.role}
                             </p>
                         </div>
                     </button>
@@ -288,11 +291,11 @@ export function DashboardLayout({ user, onLogout, onProfileUpdate, sidebarLinks,
             <p class="text-sm text-gray-600">Estás a punto de cerrar tu sesión. ¿Deseas continuar?</p>
         <//>
         
-        <${ProfileModal} 
+        ${user && html`<${ProfileModal} 
             isOpen=${isProfileModalOpen}
             onClose=${() => setProfileModalOpen(false)}
             user=${user}
             onProfileUpdate=${onProfileUpdate}
-        />
+        />`}
     `;
 }

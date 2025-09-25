@@ -66,13 +66,16 @@ const StockPill = ({ stock }) => {
 };
 
 
-const ProductCard = ({ product, onAddToCart, defaultPrice, quantityInCart, onCheckStock }) => {
+const ProductCard = ({ product, onAction, defaultPrice, quantityInCart, onCheckStock }) => {
     const hasStock = product.stock_sucursal > 0;
+    const hasPrice = defaultPrice > 0;
+    const isAvailable = hasStock && hasPrice;
+    
     return html`
-        <div class="group relative flex flex-col rounded-lg bg-white shadow-md border overflow-hidden">
+        <div class="group relative flex flex-col rounded-lg bg-white shadow-md border overflow-hidden ${!isAvailable ? 'opacity-75' : ''}">
             <button 
-                onClick=${() => hasStock ? onAddToCart(product) : onCheckStock(product)}
-                class="flex flex-col flex-grow focus:outline-none cursor-pointer ${!hasStock ? 'opacity-75' : ''}"
+                onClick=${() => onAction(product, isAvailable)}
+                class="flex flex-col flex-grow focus:outline-none cursor-pointer"
             >
                 <div class="relative aspect-square w-full bg-gray-100 overflow-hidden">
                     <img src=${product.imagen_principal || 'https://picsum.photos/300/300'} alt=${product.nombre} class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
@@ -85,7 +88,11 @@ const ProductCard = ({ product, onAddToCart, defaultPrice, quantityInCart, onChe
                 <div class="flex flex-1 flex-col p-3 text-left">
                     <h3 class="text-sm font-semibold text-gray-800 flex-grow">${product.nombre}</h3>
                     <div class="mt-2">
-                        <p class="text-base font-bold text-gray-900">Bs ${defaultPrice.toFixed(2)}</p>
+                         ${hasPrice ? html`
+                            <p class="text-base font-bold text-gray-900">Bs ${defaultPrice.toFixed(2)}</p>
+                        ` : html`
+                             <p class="text-xs font-bold text-amber-600">Precio no asignado</p>
+                        `}
                     </div>
                 </div>
             </button>
@@ -95,7 +102,13 @@ const ProductCard = ({ product, onAddToCart, defaultPrice, quantityInCart, onChe
                     ${ICONS.inventory}
                 </button>
             </div>
-            ${!hasStock && html`<div class="absolute inset-0 bg-white/60 flex items-center justify-center pointer-events-none"><span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full">AGOTADO</span></div>`}
+            ${!isAvailable && html`
+                <div class="absolute inset-0 bg-white/60 flex items-center justify-center pointer-events-none">
+                    <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full">
+                        ${!hasPrice ? 'SIN PRECIO' : 'AGOTADO'}
+                    </span>
+                </div>
+            `}
         </div>
     `;
 };
@@ -233,6 +246,19 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         });
     };
 
+    const handleProductAction = (product, isAvailable) => {
+        if (isAvailable) {
+            handleAddToCart(product);
+        } else {
+            const price = getPriceForProduct(product, defaultPriceListId);
+            if (price <= 0) {
+                addToast({ message: 'Este producto no tiene un precio asignado y no puede ser vendido.', type: 'warning' });
+            } else { // out of stock
+                handleCheckStock(product);
+            }
+        }
+    };
+
     const handleUpdateQuantity = (productId, newQuantity) => {
         if (isNaN(newQuantity)) {
             return;
@@ -366,7 +392,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                             ${filteredProducts.map(p => html`
                                 <${ProductCard} 
                                     product=${p} 
-                                    onAddToCart=${handleAddToCart} 
+                                    onAction=${handleProductAction} 
                                     onCheckStock=${handleCheckStock}
                                     defaultPrice=${getPriceForProduct(p, defaultPriceListId)}
                                     quantityInCart=${cartMap.get(p.id)?.quantity || 0}

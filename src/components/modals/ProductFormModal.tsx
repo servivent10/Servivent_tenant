@@ -148,18 +148,15 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
     };
 
     const validateForm = () => {
-        // FIX: Initialize `newErrors` with a defined shape to prevent TypeScript errors.
-        // This ensures the object passed to `setErrors` matches the state's type.
         const newErrors = { nombre: '', precio_base: '' };
         if (!formData.nombre.trim()) {
             newErrors.nombre = 'El nombre del producto es obligatorio.';
         }
         const price = parseFloat(formData.precio_base);
-        if (isNaN(price) || price < 0) {
-            newErrors.precio_base = 'Introduce un precio válido.';
+        if (formData.precio_base === '' || isNaN(price) || price < 0) {
+            newErrors.precio_base = 'El precio base es obligatorio y debe ser >= 0.';
         }
         setErrors(newErrors);
-        // FIX: Update validation logic to check for actual error messages, not just object keys.
         return !newErrors.nombre && !newErrors.precio_base;
     };
 

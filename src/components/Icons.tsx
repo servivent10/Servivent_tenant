@@ -18,6 +18,7 @@ export const ICONS = {
     menu: html`<${Icon} name="menu" />`,
     close: html`<${Icon} name="close" />`,
     chevron_right: html`<${Icon} name="chevron_right" className="text-xl" />`,
+    chevron_left: html`<${Icon} name="chevron_left" className="text-xl" />`,
     settings: html`<${Icon} name="settings" />`,
     business: html`<${Icon} name="business_center" />`,
     add: html`<${Icon} name="add" />`,
@@ -32,6 +33,10 @@ export const ICONS = {
     payments: html`<${Icon} name="payments" />`,
     qr_code_2: html`<${Icon} name="qr_code_2" />`,
     shopping_cart: html`<${Icon} name="shopping_cart" />`,
+    paid: html`<${Icon} name="paid" />`,
+    credit_score: html`<${Icon} name="credit_score" />`,
+    currency_exchange: html`<${Icon} name="currency_exchange" />`,
+    calendar_month: html`<${Icon} name="calendar_month" />`,
 
     // Notifications
     notifications: html`<${Icon} name="notifications" className="text-2xl" />`,
@@ -48,6 +53,7 @@ export const ICONS = {
     inventory: html`<${Icon} name="inventory_2" />`,
     edit_note: html`<${Icon} name="edit_note" />`,
     products: html`<${Icon} name="style" />`,
+    category: html`<${Icon} name="category" />`,
     activity: html`<${Icon} name="history" className="text-primary" />`,
     bolt: html`<${Icon} name="bolt" className="text-primary" />`,
     newSale: html`<${Icon} name="point_of_sale" className="text-2xl text-primary" />`,

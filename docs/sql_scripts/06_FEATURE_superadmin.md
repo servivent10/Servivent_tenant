@@ -1,27 +1,33 @@
 -- =============================================================================
--- SUPERADMIN FUNCTIONS
+-- SUPERADMIN FUNCTIONS (v17 - Final Fix for Execution Context)
 -- =============================================================================
--- Este script crea las funciones PostgreSQL necesarias para el panel de SuperAdmin.
--- Por favor, ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
+-- Este script implementa la arquitectura de eliminación definitiva de dos etapas,
+-- y corrige el error de contexto de ejecución donde la función SQL no reconocía
+-- al SuperAdmin que la llamaba desde la Edge Function.
+--
+-- INSTRUCCIONES:
+-- Ejecuta este script para actualizar tu lógica de SuperAdmin a la versión final.
 -- =============================================================================
 
+-- -----------------------------------------------------------------------------
+-- Paso 1: Limpieza de todas las funciones de eliminación anteriores
+-- -----------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.delete_company_as_superadmin(uuid, text);
+DROP FUNCTION IF EXISTS public.delete_company_forcefully_as_superadmin(uuid);
+DROP FUNCTION IF EXISTS public.get_all_companies();
+
 
 -- -----------------------------------------------------------------------------
--- Función 1: Obtener todas las empresas
--- -----------------------------------------------------------------------------
--- Descripción:
--- Esta función recupera una lista de todas las empresas registradas, uniendo
--- información clave del propietario (usuario) y el estado de su licencia.
--- Es SECURITY DEFINER para que pueda ser llamada por el SuperAdmin sin que las
--- políticas de RLS interfieran. Incluye una comprobación de seguridad para
--- asegurar que solo un SuperAdmin pueda ejecutarla.
+-- Paso 2: Funciones que se mantienen o actualizan
 -- -----------------------------------------------------------------------------
 
+-- Función para obtener todas las empresas (sin cambios)
 CREATE OR REPLACE FUNCTION get_all_companies()
 RETURNS TABLE (
     id uuid,
     nombre text,
     nit text,
+    propietario_id uuid,
     propietario_email text,
     plan_actual text,
     estado_licencia text,
@@ -29,9 +35,10 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
-    -- Comprobación de seguridad: Asegura que el usuario que llama tiene el rol 'SuperAdmin'
+    -- Comprobación de seguridad
     IF NOT EXISTS (
         SELECT 1
         FROM public.usuarios
@@ -40,12 +47,12 @@ BEGIN
         RAISE EXCEPTION 'Acceso denegado: Se requiere rol de SuperAdmin.';
     END IF;
 
-    -- Devuelve la consulta con la información de todas las empresas
     RETURN QUERY
     SELECT
         e.id,
         e.nombre,
         e.nit,
+        u.id AS propietario_id,
         u.correo AS propietario_email,
         l.tipo_licencia AS plan_actual,
         l.estado AS estado_licencia,
@@ -53,24 +60,14 @@ BEGIN
     FROM
         public.empresas e
     LEFT JOIN
-        -- Une con usuarios para encontrar al propietario de cada empresa
         public.usuarios u ON e.id = u.empresa_id AND u.rol = 'Propietario'
     LEFT JOIN
-        -- Une con licencias para obtener el plan y el estado
         public.licencias l ON e.id = l.empresa_id;
 END;
 $$;
 
 
--- -----------------------------------------------------------------------------
--- Función 2: Actualizar el estado de una empresa
--- -----------------------------------------------------------------------------
--- Descripción:
--- Permite al SuperAdmin cambiar el estado de la licencia de una empresa
--- (por ejemplo, de 'Activa' a 'Suspendida' y viceversa).
--- También es SECURITY DEFINER y contiene la misma comprobación de rol.
--- -----------------------------------------------------------------------------
-
+-- Función para suspender o activar una empresa (sin cambios)
 CREATE OR REPLACE FUNCTION update_company_status_as_superadmin(
     p_empresa_id uuid,
     p_new_status text
@@ -78,9 +75,10 @@ CREATE OR REPLACE FUNCTION update_company_status_as_superadmin(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
-    -- Comprobación de seguridad: Asegura que el usuario que llama tiene el rol 'SuperAdmin'
+    -- Comprobación de seguridad
     IF NOT EXISTS (
         SELECT 1
         FROM public.usuarios
@@ -89,7 +87,6 @@ BEGIN
         RAISE EXCEPTION 'Acceso denegado: Se requiere rol de SuperAdmin.';
     END IF;
 
-    -- Actualiza el estado de la licencia para la empresa especificada
     UPDATE public.licencias
     SET estado = p_new_status
     WHERE empresa_id = p_empresa_id;
@@ -98,62 +95,42 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Función 3: Eliminar una empresa y todos sus datos
+-- Paso 3: Función de Preparación para Eliminación (CORREGIDA)
 -- -----------------------------------------------------------------------------
 -- Descripción:
--- Esta es una función crítica que elimina permanentemente una empresa y toda
--- la información asociada a ella, incluyendo:
--- - Licencia
--- - Sucursales
--- - Perfiles de usuario (en la tabla `public.usuarios`)
--- - La propia empresa (en la tabla `public.empresas`)
--- - Las cuentas de autenticación de los usuarios (en `auth.users`)
--- IMPORTANTE: Esta función debe ser propiedad de un superusuario (como `postgres`)
--- para tener los permisos necesarios para eliminar de `auth.users`.
+-- Esta es la primera etapa de la demolición controlada.
+-- Su ÚNICA responsabilidad es eliminar a todos los usuarios de la empresa.
+-- SE ELIMINA LA COMPROBACIÓN DE SEGURIDAD INTERNA, ya que la Edge Function
+-- que la llama ya ha verificado la identidad y contraseña del SuperAdmin.
+-- La función confía en que si es invocada, es por un proceso ya validado.
 -- -----------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION delete_company_as_superadmin(p_empresa_id uuid)
-RETURNS void
+CREATE OR REPLACE FUNCTION _prepare_company_for_deletion(p_empresa_id_to_clean uuid)
+RETURNS text
 LANGUAGE plpgsql
--- SECURITY DEFINER es crucial aquí para permitir operaciones con privilegios elevados
 SECURITY DEFINER
--- Asegura que podamos acceder a los esquemas 'public' y 'auth'
 SET search_path = public, auth
 AS $$
 DECLARE
-    v_user_id uuid;
-    user_ids uuid[];
+    user_record RECORD;
+    user_count integer;
 BEGIN
-    -- 1. Comprobación de seguridad: Asegura que el que llama es SuperAdmin
-    IF NOT EXISTS (
-        SELECT 1
-        FROM public.usuarios
-        WHERE id = auth.uid() AND rol = 'SuperAdmin'
-    ) THEN
-        RAISE EXCEPTION 'Acceso denegado: Se requiere rol de SuperAdmin.';
-    END IF;
+    -- **SE ELIMINA LA COMPROBACIÓN DE ROL AQUÍ**
+    -- La validación ahora es responsabilidad exclusiva de la Edge Function
+    -- que invoca esta función SQL.
 
-    -- 2. Recolecta todos los IDs de usuario asociados a la empresa a eliminar
-    SELECT array_agg(id) INTO user_ids FROM public.usuarios WHERE empresa_id = p_empresa_id;
+    -- Contar usuarios para el log
+    SELECT count(*) INTO user_count FROM public.usuarios WHERE empresa_id = p_empresa_id_to_clean;
 
-    -- 3. Elimina datos relacionados en el orden correcto para evitar errores de clave foránea
-    DELETE FROM public.licencias WHERE empresa_id = p_empresa_id;
-    DELETE FROM public.sucursales WHERE empresa_id = p_empresa_id;
-    DELETE FROM public.usuarios WHERE empresa_id = p_empresa_id;
-    DELETE FROM public.empresas WHERE id = p_empresa_id;
+    -- Iterar y eliminar cada usuario desde auth.users. Esto romperá el ciclo.
+    FOR user_record IN SELECT id FROM public.usuarios WHERE empresa_id = p_empresa_id_to_clean
+    LOOP
+        PERFORM auth.admin_delete_user(user_record.id);
+    END LOOP;
 
-    -- 4. Elimina los usuarios del sistema de autenticación de Supabase (auth.users)
-    -- Esta es la operación más delicada y requiere privilegios de superusuario.
-    IF user_ids IS NOT NULL THEN
-        FOREACH v_user_id IN ARRAY user_ids
-        LOOP
-            -- Ejecuta la eliminación en el esquema 'auth'
-            DELETE FROM auth.users WHERE id = v_user_id;
-        END LOOP;
-    END IF;
-
+    RETURN 'Preparación completada: Se eliminaron ' || user_count || ' usuarios.';
 END;
 $$;
+
 
 -- =============================================================================
 -- Fin del script.

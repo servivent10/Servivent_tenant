@@ -235,7 +235,7 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Función 5: Eliminar una sucursal
+-- Función 5: Eliminar una sucursal (MEJORADA)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION delete_sucursal(p_sucursal_id uuid)
 RETURNS void
@@ -247,8 +247,8 @@ DECLARE
     caller_empresa_id uuid;
     caller_rol text;
     target_empresa_id uuid;
-    user_count int;
     branch_count int;
+    assigned_users_list text;
 BEGIN
     -- 1. Validar permisos (solo Propietario)
     SELECT empresa_id, rol INTO caller_empresa_id, caller_rol
@@ -270,13 +270,17 @@ BEGIN
         RAISE EXCEPTION 'No se puede eliminar la única sucursal de la empresa.';
     END IF;
     
-    -- 4. Verificar que no hay usuarios asignados a esta sucursal
-    SELECT COUNT(*) INTO user_count FROM public.usuarios WHERE sucursal_id = p_sucursal_id;
-    IF user_count > 0 THEN
-        RAISE EXCEPTION 'No se puede eliminar una sucursal con usuarios asignados. Por favor, reasigna los usuarios primero.';
+    -- 4. VERIFICACIÓN MEJORADA: Obtener la lista de usuarios asignados.
+    SELECT string_agg(nombre_completo, ', ') INTO assigned_users_list
+    FROM public.usuarios
+    WHERE sucursal_id = p_sucursal_id;
+
+    -- Si la lista no es nula, significa que hay usuarios, y se lanza un error detallado.
+    IF assigned_users_list IS NOT NULL THEN
+        RAISE EXCEPTION 'No se puede eliminar la sucursal. Los siguientes usuarios aún están asignados a ella: %. Por favor, reasigna o elimina a estos usuarios primero desde la página de detalle de la sucursal.', assigned_users_list;
     END IF;
 
-    -- 5. Eliminar
+    -- 5. Si pasaron todas las verificaciones, se elimina
     DELETE FROM public.sucursales WHERE id = p_sucursal_id;
 END;
 $$;

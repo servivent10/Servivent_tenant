@@ -24,6 +24,8 @@ Estos scripts añaden la lógica de backend para los diferentes módulos de la a
 -   `06_FEATURE_superadmin.md`
 -   `07_FEATURE_company_details.md`
 -   `08_FEATURE_productos.md`
+-   `09_FIX_CASCADE_DELETES.md`: **(IMPORTANTE)** Asegura la integridad referencial para eliminaciones.
+-   `10_FEATURE_categorias.md`: **(NUEVO)** Añade la lógica para la gestión de categorías.
 
 ## Scripts de Corrección (Fixes)
 

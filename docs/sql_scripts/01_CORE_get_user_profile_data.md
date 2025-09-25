@@ -1,9 +1,9 @@
 -- =============================================================================
--- DATABASE UPDATE SCRIPT
+-- DATABASE UPDATE SCRIPT (v5 - Sucursal ID Fix)
 -- =============================================================================
 -- Este script actualiza la función principal que carga los datos del perfil
--- de usuario para que incluya todos los detalles de la empresa y el historial
--- de pagos.
+-- de usuario para que devuelva también el ID de la sucursal, un dato crucial
+-- que faltaba y causaba errores en módulos como el de Compras.
 --
 -- **INSTRUCCIONES:**
 -- Por favor, ejecuta este script completo en el Editor SQL de tu proyecto de
@@ -13,19 +13,16 @@
 -- -----------------------------------------------------------------------------
 -- Paso 1: Eliminar la función antigua
 -- -----------------------------------------------------------------------------
--- Es necesario eliminar la función existente antes de crear la nueva versión,
--- ya que vamos a cambiar la estructura de lo que devuelve.
--- -----------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.get_user_profile_data();
 
 
 -- -----------------------------------------------------------------------------
--- Paso 2: Crear la nueva función `get_user_profile_data` (v3)
+-- Paso 2: Crear la nueva función `get_user_profile_data` (v5)
 -- -----------------------------------------------------------------------------
 -- Descripción:
--- Esta es la nueva versión de la función. Ahora devuelve todos los campos de
--- la tabla `empresas` para evitar llamadas adicionales desde el frontend.
--- También sigue incluyendo el historial de pagos.
+-- Se añade `sucursal_id` tanto a la definición de la tabla de retorno como a
+-- la sentencia SELECT principal. Esto asegura que el ID de la sucursal del
+-- usuario esté disponible en el frontend después de iniciar sesión.
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_user_profile_data()
 RETURNS table (
@@ -41,6 +38,7 @@ RETURNS table (
     nombre_completo text,
     rol text,
     avatar text,
+    sucursal_id uuid, -- **NUEVO CAMPO**
     sucursal_principal_nombre text,
     historial_pagos json
 )
@@ -50,9 +48,7 @@ SET search_path = public
 AS $$
 BEGIN
     RETURN QUERY
-    -- Utilizamos un Common Table Expression (CTE) para pre-calcular el historial de pagos
     WITH user_payments AS (
-        -- Agrega todos los pagos de la empresa del usuario actual en un único array JSON
         SELECT
             p.empresa_id,
             json_agg(
@@ -62,17 +58,15 @@ BEGIN
                     'fecha_pago', p.fecha_pago,
                     'metodo_pago', p.metodo_pago,
                     'notas', p.notas
-                ) ORDER BY p.fecha_pago DESC -- Ordena los pagos del más reciente al más antiguo
+                ) ORDER BY p.fecha_pago DESC
             ) AS historial
         FROM
             pagos_licencia p
         WHERE
-            -- Filtra los pagos para que coincidan con el empresa_id del usuario que ha iniciado sesión
             p.empresa_id = (SELECT u.empresa_id FROM usuarios u WHERE u.id = auth.uid())
         GROUP BY
             p.empresa_id
     )
-    -- Consulta principal que une toda la información
     SELECT
         u.empresa_id,
         e.nombre AS empresa_nombre,
@@ -86,8 +80,9 @@ BEGIN
         u.nombre_completo,
         u.rol,
         u.avatar,
+        u.sucursal_id, -- **SE AÑADE EL ID DE LA SUCURSAL**
         s.nombre AS sucursal_principal_nombre,
-        up.historial AS historial_pagos -- Unimos el historial de pagos pre-calculado
+        up.historial AS historial_pagos
     FROM
         usuarios u
     LEFT JOIN
@@ -95,14 +90,11 @@ BEGIN
     LEFT JOIN
         licencias l ON u.empresa_id = l.empresa_id
     LEFT JOIN
-        -- Asumimos que la primera sucursal es la principal (ajustar si hay otra lógica)
-        sucursales s ON u.empresa_id = s.empresa_id
+        sucursales s ON u.sucursal_id = s.id
     LEFT JOIN
-        -- Hacemos un LEFT JOIN para que si no hay pagos, no falle la consulta
         user_payments up ON u.empresa_id = up.empresa_id
     WHERE
-        u.id = auth.uid()
-    LIMIT 1;
+        u.id = auth.uid();
 END;
 $$;
 

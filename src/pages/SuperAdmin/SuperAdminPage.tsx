@@ -11,6 +11,8 @@ import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { useToast } from '../../hooks/useToast.js';
 import { useLoading } from '../../hooks/useLoading.js';
 import { FloatingActionButton } from '../../components/FloatingActionButton.js';
+import { FormInput } from '../../components/FormComponents.js';
+import { Spinner } from '../../components/Spinner.js';
 
 const CompanyTable = ({ companies, onAction, onRowClick }) => {
     const getStatusPill = (status) => {
@@ -131,6 +133,8 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
     
     const [companies, setCompanies] = useState([]);
     const [modalState, setModalState] = useState({ isOpen: false, action: null, company: null });
+    const [password, setPassword] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false); // For loading state inside the modal
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
 
@@ -172,54 +176,85 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
 
     const handleCloseModal = () => {
         setModalState({ isOpen: false, action: null, company: null });
+        setPassword('');
+        setIsProcessing(false);
     };
 
     const handleConfirmAction = async () => {
         const { action, company } = modalState;
         if (!action || !company) return;
 
-        let rpcName = '';
-        let params = {};
-        let successMessage = '';
-        
-        startLoading();
+        setIsProcessing(true);
+
         try {
-            switch(action) {
-                case 'delete':
-                    rpcName = 'delete_company_as_superadmin';
-                    params = { p_empresa_id: company.id };
-                    successMessage = `Empresa "${company.nombre}" eliminada correctamente.`;
-                    break;
-                case 'suspend':
-                    rpcName = 'update_company_status_as_superadmin';
-                    params = { p_empresa_id: company.id, p_new_status: 'Suspendida' };
-                    successMessage = `Empresa "${company.nombre}" suspendida.`;
-                    break;
-                case 'activate':
-                    rpcName = 'update_company_status_as_superadmin';
-                    params = { p_empresa_id: company.id, p_new_status: 'Activa' };
-                    successMessage = `Empresa "${company.nombre}" activada.`;
-                    break;
-                default:
-                    throw new Error("Acción desconocida");
+            if (action === 'delete') {
+                if (!password) {
+                    addToast({ message: 'La contraseña es obligatoria para eliminar.', type: 'error' });
+                    setIsProcessing(false);
+                    return;
+                }
+                
+                // --- INVOCACIÓN DE EDGE FUNCTION ---
+                // REVERTIDO: Se vuelve a enviar el ID de la empresa directamente.
+                const { error: functionError } = await supabase.functions.invoke('delete-company-forcefully', {
+                    body: { 
+                        p_empresa_id: company.id, // CORREGIDO
+                        p_superadmin_password: password 
+                    },
+                });
+
+                // El objeto de error se lanzará y será manejado en el bloque catch
+                if (functionError) {
+                    throw functionError;
+                }
+
+                addToast({ message: `Empresa "${company.nombre}" eliminada correctamente.`, type: 'success' });
+
+            } else {
+                // --- INVOCACIÓN DE RPC (para suspender/activar) ---
+                const rpcName = 'update_company_status_as_superadmin';
+                const params = { 
+                    p_empresa_id: company.id, 
+                    p_new_status: action === 'suspend' ? 'Suspendida' : 'Activa' 
+                };
+                const successMessage = `Empresa "${company.nombre}" ${action === 'suspend' ? 'suspendida' : 'activada'}.`;
+
+                const { error: rpcError } = await supabase.rpc(rpcName, params);
+                if (rpcError) throw rpcError;
+                
+                addToast({ message: successMessage, type: 'success' });
             }
 
-            const { error } = await supabase.rpc(rpcName, params);
-            
-            if (error) throw error;
-            
-            addToast({ message: successMessage, type: 'success' });
-            fetchCompanies(); // Refresh data
+            fetchCompanies(); // Refrescar datos en ambos casos
 
         } catch (err) {
             console.error(`Error during action '${action}':`, err);
-            let friendlyError = err.message;
-            if (err.message.includes('does not exist')) {
-                 friendlyError = `La función RPC '${rpcName}' no existe en la base de datos.`;
+            let friendlyError = 'Ocurrió un error inesperado.';
+
+            // Comprobar si es un FunctionError de Supabase con contexto de respuesta
+            if (err.context && typeof err.context.json === 'function') {
+                try {
+                    // Intentar parsear el mensaje de error específico de la Edge Function
+                    const errorData = await err.context.json();
+                    friendlyError = errorData.error || err.message;
+                } catch (jsonError) {
+                    // Fallback si el parseo JSON falla
+                    friendlyError = err.message;
+                }
+            } else {
+                 // Fallback para errores RPC u otros tipos de errores
+                 friendlyError = err.message;
             }
-            addToast({ message: `Error: ${friendlyError}`, type: 'error' });
+            
+            // Refinar aún más los mensajes del lado del cliente para problemas conocidos
+            if (friendlyError.includes('Function not found')) {
+                 friendlyError = "La Edge Function 'delete-company-forcefully' no existe o no se ha desplegado correctamente en Supabase.";
+            } else if (friendlyError.includes('does not exist')) {
+                 friendlyError = `La función RPC no existe. Intenta recargar el esquema de la API en Supabase (API Docs > Reload schema).`;
+            }
+
+            addToast({ message: `Error: ${friendlyError}`, type: 'error', duration: 15000 });
         } finally {
-            stopLoading();
             handleCloseModal();
         }
     };
@@ -228,6 +263,19 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
         const { action, company } = modalState;
         if (!action || !company) return { title: '', confirmText: '', variant: 'primary', icon: null, body: '' };
 
+        if (isProcessing && action === 'delete') {
+            return {
+                title: 'Eliminando Empresa',
+                body: html`
+                    <div class="text-center p-4">
+                        <${Spinner} color="text-primary" size="h-12 w-12" />
+                        <p class="mt-4 font-semibold">Procesando eliminación de <span class="font-bold">${company.nombre}</span>...</p>
+                        <p class="text-sm text-gray-500">Este proceso es irreversible y puede tardar unos minutos. No cierres esta ventana.</p>
+                    </div>
+                `
+            };
+        }
+
         switch(action) {
             case 'delete':
                 return {
@@ -235,7 +283,19 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
                     confirmText: 'Sí, eliminar',
                     variant: 'danger',
                     icon: ICONS.warning_amber,
-                    body: html`<p class="text-sm text-gray-600">¿Estás seguro de que quieres eliminar la empresa <span class="font-bold text-gray-800">${company.nombre}</span>? Esta acción es irreversible y eliminará todos sus datos.</p>`
+                    body: html`
+                        <div class="space-y-4">
+                             <p class="text-sm text-gray-600">Esta acción es irreversible y eliminará todos los datos de <span class="font-bold text-gray-800">${company.nombre}</span>, incluyendo usuarios, sucursales y productos.</p>
+                             <p class="text-sm text-gray-600">Para confirmar, por favor ingresa tu contraseña de SuperAdmin.</p>
+                             <${FormInput}
+                                label="Contraseña"
+                                name="password"
+                                type="password"
+                                value=${password}
+                                onInput=${(e) => setPassword(e.target.value)}
+                            />
+                        </div>
+                    `
                 };
             case 'suspend':
                 return {
@@ -295,6 +355,7 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
                 confirmText=${modalContent.confirmText}
                 confirmVariant=${modalContent.variant}
                 icon=${modalContent.icon}
+                isProcessing=${isProcessing}
             >
                 ${modalContent.body}
             <//>

@@ -11,12 +11,15 @@ import { LoginPage } from './pages/Login/LoginPage.js';
 import { RegistrationFlow } from './pages/Registro/RegistrationFlow.js';
 import { SuperAdminPage } from './pages/SuperAdmin/SuperAdminPage.js';
 import { CompanyDetailsPage } from './pages/SuperAdmin/CompanyDetailsPage.js';
+import { DashboardLayout } from './components/DashboardLayout.js';
 import { DashboardPage } from './pages/Tenant/DashboardPage.js';
 import { TerminalVentaPage } from './pages/Tenant/TerminalVentaPage.js';
 import { ProductosPage } from './pages/Tenant/ProductosPage.js';
 import { ProductoDetailPage } from './pages/Tenant/ProductoDetailPage.js';
+import { CategoriasPage } from './pages/Tenant/CategoriasPage.js';
 import { InventariosPage } from './pages/Tenant/InventariosPage.js';
 import { ComprasPage } from './pages/Tenant/ComprasPage.js';
+import { CompraDetailPage } from './pages/Tenant/CompraDetailPage.js';
 import { VentasPage } from './pages/Tenant/VentasPage.js';
 import { SucursalesListPage } from './pages/Tenant/SucursalesListPage.js';
 import { SucursalDetailPage } from './pages/Tenant/SucursalDetailPage.js';
@@ -38,6 +41,7 @@ function AppContent() {
     const [companyInfo, setCompanyInfo] = useState(null);
     const [displayUser, setDisplayUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [loadingSteps, setLoadingSteps] = useState([]);
     const [hasLoadFailed, setHasLoadFailed] = useState(false); // Circuit breaker state
     const [currentPath, setCurrentPath] = useState(() => window.location.hash.substring(1) || '/login');
@@ -63,6 +67,11 @@ function AppContent() {
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session);
+            if (!session) {
+                setLoading(false);
+                setIsLoggingOut(false);
+                setLoadingSteps([]);
+            }
         });
 
         if (!window.location.hash) {
@@ -75,14 +84,13 @@ function AppContent() {
         };
     }, []);
 
-    // Effect 2: Manages data fetching based on session state. This is the core sequential loading logic.
+    // Effect 2: Manages data fetching based on session state.
     useEffect(() => {
         if (!session) {
-            // User is logged out, clear all state.
             setDisplayUser(null);
             setCompanyInfo(null);
             setLoading(false);
-            setHasLoadFailed(false); // Reset circuit breaker on logout
+            setHasLoadFailed(false);
             const current = window.location.hash.substring(1);
             if (!current.startsWith('/registro') && !current.startsWith('/admin-delete-tool')) {
                 navigate('/login');
@@ -90,16 +98,15 @@ function AppContent() {
             return;
         }
 
-        // --- FIX START: Prevent race condition during registration ---
-        // If a session is detected but we are still on the registration page,
-        // it means signUp just completed. We must wait for the RegistrationFlow
-        // component to finish its process (including signOut) before proceeding.
         if (window.location.hash.startsWith('#/registro')) {
             return;
         }
-        // --- FIX END ---
-
-        if (hasLoadFailed) return; // Circuit breaker is active, do not proceed.
+       
+        if (hasLoadFailed) return;
+        
+        if (displayUser) {
+            return;
+        }
 
         const loadUserData = async () => {
             setLoading(true);
@@ -119,7 +126,7 @@ function AppContent() {
             };
 
             setLoadingSteps(initialSteps);
-            await delay(100); // Allow state to update before starting
+            await delay(100); 
             updateStepStatus('profile', 'loading');
             
             const fetchWithTimeout = (promise, timeout = 8000) => {
@@ -133,34 +140,28 @@ function AppContent() {
             };
 
             try {
-                // --- Step 1: Fetch ALL initial data in one go to avoid RLS recursion ---
                 const profilePromise = supabase
                     .rpc('get_user_profile_data')
                     .single();
 
                 const { data: profile, error: profileError } = await fetchWithTimeout(profilePromise);
                 
-                // As requested by user, log the received data for debugging.
-                console.log('Datos recibidos de la función get_user_profile_data:', profile);
-
                 if (profileError) throw profileError;
                 if (!profile) throw new Error("Error Crítico: Usuario autenticado pero no se encontraron datos de perfil.");
                 
-                // --- Orchestrate the visual success sequence ---
                 updateStepStatus('profile', 'success');
-                await delay(1000); // 1-second pause
+                await delay(1000);
 
                 updateStepStatus('company', 'loading');
-                await delay(150); // Show spinner briefly
+                await delay(150);
                 updateStepStatus('company', 'success');
-                await delay(1000); // 1-second pause
+                await delay(1000);
 
                 updateStepStatus('branch', 'loading');
-                await delay(150); // Show spinner briefly
+                await delay(150);
                 updateStepStatus('branch', 'success');
-                await delay(2000); // 2-second pause for the final step
+                await delay(2000);
 
-                // --- Step 2: All data is here, construct final user and company objects ---
                 let companyData = null;
                 if (profile.empresa_id) {
                     const planName = profile.plan_actual || 'Sin Plan';
@@ -187,6 +188,7 @@ function AppContent() {
                 setDisplayUser({
                     id: session.user.id,
                     empresa_id: profile.empresa_id,
+                    sucursal_id: profile.sucursal_id,
                     email: session.user.email,
                     name: profile.nombre_completo,
                     role: profile.rol,
@@ -194,15 +196,11 @@ function AppContent() {
                     sucursal: profile.rol === 'SuperAdmin' ? 'Global' : branchName,
                 });
 
-                // Check for suspended license before navigating
                 if (companyData && companyData.licenseStatus === 'Suspendida') {
-                    // Do not navigate away, the renderer will handle showing the suspended page.
+                    // Renderer will handle showing the suspended page.
                 } else {
                     const expectedPath = profile.rol === 'SuperAdmin' ? '/superadmin' : '/dashboard';
                     const currentHash = window.location.hash.substring(1);
-
-                    // Don't redirect if we are already on a valid superadmin sub-page
-                    const isSuperAdminSubRoute = currentHash.startsWith('/superadmin/');
 
                     if (profile.rol === 'SuperAdmin' && !currentHash.startsWith('/superadmin')) {
                         navigate('/superadmin');
@@ -236,13 +234,13 @@ function AppContent() {
                 }
 
                 addToast({ message: `Error crítico al cargar datos: ${friendlyError}`, type: 'error', duration: Infinity });
-                setHasLoadFailed(true); // Activate the circuit breaker
+                setHasLoadFailed(true);
             }
         };
 
         loadUserData();
 
-    }, [session, hasLoadFailed]); // Add hasLoadFailed to dependency array
+    }, [session, hasLoadFailed, displayUser]);
 
 
     const handleLogin = async (email, pass) => {
@@ -259,12 +257,41 @@ function AppContent() {
     };
 
     const handleLogout = async () => {
-        setLoading(true); // Show loading screen immediately on logout
+        setIsLoggingOut(true);
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        const logoutSteps = [
+            { key: 'logout_server', label: 'Cerrando sesión en el servidor', status: 'pending' },
+            { key: 'cleanup', label: 'Limpiando datos de la aplicación', status: 'pending' },
+        ];
+        
+        const updateStepStatus = (key, status) => {
+            setLoadingSteps(prevSteps => 
+                prevSteps.map(step => step.key === key ? { ...step, status } : step)
+            );
+        };
+        
+        setLoadingSteps(logoutSteps);
+        await delay(100);
+        updateStepStatus('logout_server', 'loading');
+        
         const { error } = await supabase.auth.signOut();
+
         if (error) {
             console.error('Error during signOut call:', error);
-            handleForceLogout();
+            addToast({ message: 'Error al cerrar sesión. Intenta recargar la página.', type: 'error' });
+            setIsLoggingOut(false);
+            return;
         }
+        
+        updateStepStatus('logout_server', 'success');
+        await delay(500);
+        
+        updateStepStatus('cleanup', 'loading');
+        await delay(1000);
+        updateStepStatus('cleanup', 'success');
+        
+        await delay(500);
+        // The onAuthStateChange listener will handle the final state cleanup
     };
 
     const handleForceLogout = () => {
@@ -273,7 +300,8 @@ function AppContent() {
         setDisplayUser(null);
         setCompanyInfo(null);
         setLoading(false);
-        setHasLoadFailed(false); // Also reset circuit breaker on forced logout
+        setIsLoggingOut(false);
+        setHasLoadFailed(false);
         navigate('/login');
     };
 
@@ -291,28 +319,33 @@ function AppContent() {
         }));
     };
 
-    if (loading) {
-        return html`<${LoadingPage} onForceLogout=${handleForceLogout} steps=${loadingSteps} />`;
-    }
-
     let content;
     const isRegistrationRoute = currentPath.startsWith('/registro');
     const isAdminToolRoute = currentPath === '/admin-delete-tool';
 
-    if (displayUser) {
-        // --- START: Intercept for Suspended License ---
-        if (companyInfo && companyInfo.licenseStatus === 'Suspendida' && displayUser.role !== 'SuperAdmin') {
+    if (session) {
+        if (!displayUser) {
+            const shellUser = { name: ' ', email: session.user.email, role: '', sucursal: 'Cargando...', avatar: null };
+            const shellCompany = { name: ' ', licenseStatus: 'Activa' };
+            content = html`
+                <${DashboardLayout} 
+                    user=${shellUser} 
+                    companyInfo=${shellCompany} 
+                    onLogout=${handleLogout} 
+                    onProfileUpdate=${handleProfileUpdate} 
+                    disableNavigation=${true}
+                >
+                    <div />
+                <//>`;
+        } else if (companyInfo && companyInfo.licenseStatus === 'Suspendida' && displayUser.role !== 'SuperAdmin') {
             content = html`<${SuspendedLicensePage} user=${displayUser} onLogout=${handleLogout} onProfileUpdate=${handleProfileUpdate} companyInfo=${companyInfo} />`;
-        // --- END: Intercept for Suspended License ---
         } else if (displayUser.role === 'SuperAdmin') {
             const companyDetailsMatch = currentPath.match(/^\/superadmin\/empresa\/(.+)$/);
             if (companyDetailsMatch) {
                 const companyId = companyDetailsMatch[1];
                 content = html`<${CompanyDetailsPage} companyId=${companyId} user=${displayUser} onLogout=${handleLogout} navigate=${navigate} onProfileUpdate=${handleProfileUpdate} />`;
-            } else if (currentPath.startsWith('/superadmin')) {
-                content = html`<${SuperAdminPage} user=${displayUser} onLogout=${handleLogout} navigate=${navigate} onProfileUpdate=${handleProfileUpdate} />`;
             } else {
-                navigate('/superadmin');
+                content = html`<${SuperAdminPage} user=${displayUser} onLogout=${handleLogout} navigate=${navigate} onProfileUpdate=${handleProfileUpdate} />`;
             }
         } else if (displayUser.role === 'Propietario' || displayUser.role === 'Administrador' || displayUser.role === 'Empleado') {
             const commonProps = { 
@@ -327,46 +360,39 @@ function AppContent() {
 
             const sucursalDetailsMatch = currentPath.match(/^\/sucursales\/(.+)$/);
             const productoDetailsMatch = currentPath.match(/^\/productos\/(.+)$/);
+            const compraDetailsMatch = currentPath.match(/^\/compras\/(.+)$/);
+            
+            let tenantContent;
 
-            if (currentPath === '/dashboard') {
-                content = html`<${DashboardPage} ...${commonProps} />`;
-            } else if (currentPath === '/terminal-venta') {
-                content = html`<${TerminalVentaPage} ...${commonProps} />`;
-            } else if (currentPath === '/productos') {
-                content = html`<${ProductosPage} ...${commonProps} />`;
-            } else if (productoDetailsMatch) {
-                const productoId = productoDetailsMatch[1];
-                content = html`<${ProductoDetailPage} productoId=${productoId} ...${commonProps} />`;
-            } else if (currentPath === '/inventarios') {
-                content = html`<${InventariosPage} ...${commonProps} />`;
-            } else if (currentPath === '/compras') {
-                content = html`<${ComprasPage} ...${commonProps} />`;
-            } else if (currentPath === '/ventas') {
-                content = html`<${VentasPage} ...${commonProps} />`;
-            } else if (currentPath === '/sucursales') {
-                content = html`<${SucursalesListPage} ...${commonProps} />`;
-            } else if (sucursalDetailsMatch) {
-                const sucursalId = sucursalDetailsMatch[1];
-                content = html`<${SucursalDetailPage} sucursalId=${sucursalId} ...${commonProps} />`;
-            } else if (currentPath === '/proveedores') {
-                content = html`<${ProveedoresPage} ...${commonProps} />`;
-            } else if (currentPath === '/clientes') {
-                content = html`<${ClientesPage} ...${commonProps} />`;
-            } else if (currentPath === '/traspasos') {
-                content = html`<${TraspasosPage} ...${commonProps} />`;
-            } else if (currentPath === '/gastos') {
-                content = html`<${GastosPage} ...${commonProps} />`;
-            } else if (currentPath === '/licencia') {
-                content = html`<${LicenciaPage} ...${commonProps} />`;
-            } else if (currentPath === '/configuracion') {
-                content = html`<${ConfiguracionPage} ...${commonProps} />`;
-            } else {
+            if (currentPath === '/dashboard') tenantContent = html`<${DashboardPage} ...${commonProps} />`;
+            else if (currentPath === '/terminal-venta') tenantContent = html`<${TerminalVentaPage} ...${commonProps} />`;
+            else if (currentPath === '/productos') tenantContent = html`<${ProductosPage} ...${commonProps} />`;
+            else if (productoDetailsMatch) { const id = productoDetailsMatch[1]; tenantContent = html`<${ProductoDetailPage} productoId=${id} ...${commonProps} />`; }
+            else if (currentPath === '/categorias') tenantContent = html`<${CategoriasPage} ...${commonProps} />`;
+            else if (currentPath === '/inventarios') tenantContent = html`<${InventariosPage} ...${commonProps} />`;
+            else if (currentPath === '/compras') tenantContent = html`<${ComprasPage} ...${commonProps} />`;
+            else if (compraDetailsMatch) { const id = compraDetailsMatch[1]; tenantContent = html`<${CompraDetailPage} compraId=${id} ...${commonProps} />`; }
+            else if (currentPath === '/ventas') tenantContent = html`<${VentasPage} ...${commonProps} />`;
+            else if (currentPath === '/sucursales') tenantContent = html`<${SucursalesListPage} ...${commonProps} />`;
+            else if (sucursalDetailsMatch) { const id = sucursalDetailsMatch[1]; tenantContent = html`<${SucursalDetailPage} sucursalId=${id} ...${commonProps} />`; }
+            else if (currentPath === '/proveedores') tenantContent = html`<${ProveedoresPage} ...${commonProps} />`;
+            else if (currentPath === '/clientes') tenantContent = html`<${ClientesPage} ...${commonProps} />`;
+            else if (currentPath === '/traspasos') tenantContent = html`<${TraspasosPage} ...${commonProps} />`;
+            else if (currentPath === '/gastos') tenantContent = html`<${GastosPage} ...${commonProps} />`;
+            else if (currentPath === '/licencia') tenantContent = html`<${LicenciaPage} ...${commonProps} />`;
+            else if (currentPath === '/configuracion') tenantContent = html`<${ConfiguracionPage} ...${commonProps} />`;
+            else {
+                // Default route for logged-in users if hash is something unexpected
                 navigate('/dashboard');
+                tenantContent = html`<${DashboardPage} ...${commonProps} />`;
             }
+            
+            content = tenantContent;
         } else {
-             handleLogout(); // For other roles
+             handleLogout(); // For other roles or inconsistent states
         }
     } else {
+        // Logged-out state
         if (isRegistrationRoute) {
             content = html`<${RegistrationFlow} navigate=${navigate} />`;
         } else if (isAdminToolRoute) {
@@ -376,7 +402,13 @@ function AppContent() {
         }
     }
 
-    return html`<div class="h-full font-sans">${content}</div>`;
+
+    return html`
+        <div class="h-full font-sans relative">
+            ${content}
+            ${(loading || isLoggingOut) && html`<${LoadingPage} onForceLogout=${handleForceLogout} steps=${loadingSteps} />`}
+        </div>
+    `;
 }
 
 export function App() {

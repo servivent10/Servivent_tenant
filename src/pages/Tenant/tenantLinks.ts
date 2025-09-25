@@ -10,8 +10,13 @@ export function getTenantSidebarLinks(role) {
         { name: 'Dashboard', href: '#/dashboard', icon: ICONS.home },
         { name: 'Punto de Venta', href: '#/terminal-venta', icon: ICONS.pos },
         { name: 'Productos', href: '#/productos', icon: ICONS.products },
-        { name: 'Inventarios', href: '#/inventarios', icon: ICONS.inventory },
     ];
+    
+    if (role === 'Propietario' || role === 'Administrador') {
+        links.push({ name: 'Categorías', href: '#/categorias', icon: ICONS.category });
+    }
+
+    links.push({ name: 'Inventarios', href: '#/inventarios', icon: ICONS.inventory });
 
     if (role === 'Propietario' || role === 'Administrador') {
         links.push(

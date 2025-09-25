@@ -86,6 +86,30 @@ function StepPlan({ onBack, onSelectPlan, error }) {
     `;
 }
 
+function RegistrationSuccess({ successData, navigate }) {
+    return html`
+        <div class="text-center animate-fade-in-down">
+            <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                <div class="text-green-600 text-4xl">${ICONS.success}</div>
+            </div>
+            <h3 class="mt-6 text-2xl font-bold text-gray-900">¡Registro Completado!</h3>
+            <div class="mt-4 text-gray-600 space-y-2">
+                <p>Tu empresa <span class="font-semibold text-gray-800">${successData.empresa}</span> ha sido registrada exitosamente.</p>
+                <p>Se ha creado una cuenta de Propietario para el correo <span class="font-semibold text-gray-800">${successData.email}</span>.</p>
+                <p class="mt-4">Ya puedes iniciar sesión para empezar a configurar tu negocio.</p>
+            </div>
+            <div class="mt-8">
+                <button 
+                    onClick=${() => navigate('/login')}
+                    class="w-full rounded-md bg-primary px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                    Aceptar e Iniciar Sesión
+                </button>
+            </div>
+        </div>
+    `;
+}
+
 export function RegistrationFlow({ navigate }) {
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState({
@@ -106,6 +130,7 @@ export function RegistrationFlow({ navigate }) {
     const [formErrors, setFormErrors] = useState({});
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [selectedPlan, setSelectedPlan] = useState(null);
+    const [successData, setSuccessData] = useState(null);
     const totalSteps = 4;
 
     const validateField = (name, value) => {
@@ -201,9 +226,8 @@ export function RegistrationFlow({ navigate }) {
         setError('');
         
         const initialSteps = [
-            { key: 'auth', label: 'Creando tu cuenta de usuario', status: 'pending' },
-            { key: 'company', label: 'Registrando los datos de la empresa', status: 'pending' },
-            { key: 'finalize', label: 'Finalizando configuración', status: 'pending' },
+            { key: 'creation', label: 'Creando cuenta, empresa y sucursal...', status: 'pending' },
+            { key: 'finalize', label: 'Finalizando y preparando todo', status: 'pending' },
         ];
         setRegistrationSteps(initialSteps);
 
@@ -215,68 +239,65 @@ export function RegistrationFlow({ navigate }) {
             );
         };
         
-        await delay(100); // Allow UI to update before starting heavy work
+        await delay(100);
 
         try {
+            updateStepStatus('creation', 'loading');
             const trimmedEmail = formData.user_email.trim();
 
-            // --- Step 1: Create Auth User ---
-            updateStepStatus('auth', 'loading');
-            const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                email: trimmedEmail,
+            const registrationPayload = {
+                // User fields
+                nombre_completo: formData.user_nombre.trim(),
+                correo: trimmedEmail,
                 password: formData.user_password,
+                rol: 'Propietario',
+                // Company and branch fields
+                empresa_nombre: formData.empresa_nombre.trim(),
+                empresa_nit: formData.empresa_nit.trim(),
+                empresa_direccion: formData.empresa_direccion.trim(),
+                empresa_telefono: formData.empresa_telefono.trim(),
+                sucursal_nombre: formData.sucursal_nombre.trim(),
+                sucursal_direccion: formData.sucursal_direccion.trim(),
+                sucursal_telefono: formData.sucursal_telefono.trim(),
+                plan_tipo: getPlanTypeString(),
+            };
+
+            const { error: functionError } = await supabase.functions.invoke('create-company-user', {
+                body: registrationPayload,
             });
 
-            if (signUpError) {
-                if (signUpError.message.includes('User already registered')) throw new Error('El correo electrónico ya está registrado. Por favor, usa otro.');
-                if (signUpError.message.includes('Password should be at least 6 characters')) throw new Error('La contraseña es demasiado corta. Debe tener al menos 6 caracteres.');
-                throw new Error(`Error de autenticación: ${signUpError.message}`);
+            if (functionError) {
+                let friendlyError = functionError.message;
+                 if (functionError.context && typeof functionError.context.json === 'function') {
+                    try {
+                        const errorData = await functionError.context.json();
+                        if (errorData.error) { friendlyError = errorData.error; }
+                    } catch (e) { /* ignore json parsing error */ }
+                }
+                // Custom handling for critical errors that require user action
+                if (friendlyError.includes('Este correo electrónico ya está en uso.')) {
+                    friendlyError += ` Si este es tu correo, intenta iniciar sesión. Si el problema persiste, usa la "Herramienta de Administrador" en la página de inicio para eliminar el usuario con este correo y vuelve a intentarlo.`
+                }
+                throw new Error(friendlyError);
             }
-            if (!signUpData.user) throw new Error('No se pudo crear el usuario en el sistema de autenticación. Por favor, inténtalo de nuevo.');
+
+            updateStepStatus('creation', 'success');
+            await delay(500);
             
-            updateStepStatus('auth', 'success');
-            await delay(500);
-
-            // --- Step 2: Create Company Data ---
-            updateStepStatus('company', 'loading');
-            const params = {
-                p_user_id: signUpData.user.id,
-                p_user_nombre_completo: formData.user_nombre.trim(),
-                p_user_email: trimmedEmail,
-                p_empresa_nombre: formData.empresa_nombre.trim(),
-                p_empresa_nit: formData.empresa_nit.trim(),
-                p_empresa_direccion: formData.empresa_direccion.trim(),
-                p_empresa_telefono: formData.empresa_telefono.trim(),
-                p_sucursal_nombre: formData.sucursal_nombre.trim(),
-                p_sucursal_direccion: formData.sucursal_direccion.trim(),
-                p_sucursal_telefono: formData.sucursal_telefono.trim(),
-                p_plan_tipo: getPlanTypeString(),
-            };
-            const { error: rpcError } = await supabase.rpc('finish_registration', params);
-
-            if (rpcError) {
-                console.error("RPC Error:", rpcError);
-                let detailedError = rpcError.message.includes('ERROR_NIT_DUPLICADO')
-                    ? `El NIT "${formData.empresa_nit.trim()}" ya ha sido registrado por otra empresa.`
-                    : `Causa: ${rpcError.message}.`;
-                throw new Error(`¡Error Crítico! Se creó tu cuenta de usuario, pero falló el registro de la empresa. ${detailedError} Para solucionar esto, ve a la "Herramienta de Administrador" en la página de inicio de sesión y elimina el usuario con el correo "${trimmedEmail}" antes de volver a intentarlo.`);
-            }
-            updateStepStatus('company', 'success');
-            await delay(500);
-
-            // --- Step 3: Finalize and Redirect ---
             updateStepStatus('finalize', 'loading');
-            await supabase.auth.signOut();
-            updateStepStatus('finalize', 'success');
             await delay(1000);
+            updateStepStatus('finalize', 'success');
             
-            navigate('/login');
+            setSuccessData({
+                empresa: formData.empresa_nombre.trim(),
+                email: trimmedEmail,
+            });
+            setLoading(false);
 
         } catch (err) {
             console.error("Full Registration Flow Error:", err);
             setError(err.message);
             
-            // Mark the failing step as 'error'
             setRegistrationSteps(prevSteps => {
                 const currentStepIndex = prevSteps.findIndex(s => s.status === 'loading');
                 if (currentStepIndex > -1) {
@@ -287,8 +308,9 @@ export function RegistrationFlow({ navigate }) {
                 return prevSteps;
             });
 
-            // Stop loading so the user can see the error on the form
-            setLoading(false);
+            setTimeout(() => {
+                setLoading(false);
+            }, 3000);
         }
     };
 
@@ -303,6 +325,18 @@ export function RegistrationFlow({ navigate }) {
     
     if (loading) {
         return html`<${LoadingPage} steps=${registrationSteps} onForceLogout=${() => navigate('/login')} />`;
+    }
+
+    if (successData) {
+        return html`
+            <div class="flex min-h-full flex-col justify-center items-center px-6 py-12 lg:px-8 bg-slate-100">
+                <div class="sm:mx-auto sm:w-full sm:max-w-md">
+                     <div class="bg-white p-8 rounded-lg shadow-md">
+                        <${RegistrationSuccess} successData=${successData} navigate=${navigate} />
+                     </div>
+                </div>
+            </div>
+        `;
     }
 
     return html`

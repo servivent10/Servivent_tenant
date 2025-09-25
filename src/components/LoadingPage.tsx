@@ -43,13 +43,8 @@ export function LoadingPage({ onForceLogout, steps = [] }) {
     const visibleSteps = steps.filter(step => step.status !== 'pending');
 
     return html`
-        <div class="relative flex min-h-full w-full items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-             <div class="absolute inset-0 -z-20">
-                <img class="h-full w-full object-cover" src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2830&q=80" alt="Team working" />
-                <div class="absolute inset-0 bg-secondary-dark/70"></div>
-            </div>
-
-            <div class="w-full max-w-md rounded-xl bg-black/20 shadow-2xl backdrop-blur-lg text-center overflow-hidden">
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-secondary-dark/50 backdrop-blur-md p-4 sm:p-6 lg:p-8">
+            <div class="w-full max-w-md rounded-xl bg-black/20 shadow-2xl backdrop-blur-lg text-center overflow-hidden animate-fade-in-down">
                 <div class="relative py-6 bg-black/10 overflow-hidden">
                     <${AnimatedServiVentLogo} />
                     <div class="shine-effect"></div>

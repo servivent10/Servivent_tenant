@@ -431,6 +431,21 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
                 </div>
             </div>
 
+            ${(!generalPrice || generalPrice <= 0) && html`
+                <div class="mb-6 p-4 rounded-md bg-amber-50 text-amber-800 border border-amber-200 flex items-center justify-between gap-4" role="alert">
+                    <div class="flex items-center gap-3">
+                        <div class="text-2xl">${ICONS.warning}</div>
+                        <div>
+                            <h3 class="font-bold">Precio de Venta no Asignado</h3>
+                            <p class="text-sm">Este producto no aparecerá en el Punto de Venta hasta que se le asigne un precio en la lista "General".</p>
+                        </div>
+                    </div>
+                    <button onClick=${handleEdit} class="flex-shrink-0 rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600">
+                        Asignar Precio
+                    </button>
+                </div>
+            `}
+
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-1">
                     <div class="bg-white p-4 rounded-lg shadow-md border sticky top-6">

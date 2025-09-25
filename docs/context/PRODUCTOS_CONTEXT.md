@@ -12,6 +12,7 @@ Este documento define la arquitectura, diseño y funcionalidad de los módulos d
 *   **Páginas:**
     *   `src/pages/Tenant/ProductosPage.tsx`: Página principal para listar y buscar todos los productos.
     *   `src/pages/Tenant/ProductoDetailPage.tsx`: Página para ver los detalles de un producto, incluyendo su galería, desglose de inventario y la nueva gestión de precios.
+    *   `src/pages/Tenant/CategoriasPage.tsx`: **NUEVO:** Página dedicada para la gestión centralizada de categorías.
 *   **Modales:**
     *   `src/components/modals/ProductFormModal.tsx`: Para crear y editar la información de los productos.
 *   **Base de Datos:**

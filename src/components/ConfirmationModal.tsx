@@ -16,7 +16,8 @@ export function ConfirmationModal({
     confirmText = 'Confirmar',
     cancelText = 'Cancelar',
     confirmVariant = 'primary',
-    maxWidthClass = 'max-w-lg'
+    maxWidthClass = 'max-w-lg',
+    isProcessing = false // Nueva propiedad para controlar el estado de carga
 }) {
     const [showModal, setShowModal] = useState(isOpen);
 
@@ -42,7 +43,7 @@ export function ConfirmationModal({
     }, [isOpen]);
 
     const handleClose = () => {
-        if (onClose) onClose();
+        if (onClose && !isProcessing) onClose();
     };
 
     const handleConfirm = () => {
@@ -82,7 +83,7 @@ export function ConfirmationModal({
                 <!-- Header -->
                 <div class="flex items-start justify-between p-4 border-b border-gray-200">
                     <h2 id="modal-title" class="text-lg font-semibold">${title}</h2>
-                    <button onClick=${handleClose} class="p-1 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-colors" aria-label="Cerrar">
+                    <button onClick=${handleClose} class="p-1 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-colors" aria-label="Cerrar" disabled=${isProcessing}>
                         ${ICONS.close}
                     </button>
                 </div>
@@ -90,7 +91,7 @@ export function ConfirmationModal({
                 <!-- Body -->
                 <div class="p-6">
                     <div class="flex items-start">
-                        ${icon && html`<div class="flex-shrink-0 mr-4">${icon}</div>`}
+                        ${!isProcessing && icon && html`<div class="flex-shrink-0 mr-4">${icon}</div>`}
                         <div class="flex-1">
                             ${children}
                         </div>
@@ -98,22 +99,24 @@ export function ConfirmationModal({
                 </div>
 
                 <!-- Footer -->
-                <div class="flex justify-end items-center p-4 bg-gray-50 rounded-b-xl space-x-3">
-                    <button 
-                        type="button" 
-                        onClick=${handleClose} 
-                        class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 transition-colors"
-                    >
-                        ${cancelText}
-                    </button>
-                    <button 
-                        type="button" 
-                        onClick=${handleConfirm} 
-                        class="rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 transition-colors ${confirmButtonClasses[confirmVariant] || confirmButtonClasses.primary}"
-                    >
-                        ${confirmText}
-                    </button>
-                </div>
+                 ${!isProcessing && html`
+                    <div class="flex justify-end items-center p-4 bg-gray-50 rounded-b-xl space-x-3">
+                        <button 
+                            type="button" 
+                            onClick=${handleClose} 
+                            class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 transition-colors"
+                        >
+                            ${cancelText}
+                        </button>
+                        <button 
+                            type="button" 
+                            onClick=${handleConfirm} 
+                            class="rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 transition-colors ${confirmButtonClasses[confirmVariant] || confirmButtonClasses.primary}"
+                        >
+                            ${confirmText}
+                        </button>
+                    </div>
+                 `}
             </div>
         </div>
     `;
