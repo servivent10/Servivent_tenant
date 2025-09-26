@@ -1,20 +1,22 @@
 -- =============================================================================
--- SUPERADMIN FUNCTIONS (v17 - Final Fix for Execution Context)
+-- SUPERADMIN FUNCTIONS (v19 - Full Edge Function Logic)
 -- =============================================================================
--- Este script implementa la arquitectura de eliminación definitiva de dos etapas,
--- y corrige el error de contexto de ejecución donde la función SQL no reconocía
--- al SuperAdmin que la llamaba desde la Edge Function.
+-- Este script elimina la función de preparación de base de datos que causaba
+-- errores de permisos. Toda la lógica de eliminación, incluyendo la de los
+-- usuarios, ahora reside de forma segura y correcta dentro de la Edge Function.
 --
 -- INSTRUCCIONES:
--- Ejecuta este script para actualizar tu lógica de SuperAdmin a la versión final.
+-- Ejecuta este script para limpiar tu base de datos de la función obsoleta.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
 -- Paso 1: Limpieza de todas las funciones de eliminación anteriores
 -- -----------------------------------------------------------------------------
-DROP FUNCTION IF EXISTS public.delete_company_as_superadmin(uuid, text);
+DROP FUNCTION IF EXISTS public.delete_company_as_superadmin(uuid);
 DROP FUNCTION IF EXISTS public.delete_company_forcefully_as_superadmin(uuid);
 DROP FUNCTION IF EXISTS public.get_all_companies();
+-- **NUEVO:** Eliminar la función de preparación que causaba el error de permisos.
+DROP FUNCTION IF EXISTS public._prepare_company_for_deletion(uuid);
 
 
 -- -----------------------------------------------------------------------------
@@ -90,44 +92,6 @@ BEGIN
     UPDATE public.licencias
     SET estado = p_new_status
     WHERE empresa_id = p_empresa_id;
-END;
-$$;
-
-
--- -----------------------------------------------------------------------------
--- Paso 3: Función de Preparación para Eliminación (CORREGIDA)
--- -----------------------------------------------------------------------------
--- Descripción:
--- Esta es la primera etapa de la demolición controlada.
--- Su ÚNICA responsabilidad es eliminar a todos los usuarios de la empresa.
--- SE ELIMINA LA COMPROBACIÓN DE SEGURIDAD INTERNA, ya que la Edge Function
--- que la llama ya ha verificado la identidad y contraseña del SuperAdmin.
--- La función confía en que si es invocada, es por un proceso ya validado.
--- -----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION _prepare_company_for_deletion(p_empresa_id_to_clean uuid)
-RETURNS text
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, auth
-AS $$
-DECLARE
-    user_record RECORD;
-    user_count integer;
-BEGIN
-    -- **SE ELIMINA LA COMPROBACIÓN DE ROL AQUÍ**
-    -- La validación ahora es responsabilidad exclusiva de la Edge Function
-    -- que invoca esta función SQL.
-
-    -- Contar usuarios para el log
-    SELECT count(*) INTO user_count FROM public.usuarios WHERE empresa_id = p_empresa_id_to_clean;
-
-    -- Iterar y eliminar cada usuario desde auth.users. Esto romperá el ciclo.
-    FOR user_record IN SELECT id FROM public.usuarios WHERE empresa_id = p_empresa_id_to_clean
-    LOOP
-        PERFORM auth.admin_delete_user(user_record.id);
-    END LOOP;
-
-    RETURN 'Preparación completada: Se eliminaron ' || user_count || ' usuarios.';
 END;
 $$;
 

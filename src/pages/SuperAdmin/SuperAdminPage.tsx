@@ -13,6 +13,7 @@ import { useLoading } from '../../hooks/useLoading.js';
 import { FloatingActionButton } from '../../components/FloatingActionButton.js';
 import { FormInput } from '../../components/FormComponents.js';
 import { Spinner } from '../../components/Spinner.js';
+import { LoadingPage } from '../../components/LoadingPage.js';
 
 const CompanyTable = ({ companies, onAction, onRowClick }) => {
     const getStatusPill = (status) => {
@@ -134,7 +135,8 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
     const [companies, setCompanies] = useState([]);
     const [modalState, setModalState] = useState({ isOpen: false, action: null, company: null });
     const [password, setPassword] = useState('');
-    const [isProcessing, setIsProcessing] = useState(false); // For loading state inside the modal
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deletionSteps, setDeletionSteps] = useState([]);
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
 
@@ -177,104 +179,99 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
     const handleCloseModal = () => {
         setModalState({ isOpen: false, action: null, company: null });
         setPassword('');
-        setIsProcessing(false);
     };
 
     const handleConfirmAction = async () => {
         const { action, company } = modalState;
         if (!action || !company) return;
+        
+        // Cierra el modal inmediatamente y activa la pantalla de carga para la eliminación.
+        if (action === 'delete') {
+            if (!password) {
+                addToast({ message: 'La contraseña es obligatoria para eliminar.', type: 'error' });
+                return;
+            }
+            handleCloseModal();
+            setIsDeleting(true);
 
-        setIsProcessing(true);
+            const initialSteps = [
+                { key: 'auth', label: 'Verificando credenciales de SuperAdmin', status: 'pending' },
+                { key: 'users', label: 'Eliminando usuarios asociados', status: 'pending' },
+                { key: 'company', label: 'Eliminando datos de la empresa (irreversible)', status: 'pending' },
+            ];
+            const updateStepStatus = (key, status) => {
+                setDeletionSteps(prev => prev.map(s => s.key === key ? { ...s, status } : s));
+            };
+            const delay = ms => new Promise(res => setTimeout(res, ms));
 
-        try {
-            if (action === 'delete') {
-                if (!password) {
-                    addToast({ message: 'La contraseña es obligatoria para eliminar.', type: 'error' });
-                    setIsProcessing(false);
-                    return;
-                }
+            setDeletionSteps(initialSteps);
+            await delay(100);
+
+            try {
+                updateStepStatus('auth', 'loading');
+                await delay(500); // Simulación para que el usuario vea el paso
                 
-                // --- INVOCACIÓN DE EDGE FUNCTION ---
-                // REVERTIDO: Se vuelve a enviar el ID de la empresa directamente.
+                // La función de Supabase valida la contraseña, por lo que este paso es representativo
+                updateStepStatus('auth', 'success');
+                updateStepStatus('users', 'loading');
+                await delay(1000); // Simulación, la función hace esto internamente
+
+                updateStepStatus('users', 'success');
+                updateStepStatus('company', 'loading');
+
                 const { error: functionError } = await supabase.functions.invoke('delete-company-forcefully', {
                     body: { 
-                        p_empresa_id: company.id, // CORREGIDO
+                        p_empresa_id: company.id,
                         p_superadmin_password: password 
                     },
                 });
 
-                // El objeto de error se lanzará y será manejado en el bloque catch
-                if (functionError) {
-                    throw functionError;
-                }
+                if (functionError) throw functionError;
+                
+                updateStepStatus('company', 'success');
+                await delay(1000); // Dejar que el usuario vea el último check de éxito
 
                 addToast({ message: `Empresa "${company.nombre}" eliminada correctamente.`, type: 'success' });
+                fetchCompanies();
 
-            } else {
-                // --- INVOCACIÓN DE RPC (para suspender/activar) ---
+            } catch(err) {
+                 updateStepStatus('company', 'error'); // Marcar el paso final como erróneo
+                 let friendlyError = 'Ocurrió un error inesperado.';
+                 if (err.context && typeof err.context.json === 'function') {
+                    try { const errorData = await err.context.json(); friendlyError = errorData.error || err.message; } catch (e) { friendlyError = err.message; }
+                 } else { friendlyError = err.message; }
+                 addToast({ message: `Error: ${friendlyError}`, type: 'error', duration: 15000 });
+            } finally {
+                setTimeout(() => { // Esperar un poco antes de ocultar la pantalla de carga
+                    setIsDeleting(false);
+                    setDeletionSteps([]);
+                }, 2000);
+            }
+        } else {
+             // Lógica para suspender/activar (se mantiene igual, es rápida)
+            startLoading();
+            try {
                 const rpcName = 'update_company_status_as_superadmin';
                 const params = { 
                     p_empresa_id: company.id, 
                     p_new_status: action === 'suspend' ? 'Suspendida' : 'Activa' 
                 };
-                const successMessage = `Empresa "${company.nombre}" ${action === 'suspend' ? 'suspendida' : 'activada'}.`;
-
                 const { error: rpcError } = await supabase.rpc(rpcName, params);
                 if (rpcError) throw rpcError;
-                
-                addToast({ message: successMessage, type: 'success' });
+                addToast({ message: `Empresa "${company.nombre}" ${action === 'suspend' ? 'suspendida' : 'activada'}.`, type: 'success' });
+                fetchCompanies();
+            } catch (err) {
+                addToast({ message: `Error: ${err.message}`, type: 'error' });
+            } finally {
+                stopLoading();
+                handleCloseModal();
             }
-
-            fetchCompanies(); // Refrescar datos en ambos casos
-
-        } catch (err) {
-            console.error(`Error during action '${action}':`, err);
-            let friendlyError = 'Ocurrió un error inesperado.';
-
-            // Comprobar si es un FunctionError de Supabase con contexto de respuesta
-            if (err.context && typeof err.context.json === 'function') {
-                try {
-                    // Intentar parsear el mensaje de error específico de la Edge Function
-                    const errorData = await err.context.json();
-                    friendlyError = errorData.error || err.message;
-                } catch (jsonError) {
-                    // Fallback si el parseo JSON falla
-                    friendlyError = err.message;
-                }
-            } else {
-                 // Fallback para errores RPC u otros tipos de errores
-                 friendlyError = err.message;
-            }
-            
-            // Refinar aún más los mensajes del lado del cliente para problemas conocidos
-            if (friendlyError.includes('Function not found')) {
-                 friendlyError = "La Edge Function 'delete-company-forcefully' no existe o no se ha desplegado correctamente en Supabase.";
-            } else if (friendlyError.includes('does not exist')) {
-                 friendlyError = `La función RPC no existe. Intenta recargar el esquema de la API en Supabase (API Docs > Reload schema).`;
-            }
-
-            addToast({ message: `Error: ${friendlyError}`, type: 'error', duration: 15000 });
-        } finally {
-            handleCloseModal();
         }
     };
     
     const getModalContent = () => {
         const { action, company } = modalState;
         if (!action || !company) return { title: '', confirmText: '', variant: 'primary', icon: null, body: '' };
-
-        if (isProcessing && action === 'delete') {
-            return {
-                title: 'Eliminando Empresa',
-                body: html`
-                    <div class="text-center p-4">
-                        <${Spinner} color="text-primary" size="h-12 w-12" />
-                        <p class="mt-4 font-semibold">Procesando eliminación de <span class="font-bold">${company.nombre}</span>...</p>
-                        <p class="text-sm text-gray-500">Este proceso es irreversible y puede tardar unos minutos. No cierres esta ventana.</p>
-                    </div>
-                `
-            };
-        }
 
         switch(action) {
             case 'delete':
@@ -355,10 +352,10 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
                 confirmText=${modalContent.confirmText}
                 confirmVariant=${modalContent.variant}
                 icon=${modalContent.icon}
-                isProcessing=${isProcessing}
             >
                 ${modalContent.body}
             <//>
         <//>
+        ${isDeleting && html`<${LoadingPage} steps=${deletionSteps} />`}
     `;
 }

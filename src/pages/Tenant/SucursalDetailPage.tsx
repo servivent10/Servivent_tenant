@@ -256,11 +256,26 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
         startLoading();
         setUserDeleteModalOpen(false);
         try {
-            const { error } = await supabase.rpc('delete_company_user', { p_user_id_to_delete: userToDelete.id });
-            if (error) throw error;
+            const { error: functionError } = await supabase.functions.invoke('delete-company-user', {
+                body: { p_user_id_to_delete: userToDelete.id },
+            });
+
+            if (functionError) {
+                let friendlyError = functionError.message;
+                if (functionError.context && typeof functionError.context.json === 'function') {
+                    try {
+                        const errorData = await functionError.context.json();
+                        if (errorData.error) { friendlyError = errorData.error; }
+                    } catch (e) { /* ignore json parsing error */ }
+                }
+                throw new Error(friendlyError);
+            }
+
             addToast({ message: `Usuario eliminado.`, type: 'success' });
             await fetchData();
-        } catch(err) {
+
+        } catch (err) {
+            console.error('Error deleting user:', err);
             addToast({ message: `Error al eliminar: ${err.message}`, type: 'error' });
         } finally {
             stopLoading();

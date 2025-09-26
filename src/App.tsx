@@ -19,6 +19,7 @@ import { ProductoDetailPage } from './pages/Tenant/ProductoDetailPage.js';
 import { CategoriasPage } from './pages/Tenant/CategoriasPage.js';
 import { InventariosPage } from './pages/Tenant/InventariosPage.js';
 import { ComprasPage } from './pages/Tenant/ComprasPage.js';
+import { NuevaCompraPage } from './pages/Tenant/NuevaCompraPage.js';
 import { CompraDetailPage } from './pages/Tenant/CompraDetailPage.js';
 import { VentasPage } from './pages/Tenant/VentasPage.js';
 import { SucursalesListPage } from './pages/Tenant/SucursalesListPage.js';
@@ -371,6 +372,7 @@ function AppContent() {
             else if (currentPath === '/categorias') tenantContent = html`<${CategoriasPage} ...${commonProps} />`;
             else if (currentPath === '/inventarios') tenantContent = html`<${InventariosPage} ...${commonProps} />`;
             else if (currentPath === '/compras') tenantContent = html`<${ComprasPage} ...${commonProps} />`;
+            else if (currentPath === '/compras/nueva') tenantContent = html`<${NuevaCompraPage} ...${commonProps} />`;
             else if (compraDetailsMatch) { const id = compraDetailsMatch[1]; tenantContent = html`<${CompraDetailPage} compraId=${id} ...${commonProps} />`; }
             else if (currentPath === '/ventas') tenantContent = html`<${VentasPage} ...${commonProps} />`;
             else if (currentPath === '/sucursales') tenantContent = html`<${SucursalesListPage} ...${commonProps} />`;

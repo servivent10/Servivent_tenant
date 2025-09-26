@@ -429,11 +429,23 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
 
     const tabs = [
         { id: 'inventario', label: 'Inventario' },
-        { id: 'precios', label: 'Precios y Costos' },
-        { id: 'detalles', label: 'Detalles' },
     ];
+    if (user.role === 'Propietario' || user.role === 'Administrador') {
+        tabs.push({ id: 'precios', label: 'Precios y Costos' });
+    }
+    tabs.push({ id: 'detalles', label: 'Detalles' });
     
-    const totalStock = (inventory || []).reduce((sum, item) => sum + (Number(item.cantidad) || 0), 0);
+    const stockToShow = useMemo(() => {
+        if (!inventory) return 0;
+        if (user.role === 'Propietario') {
+            return inventory.reduce((sum, item) => sum + (Number(item.cantidad) || 0), 0);
+        } else {
+            const branchInventory = inventory.find(item => item.sucursal_id === user.sucursal_id);
+            return branchInventory ? (Number(branchInventory.cantidad) || 0) : 0;
+        }
+    }, [inventory, user]);
+
+    const kpiTitle = user.role === 'Propietario' ? "Stock Total" : "Stock en Sucursal";
 
     const productForEdit = {
         ...details,
@@ -525,10 +537,10 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
                 <div class="lg:col-span-2">
                     <div class="mb-6">
                         <${KPI_Card} 
-                            title="Stock Total" 
-                            value=${totalStock} 
+                            title=${kpiTitle}
+                            value=${stockToShow}
                             icon=${ICONS.inventory} 
-                            color=${totalStock > 0 ? 'green' : 'red'}
+                            color=${stockToShow > 0 ? 'green' : 'red'}
                             subtext=${html`
                                 <div class="mt-2 text-xs space-y-1">
                                     ${(user.role === 'Propietario' || user.role === 'Administrador') && html`

@@ -1,30 +1,22 @@
 -- =============================================================================
--- USER MANAGEMENT FIX & COMPLETE FUNCTIONS
+-- USER MANAGEMENT FIX & COMPLETE FUNCTIONS (v5 - Edge Function Migration)
 -- =============================================================================
--- Este script SOLUCIONA el error "function not found" y habilita la
--- funcionalidad completa del módulo de gestión de usuarios.
+-- Este script actualiza la gestión de usuarios para reflejar que la eliminación
+-- ahora se maneja a través de una Edge Function, eliminando la función RPC
+-- `delete_company_user` que causaba errores de permisos.
 --
--- **INSTRUCCIONES:**
--- Por favor, ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
--- También necesitarás tener un Bucket de Storage llamado 'avatars' con
--- políticas para permitir la subida y lectura pública de imágenes.
+-- INSTRUCCIONES:
+-- Ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
 -- Prerrequisito: Añadir columna `sucursal_id` a la tabla `usuarios`
 -- -----------------------------------------------------------------------------
--- Esta columna es CRUCIAL para asignar usuarios a sucursales.
 ALTER TABLE public.usuarios
 ADD COLUMN IF NOT EXISTS sucursal_id uuid REFERENCES public.sucursales(id);
 
 -- -----------------------------------------------------------------------------
--- Función 1: Obtener usuarios y sucursales de la empresa (CORREGIDA)
--- -----------------------------------------------------------------------------
--- Descripción:
--- Recupera la lista de usuarios para el Propietario o Administrador y la lista
--- de sucursales de la empresa.
--- - Propietario: Ve todos los usuarios de la empresa.
--- - Administrador: Ve solo los usuarios de su propia sucursal.
+-- Función 1: Obtener usuarios y sucursales de la empresa
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_company_users()
 RETURNS json
@@ -107,11 +99,7 @@ END;
 $$;
 
 -- -----------------------------------------------------------------------------
--- Función 3: Actualizar un usuario existente (CON CAMBIO DE CONTRASEÑA)
--- -----------------------------------------------------------------------------
--- Corrección (v2): Se reemplaza la llamada a `auth.admin_update_user_by_id` por
--- un `UPDATE` directo con encriptación usando `crypt`, para ser consistente con
--- las otras funciones de admin y evitar posibles problemas de permisos.
+-- Función 3: Actualizar un usuario existente
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION update_company_user(
     p_user_id_to_update uuid,
@@ -119,12 +107,12 @@ CREATE OR REPLACE FUNCTION update_company_user(
     p_rol text,
     p_sucursal_id uuid,
     p_avatar text,
-    p_password text DEFAULT NULL -- Parámetro opcional para contraseña
+    p_password text DEFAULT NULL
 )
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, auth, extensions -- 'extensions' es necesario para pgcrypto (crypt)
+SET search_path = public, auth, extensions
 AS $$
 DECLARE
     caller_empresa_id uuid;
@@ -133,7 +121,6 @@ DECLARE
     target_empresa_id uuid;
     target_rol text;
 BEGIN
-    -- 1. Validar permisos del que llama
     SELECT empresa_id, rol, sucursal_id INTO caller_empresa_id, caller_rol, caller_sucursal_id
     FROM public.usuarios WHERE id = auth.uid();
 
@@ -141,13 +128,11 @@ BEGIN
         RAISE EXCEPTION 'Acceso denegado.';
     END IF;
 
-    -- 2. Asegurarse de que el usuario a editar pertenece a la misma empresa y obtener su rol
     SELECT empresa_id, rol INTO target_empresa_id, target_rol FROM public.usuarios WHERE id = p_user_id_to_update;
     IF target_empresa_id IS NULL OR target_empresa_id != caller_empresa_id THEN
         RAISE EXCEPTION 'Usuario no encontrado o no pertenece a tu empresa.';
     END IF;
 
-    -- 2.1. Reglas de seguridad adicionales
     IF target_rol = 'Propietario' AND auth.uid() != p_user_id_to_update THEN
         RAISE EXCEPTION 'Un Administrador no puede editar al Propietario de la empresa.';
     END IF;
@@ -155,7 +140,6 @@ BEGIN
         RAISE EXCEPTION 'El rol del Propietario no puede ser modificado.';
     END IF;
 
-    -- 3. Actualizar la tabla public.usuarios
     UPDATE public.usuarios
     SET
         nombre_completo = p_nombre_completo,
@@ -164,7 +148,6 @@ BEGIN
         avatar = p_avatar
     WHERE id = p_user_id_to_update;
 
-    -- 4. Si se proporcionó una nueva contraseña, actualizarla en auth.users
     IF p_password IS NOT NULL AND p_password != '' THEN
         IF char_length(p_password) < 6 THEN
             RAISE EXCEPTION 'La contraseña debe tener al menos 6 caracteres.';
@@ -179,63 +162,16 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Función 4: Eliminar un usuario de la empresa
+-- Función 4: Eliminar un usuario de la empresa (OBSOLETA)
 -- -----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION delete_company_user(
-    p_user_id_to_delete uuid
-)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, auth
-AS $$
-DECLARE
-    caller_empresa_id uuid;
-    caller_rol text;
-    target_empresa_id uuid;
-    target_rol text;
-BEGIN
-    -- 1. Validar permisos del que llama
-    SELECT empresa_id, rol INTO caller_empresa_id, caller_rol
-    FROM public.usuarios WHERE id = auth.uid();
+-- La función `delete_company_user` ha sido eliminada. La lógica ahora se maneja
+-- en la Edge Function 'delete-company-user' para evitar problemas de permisos.
+-- -----------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.delete_company_user(uuid);
 
-    IF caller_rol NOT IN ('Propietario', 'Administrador') THEN
-        RAISE EXCEPTION 'Acceso denegado.';
-    END IF;
-    
-    -- No se puede auto-eliminar
-    IF auth.uid() = p_user_id_to_delete THEN
-        RAISE EXCEPTION 'No puedes eliminarte a ti mismo.';
-    END IF;
-
-    -- 2. Asegurarse de que el usuario a eliminar pertenece a la misma empresa
-    SELECT empresa_id, rol INTO target_empresa_id, target_rol FROM public.usuarios WHERE id = p_user_id_to_delete;
-    IF target_empresa_id IS NULL OR target_empresa_id != caller_empresa_id THEN
-        RAISE EXCEPTION 'Usuario no encontrado o no pertenece a tu empresa.';
-    END IF;
-
-    -- Un Propietario no puede ser eliminado.
-    IF target_rol = 'Propietario' THEN
-      RAISE EXCEPTION 'No se puede eliminar a un usuario con el rol de Propietario.';
-    END IF;
-
-    -- 3. Eliminar de public.usuarios primero
-    DELETE FROM public.usuarios WHERE id = p_user_id_to_delete;
-    
-    -- 4. Eliminar de auth.users
-    PERFORM auth.admin_delete_user(p_user_id_to_delete);
-END;
-$$;
 
 -- -----------------------------------------------------------------------------
 -- Función 5: Obtener el perfil del usuario que llama (para Edge Functions)
--- -----------------------------------------------------------------------------
--- Descripción:
--- Esta función es una alternativa segura a un SELECT directo en la tabla de usuarios
--- desde una Edge Function. Al ser SECURITY DEFINER, evita problemas causados por
--- políticas RLS complejas o defectuosas que podrían impedir que la función verifique
--- los permisos del usuario que la invoca.
--- Devuelve la empresa y el rol del usuario autenticado que realiza la llamada.
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_caller_profile_safely()
 RETURNS TABLE (
@@ -258,7 +194,6 @@ BEGIN
     LIMIT 1;
 END;
 $$;
-
 
 -- =============================================================================
 -- Fin del script.

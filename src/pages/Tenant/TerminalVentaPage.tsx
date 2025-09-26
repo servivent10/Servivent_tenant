@@ -371,7 +371,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                 <div class="lg:col-span-3 flex flex-col bg-white rounded-lg border shadow-sm overflow-hidden h-full">
                     <div class="flex-shrink-0 p-4 border-b">
                         <div class="relative">
-                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">${ICONS.search}</div>
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">${ICONS.search}</div>
                             <input type="text" placeholder="Buscar por nombre o SKU..." value=${searchTerm} onInput=${e => setSearchTerm(e.target.value)} class="block w-full rounded-md border-0 pl-10 p-2 bg-white text-gray-900 placeholder-gray-500 shadow-sm ring-1 ring-inset ring-gray-300 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200" />
                         </div>
                         <div class="mt-3 flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4">

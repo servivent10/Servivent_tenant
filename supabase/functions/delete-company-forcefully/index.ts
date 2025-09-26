@@ -56,18 +56,29 @@ Deno.serve(async (req) => {
     if (signInError) throw new Error("Contraseña de SuperAdmin incorrecta. Operación cancelada.");
     console.log('[STEP 1/3] Verificación de SuperAdmin completada.');
 
-    // --- 2. ETAPA 1: ROMPER EL CICLO DE RECURSIÓN ---
-    // Se invoca la función SQL que SOLO elimina los usuarios de auth.users,
-    // rompiendo así la cadena de dependencias que causa el error del planificador.
-    console.log('[STEP 2/3] Invocando RPC para preparar la eliminación (eliminar usuarios)...');
-    const { error: prepareError } = await supabaseAdmin.rpc(
-        '_prepare_company_for_deletion',
-        { p_empresa_id_to_clean: p_empresa_id }
-    );
-    if (prepareError) {
-      throw new Error(`Error en la etapa de preparación: ${prepareError.message}`);
+    // --- 2. ETAPA 1: ROMPER EL CICLO DE RECURSIÓN (AHORA DENTRO DE LA EDGE FUNCTION) ---
+    console.log('[STEP 2/3] Obteniendo la lista de usuarios para eliminar...');
+    const { data: usersToDelete, error: userFetchError } = await supabaseAdmin
+      .from('usuarios')
+      .select('id')
+      .eq('empresa_id', p_empresa_id);
+
+    if (userFetchError) {
+      throw new Error(`Error al obtener la lista de usuarios: ${userFetchError.message}`);
     }
-    console.log('[STEP 2/3] Preparación completada, usuarios eliminados.');
+
+    console.log(`[STEP 2/3] Se encontraron ${usersToDelete.length} usuarios. Procediendo a eliminarlos...`);
+    
+    // Eliminar cada usuario usando el cliente de administrador
+    for (const userToDelete of usersToDelete) {
+      const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(userToDelete.id);
+      if (deleteUserError) {
+        // Registrar el error pero continuar si es posible
+        console.warn(`No se pudo eliminar al usuario ${userToDelete.id}: ${deleteUserError.message}`);
+      }
+    }
+    console.log('[STEP 2/3] Preparación completada, usuarios eliminados de auth.users.');
+
 
     // --- 3. ETAPA 2: DEMOLICIÓN FINAL ---
     // Con los usuarios ya eliminados, el planificador ya no ve un ciclo y

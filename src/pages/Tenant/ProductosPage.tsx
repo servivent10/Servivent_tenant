@@ -29,7 +29,7 @@ const StockPill = ({ stock }) => {
     return html`<span class="${pillClass} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">${text} (${stock})</span>`;
 };
 
-const ProductCard = ({ product, navigate, onEdit, onDelete }) => {
+const ProductCard = ({ product, navigate, onEdit, onDelete, user }) => {
     const handleCardClick = () => {
         if (window.getSelection().toString()) {
             return;
@@ -48,6 +48,8 @@ const ProductCard = ({ product, navigate, onEdit, onDelete }) => {
         if (p.sku) return `SKU: ${p.sku}`;
         return 'Sin detalles';
     };
+
+    const stockToShow = user.role === 'Propietario' ? product.stock_total : product.stock_sucursal;
 
     return html`
         <div onClick=${handleCardClick} class="group bg-white rounded-lg shadow-sm border overflow-hidden flex flex-row transition-shadow hover:shadow-md cursor-pointer">
@@ -81,71 +83,161 @@ const ProductCard = ({ product, navigate, onEdit, onDelete }) => {
                     <p class="text-lg font-semibold text-gray-900">
                         ${Number(product.precio_base) > 0 ? `Bs ${Number(product.precio_base).toFixed(2)}` : html`<span class="text-sm text-amber-600 font-medium">Precio no asignado</span>`}
                     </p>
-                    <${StockPill} stock=${product.stock_total} />
+                    <${StockPill} stock=${stockToShow} />
                 </div>
             </div>
         </div>
     `;
 };
 
-const ProductTable = ({ products, navigate, onEdit, onDelete }) => {
+const ProductTable = ({ products, navigate, onEdit, onDelete, user }) => {
     const handleRowClick = (product) => {
         navigate(`/productos/${product.id}`);
     };
     
     return html`
-    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-        <table class="min-w-full divide-y divide-gray-300">
+    <div class="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+        <table class="min-w-full divide-y divide-gray-300 table-fixed">
+            <colgroup>
+                <col />
+                <col class="w-[150px]" />
+                <col class="w-[150px]" />
+                <col class="w-[150px]" />
+                <col class="w-[100px]" />
+            </colgroup>
             <thead class="bg-gray-50">
                 <tr>
                     <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Producto</th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">SKU</th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Categoría</th>
+                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Modelo</th>
                     <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Precio Base</th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Stock Total</th>
-                    <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6"><span class="sr-only">Acciones</span></th>
+                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Stock</th>
+                    <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6 text-right text-sm font-semibold text-gray-900">Acciones</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 bg-white">
-                ${products.map(p => html`
-                    <tr key=${p.id} onClick=${() => handleRowClick(p)} class="group hover:bg-gray-50 cursor-pointer">
-                        <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm sm:pl-6">
-                            <div class="flex items-center">
-                                <div class="h-10 w-10 flex-shrink-0">
-                                    ${p.imagen_principal ? html`
-                                        <img class="h-10 w-10 rounded-md object-cover" src=${p.imagen_principal} alt=${p.nombre} />
-                                    ` : html`
-                                        <div class="h-10 w-10 rounded-md bg-slate-100 flex items-center justify-center">
-                                            <div class="text-slate-400 text-2xl">${ICONS.products}</div>
-                                        </div>
-                                    `}
-                                </div>
-                                <div class="ml-4">
-                                    <div class="font-medium text-gray-900 group-hover:text-primary">${p.nombre}</div>
-                                    <div class="text-gray-500">${p.marca}</div>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${p.sku}</td>
-                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${p.categoria_nombre}</td>
-                        <td class="whitespace-nowrap px-3 py-4 text-sm font-semibold text-gray-800">
-                             ${Number(p.precio_base) > 0 ? `Bs ${Number(p.precio_base).toFixed(2)}` : html`<span class="text-xs text-amber-600 font-medium">Precio no asignado</span>`}
-                        </td>
-                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                             <${StockPill} stock=${p.stock_total} />
-                        </td>
-                        <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                            <div class="flex items-center justify-end space-x-2">
-                                <button onClick=${(e) => { e.stopPropagation(); onEdit(p); }} title="Editar" class="text-gray-400 hover:text-primary p-1 rounded-full hover:bg-gray-100">${ICONS.edit}</button>
-                                <button onClick=${(e) => { e.stopPropagation(); onDelete(p); }} title="Eliminar" class="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-gray-100">${ICONS.delete}</button>
-                            </div>
-                        </td>
-                    </tr>
-                `)}
+            ${products.map(p => {
+                const stockToShow = user.role === 'Propietario' ? p.stock_total : p.stock_sucursal;
+                return html`
+                <tr key=${p.id} onClick=${() => handleRowClick(p)} class="group hover:bg-gray-50 cursor-pointer">
+                <td class="py-4 pl-4 pr-3 text-sm sm:pl-6">
+                    <div class="flex items-center">
+                    <div class="h-10 w-10 flex-shrink-0">
+                        ${p.imagen_principal ? html`
+                        <img class="h-10 w-10 rounded-md object-cover" src=${p.imagen_principal} alt=${p.nombre} />
+                        ` : html`
+                        <div class="h-10 w-10 rounded-md bg-slate-100 flex items-center justify-center">
+                            <div class="text-slate-400 text-2xl">${ICONS.products}</div>
+                        </div>
+                        `}
+                    </div>
+                    <div class="ml-4 min-w-0">
+                        <div class="font-medium text-gray-900 group-hover:text-primary truncate" title=${p.nombre}>${p.nombre}</div>
+                        <div class="text-gray-500 truncate" title=${p.marca || ''}>${p.marca || 'Sin marca'}</div>
+                    </div>
+                    </div>
+                </td>
+
+                <td class="px-3 py-4 text-sm text-gray-500 w-[100px] max-w-[100px] truncate" title=${p.modelo || ''}>
+                    ${p.modelo || 'N/A'}
+                </td>
+                
+                <td class="whitespace-nowrap px-3 py-4 text-sm font-semibold text-gray-800">
+                    ${Number(p.precio_base) > 0
+                    ? `Bs ${Number(p.precio_base).toFixed(2)}`
+                    : html`<span class="text-xs text-amber-600 font-medium">Precio no asignado</span>`
+                    }
+                </td>
+                
+                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                    <${StockPill} stock=${stockToShow} />
+                </td>
+                
+                <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                    <div class="flex items-center justify-end space-x-1">
+                    <button onClick=${(e) => { e.stopPropagation(); onEdit(p); }} title="Editar" class="text-gray-400 hover:text-primary p-1 rounded-full hover:bg-gray-100">${ICONS.edit}</button>
+                    <button onClick=${(e) => { e.stopPropagation(); onDelete(p); }} title="Eliminar" class="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-gray-100">${ICONS.delete}</button>
+                    </div>
+                </td>
+                </tr>
+            `})}
             </tbody>
         </table>
     </div>
 `};
+
+const FilterPanel = ({ counts, activeFilters, onFilterChange, onClearFilters }) => {
+    const [activeTab, setActiveTab] = useState('categorias');
+    const [filterSearchTerm, setFilterSearchTerm] = useState('');
+
+    const lowercasedFilterSearch = filterSearchTerm.toLowerCase();
+    
+    const categories = Object.entries(counts.categories || {})
+        .filter(([name]) => name.toLowerCase().includes(lowercasedFilterSearch))
+        .sort((a, b) => a[0].localeCompare(b[0]));
+        
+    const brands = Object.entries(counts.brands || {})
+        .filter(([name]) => name.toLowerCase().includes(lowercasedFilterSearch))
+        .sort((a, b) => a[0].localeCompare(b[0]));
+    
+    return html`
+        <div class="flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-gray-900">Filtros</h3>
+                 <button onClick=${onClearFilters} class="text-sm font-medium text-primary hover:text-primary-dark">
+                    Limpiar
+                </button>
+            </div>
+            <div class="flex-grow p-4">
+                <div class="border-b border-gray-200">
+                    <nav class="-mb-px flex space-x-4" aria-label="Tabs">
+                        <button onClick=${() => setActiveTab('categorias')} class=${`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium ${activeTab === 'categorias' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                            Categorías
+                        </button>
+                        <button onClick=${() => setActiveTab('marcas')} class=${`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium ${activeTab === 'marcas' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                            Marcas
+                        </button>
+                    </nav>
+                </div>
+
+                <div class="mt-4 relative">
+                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">${ICONS.search}</div>
+                    <input 
+                        type="text" 
+                        placeholder="Buscar..." 
+                        value=${filterSearchTerm} 
+                        onInput=${e => setFilterSearchTerm(e.target.value)}
+                        class="block w-full rounded-md border-0 pl-10 p-2 bg-white text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm"
+                    />
+                </div>
+                
+                <div class="mt-4">
+                    <ul class="divide-y divide-gray-200">
+                        ${activeTab === 'categorias' && categories.map(([name, count]) => {
+                            const isActive = activeFilters.category.includes(name);
+                            return html`
+                            <li key=${name} class="py-2">
+                                <button onClick=${() => onFilterChange('category', name)} class="w-full flex items-center justify-between text-left text-sm text-gray-600 hover:text-primary">
+                                    <span class=${`truncate ${isActive ? 'font-bold text-primary' : ''}`}>${name}</span>
+                                    <span class=${`ml-2 flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${isActive ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'}`}>${count}</span>
+                                </button>
+                            </li>
+                        `})}
+                        ${activeTab === 'marcas' && brands.map(([name, count]) => {
+                             const isActive = activeFilters.brand.includes(name);
+                            return html`
+                            <li key=${name} class="py-2">
+                                <button onClick=${() => onFilterChange('brand', name)} class="w-full flex items-center justify-between text-left text-sm text-gray-600 hover:text-primary">
+                                    <span class=${`truncate ${isActive ? 'font-bold text-primary' : ''}`}>${name}</span>
+                                    <span class=${`ml-2 flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${isActive ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'}`}>${count}</span>
+                                </button>
+                            </li>
+                        `})}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    `;
+};
 
 
 export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
@@ -159,6 +251,8 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     const [isImportModalOpen, setImportModalOpen] = useState(false);
     const [isFabOpen, setIsFabOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [activeFilters, setActiveFilters] = useState({ category: [], brand: [] });
+    const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
     const fetchData = async () => {
         startLoading();
@@ -177,6 +271,15 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     useEffect(() => {
         fetchData();
     }, []);
+
+    useEffect(() => {
+        if (isMobileFilterOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'auto';
+        }
+        return () => { document.body.style.overflow = 'auto'; };
+    }, [isMobileFilterOpen]);
     
     const handleAddProduct = () => {
         setIsFabOpen(false);
@@ -234,31 +337,63 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
         document.body.removeChild(link);
     };
     
+    const filterCounts = useMemo(() => {
+        if (!data?.products) return { categories: {}, brands: {} };
+        const categories = data.products.reduce((acc, p) => {
+            const cat = p.categoria_nombre || 'Sin Categoría';
+            acc[cat] = (acc[cat] || 0) + 1;
+            return acc;
+        }, {});
+        const brands = data.products.reduce((acc, p) => {
+            const brand = p.marca || 'Sin Marca';
+            acc[brand] = (acc[brand] || 0) + 1;
+            return acc;
+        }, {});
+        return { categories, brands };
+    }, [data]);
+
     const filteredProducts = useMemo(() => {
         if (!data?.products) return [];
-        const lowercasedFilter = searchTerm.toLowerCase();
         return data.products.filter(p => {
-            return (
+            const lowercasedFilter = searchTerm.toLowerCase();
+            const matchesSearch = searchTerm === '' ||
                 p.nombre?.toLowerCase().includes(lowercasedFilter) ||
                 p.sku?.toLowerCase().includes(lowercasedFilter) ||
-                p.marca?.toLowerCase().includes(lowercasedFilter) ||
-                p.categoria_nombre?.toLowerCase().includes(lowercasedFilter)
-            );
+                p.modelo?.toLowerCase().includes(lowercasedFilter);
+
+            const matchesCategory = activeFilters.category.length === 0 || activeFilters.category.includes(p.categoria_nombre || 'Sin Categoría');
+            const matchesBrand = activeFilters.brand.length === 0 || activeFilters.brand.includes(p.marca || 'Sin Marca');
+
+            return matchesSearch && matchesCategory && matchesBrand;
+        }).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    }, [data, searchTerm, activeFilters]);
+
+    const handleFilterChange = (type, value) => {
+        setActiveFilters(prev => {
+            const currentValues = prev[type];
+            const newValues = currentValues.includes(value)
+                ? currentValues.filter(v => v !== value) // Remove if it exists
+                : [...currentValues, value]; // Add if it doesn't exist
+            return { ...prev, [type]: newValues };
         });
-    }, [data, searchTerm]);
+    };
+    
+    const handleClearFilters = () => {
+        setActiveFilters({ category: [], brand: [] });
+        if(isMobileFilterOpen) setIsMobileFilterOpen(false);
+    };
 
     const breadcrumbs = [ { name: 'Productos', href: '#/productos' } ];
-    // FIX: Provide a default object for kpis and use optional chaining to prevent errors if data is null from the RPC call.
     const kpis = data?.kpis || { total_products: 0, total_stock_items: 0, products_without_stock: 0 };
 
     const ProductList = () => html`
         <div class="grid grid-cols-1 xl:hidden gap-4">
             ${filteredProducts.map(p => html`
-                <${ProductCard} product=${p} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} />
+                <${ProductCard} product=${p} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} user=${user} />
             `)}
         </div>
         <div class="hidden xl:block">
-            <${ProductTable} products=${filteredProducts} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} />
+            <${ProductTable} products=${filteredProducts} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} user=${user} />
         </div>
     `;
 
@@ -285,26 +420,36 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
                 <${KPI_Card} title="Productos Agotados" value=${kpis.products_without_stock || 0} icon=${ICONS.warning} color="red" />
             </div>
 
-            <div class="mt-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border">
-                <div class="relative flex-grow">
-                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">${ICONS.search}</div>
-                    <input type="text" placeholder="Buscar por Nombre, SKU, marca, modelo..." value=${searchTerm} onInput=${e => setSearchTerm(e.target.value)} class="block w-full rounded-md border-0 pl-10 p-2 bg-white text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200" />
-                </div>
-                 <div class="hidden xl:flex items-center gap-2">
-                    <button onClick=${() => addToast({ message: 'Funcionalidad de exportar no implementada.'})} class="flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">${ICONS.download} Exportar</button>
-                    <button onClick=${() => setImportModalOpen(true)} class="flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">${ICONS.upload_file} Importar</button>
-                    <button onClick=${() => addToast({ message: 'Funcionalidad de filtros no implementada.'})} class="flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">${ICONS.settings} Filtros</button>
-                    <button onClick=${handleAddProduct} class="flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover">${ICONS.add} Añadir Producto</button>
-                </div>
-            </div>
-
-            <div class="mt-6">
-                ${filteredProducts.length === 0 && searchTerm ? html`
-                    <div class="text-center py-12">
-                        <h3 class="text-lg font-medium text-gray-900">No se encontraron productos</h3>
-                        <p class="mt-1 text-sm text-gray-500">Intenta con otro término de búsqueda.</p>
+            <div class="mt-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <div class="hidden lg:block lg:col-span-1">
+                    <div class="bg-white rounded-lg shadow-sm border">
+                       <${FilterPanel} counts=${filterCounts} activeFilters=${activeFilters} onFilterChange=${handleFilterChange} onClearFilters=${handleClearFilters} />
                     </div>
-                ` : html`<${ProductList} />`}
+                </div>
+
+                <div class="lg:col-span-3">
+                    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border">
+                        <div class="relative flex-grow">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">${ICONS.search}</div>
+                            <input type="text" placeholder="Buscar por SKU, nombre o modelo..." value=${searchTerm} onInput=${e => setSearchTerm(e.target.value)} class="block w-full rounded-md border-0 pl-10 p-2 bg-white text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200" />
+                        </div>
+                         <div class="hidden xl:flex items-center gap-2">
+                            <button onClick=${() => addToast({ message: 'Funcionalidad de exportar no implementada.'})} class="flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">${ICONS.download} Exportar</button>
+                            <button onClick=${() => setImportModalOpen(true)} class="flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">${ICONS.upload_file} Importar</button>
+                            <button onClick=${handleAddProduct} class="flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover">${ICONS.add} Añadir Producto</button>
+                        </div>
+                    </div>
+
+                    <div class="mt-6">
+                        ${filteredProducts.length === 0 ? html`
+                            <div class="text-center py-12 rounded-lg border-2 border-dashed border-gray-200 bg-white">
+                                <h3 class="text-lg font-medium text-gray-900">No se encontraron productos</h3>
+                                <p class="mt-1 text-sm text-gray-500">Intenta con otro término de búsqueda o ajusta los filtros.</p>
+                                <button onClick=${handleClearFilters} class="mt-4 text-sm font-semibold text-primary hover:underline">Limpiar filtros</button>
+                            </div>
+                        ` : html`<${ProductList} />`}
+                    </div>
+                </div>
             </div>
             
             <div class="xl:hidden fixed bottom-6 right-6 z-30 flex flex-col-reverse items-end gap-4">
@@ -320,18 +465,31 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
                 </button>
                 
                 <div class=${`flex flex-col items-end gap-3 transition-all duration-300 ease-in-out ${isFabOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                    <button onClick=${() => { addToast({ message: 'Funcionalidad de filtros no implementada.'}); setIsFabOpen(false); }} class="flex items-center gap-2 bg-white text-gray-700 px-4 py-2 rounded-lg shadow-lg text-sm font-semibold hover:bg-gray-50">
+                    <button onClick=${() => { setIsMobileFilterOpen(true); setIsFabOpen(false); }} class="flex items-center gap-2 bg-white text-gray-700 px-4 py-2 rounded-lg shadow-lg text-sm font-semibold hover:bg-gray-50">
                         Filtros ${ICONS.settings}
                     </button>
                     <button onClick=${handleAddProduct} class="flex items-center gap-2 bg-white text-gray-700 px-4 py-2 rounded-lg shadow-lg text-sm font-semibold hover:bg-gray-50">
                         Añadir Producto ${ICONS.add_circle}
                     </button>
-                    <button onClick=${() => { setImportModalOpen(true); setIsFabOpen(false); }} class="flex items-center gap-2 bg-white text-gray-700 px-4 py-2 rounded-lg shadow-lg text-sm font-semibold hover:bg-gray-50">
+                     <button onClick=${() => { setImportModalOpen(true); setIsFabOpen(false); }} class="flex items-center gap-2 bg-white text-gray-700 px-4 py-2 rounded-lg shadow-lg text-sm font-semibold hover:bg-gray-50">
                         Importar ${ICONS.upload_file}
                     </button>
                     <button onClick=${() => addToast({ message: 'Funcionalidad de exportar no implementada.'})} class="flex items-center gap-2 bg-white text-gray-700 px-4 py-2 rounded-lg shadow-lg text-sm font-semibold hover:bg-gray-50">
                         Exportar ${ICONS.download}
                     </button>
+                </div>
+            </div>
+
+             <div class=${`fixed inset-0 z-40 flex lg:hidden transition-opacity duration-300 ease-linear ${isMobileFilterOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} role="dialog" aria-modal="true">
+                <div class="fixed inset-0 bg-gray-600 bg-opacity-75" aria-hidden="true" onClick=${() => setIsMobileFilterOpen(false)}></div>
+                <div class=${`relative flex w-full max-w-xs flex-1 flex-col bg-white shadow-xl overflow-y-auto transform transition duration-300 ease-in-out ${isMobileFilterOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                    <div class="absolute top-0 right-0 -mr-12 pt-2">
+                        <button type="button" class="ml-1 flex h-10 w-10 items-center justify-center rounded-full text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white" onClick=${() => setIsMobileFilterOpen(false)}>
+                            <span class="sr-only">Cerrar filtros</span>
+                            ${ICONS.close}
+                        </button>
+                    </div>
+                    <${FilterPanel} counts=${filterCounts} activeFilters=${activeFilters} onFilterChange=${handleFilterChange} onClearFilters=${handleClearFilters} />
                 </div>
             </div>
             
