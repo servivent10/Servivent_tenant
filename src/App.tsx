@@ -173,8 +173,6 @@ function AppContent() {
                     companyData = {
                         name: profile.empresa_nombre,
                         nit: profile.empresa_nit,
-                        direccion: profile.empresa_direccion,
-                        telefono: profile.empresa_telefono,
                         plan: planName,
                         logo: profile.empresa_logo,
                         planDetails: planDetails,

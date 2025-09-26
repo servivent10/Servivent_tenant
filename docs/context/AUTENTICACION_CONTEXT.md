@@ -27,7 +27,7 @@ Proporcionar un flujo seguro y guiado para que los usuarios accedan a sus cuenta
 
 Este es un proceso de 4 pasos diseñado para recopilar toda la información necesaria de forma ordenada.
 
--   **Paso 1: Datos de la Empresa:** Se recopila el nombre, NIT, dirección y teléfono de la nueva empresa.
+-   **Paso 1: Datos de la Empresa:** Se recopila el nombre y el NIT de la nueva empresa.
 -   **Paso 2: Cuenta de Propietario:** Se crean las credenciales para el usuario principal (rol 'Propietario'), incluyendo nombre, correo y contraseña.
 -   **Paso 3: Sucursal Principal:** Se registran los datos de la primera sucursal, que por defecto se llama "Sucursal Principal".
 -   **Paso 4: Elección de Plan:** El usuario selecciona uno de los planes de suscripción disponibles, incluyendo la prueba gratuita.

@@ -23,10 +23,8 @@ function StepEmpresa({ onNext, navigate, formData, handleInput, formErrors }) {
         <form onSubmit=${handleSubmit}>
             <h3 class="text-lg font-semibold text-gray-900">1. Datos de la Empresa</h3>
             <div class="mt-6 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2">
-                <${FormInput} label="Nombre de la Empresa" name="empresa_nombre" type="text" value=${formData.empresa_nombre} onInput=${handleInput} error=${formErrors.empresa_nombre} />
-                <${FormInput} label="NIT" name="empresa_nit" type="text" value=${formData.empresa_nit} onInput=${handleInput} error=${formErrors.empresa_nit} />
-                <div class="sm:col-span-2"><${FormInput} label="Dirección" name="empresa_direccion" type="text" value=${formData.empresa_direccion} onInput=${handleInput} required=${false} /></div>
-                <${FormInput} label="Teléfono" name="empresa_telefono" type="tel" value=${formData.empresa_telefono} onInput=${handleInput} required=${false} />
+                <div class="sm:col-span-1"><${FormInput} label="Nombre de la Empresa" name="empresa_nombre" type="text" value=${formData.empresa_nombre} onInput=${handleInput} error=${formErrors.empresa_nombre} /></div>
+                <div class="sm:col-span-1"><${FormInput} label="NIT" name="empresa_nit" type="text" value=${formData.empresa_nit} onInput=${handleInput} error=${formErrors.empresa_nit} /></div>
             </div>
             <${FormButtons} onBack=${() => navigate('/login')} backText="Cancelar" />
         </form>
@@ -115,8 +113,6 @@ export function RegistrationFlow({ navigate }) {
     const [formData, setFormData] = useState({
         empresa_nombre: '',
         empresa_nit: '',
-        empresa_direccion: '',
-        empresa_telefono: '',
         user_nombre: '',
         user_email: '',
         user_password: '',
@@ -254,8 +250,6 @@ export function RegistrationFlow({ navigate }) {
                 // Company and branch fields
                 empresa_nombre: formData.empresa_nombre.trim(),
                 empresa_nit: formData.empresa_nit.trim(),
-                empresa_direccion: formData.empresa_direccion.trim(),
-                empresa_telefono: formData.empresa_telefono.trim(),
                 sucursal_nombre: formData.sucursal_nombre.trim(),
                 sucursal_direccion: formData.sucursal_direccion.trim(),
                 sucursal_telefono: formData.sucursal_telefono.trim(),

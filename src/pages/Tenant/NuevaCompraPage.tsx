@@ -31,6 +31,7 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
     const [calculatedPrices, setCalculatedPrices] = useState({}); // Map of { lista_id: calculated_price }
     
     const [errors, setErrors] = useState < { cantidad?: string; costo_unitario?: string; } > ({});
+    const [generalPriceRuleError, setGeneralPriceRuleError] = useState('');
 
     const stock_sucursal_actual = Number(item.stock_sucursal || 0);
     const stock_total_actual = useMemo(() =>
@@ -90,6 +91,7 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
             setLocalItem(item);
             setActiveTab('inventory');
             setErrors({});
+            setGeneralPriceRuleError('');
             fetchDetails();
         }
     }, [isOpen, item.producto_id]);
@@ -136,6 +138,16 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
     };
 
     const handleSave = () => {
+        const generalRule = priceRules.find(p => p.es_predeterminada);
+        if (!generalRule || generalRule.valor_ganancia === null || generalRule.valor_ganancia === '' || Number(generalRule.valor_ganancia) < 1) {
+            const errorMessage = 'La ganancia debe ser al menos 1.';
+            setGeneralPriceRuleError(errorMessage);
+            addToast({ message: `Para el precio General: ${errorMessage}`, type: 'error' });
+            setActiveTab('prices'); // Asegura que el usuario vea el error
+            return; // Detiene el proceso de guardado
+        }
+
+        setGeneralPriceRuleError('');
         onSave({
             ...localItem,
             prices: priceRules.map(p => ({
@@ -211,12 +223,24 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
                                                 <div class="sm:col-span-2">
                                                     <label class="block text-xs font-medium text-gray-700">Ganancia</label>
                                                     <div class="mt-1 flex">
-                                                        <input type="number" value=${p.valor_ganancia} onInput=${e => handleRuleChange(p.lista_precio_id, 'valor_ganancia', e.target.value)} class="w-full block rounded-l-md border-0 p-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white" placeholder="0.00" />
+                                                        <input 
+                                                            type="number" 
+                                                            value=${p.valor_ganancia} 
+                                                            onInput=${e => {
+                                                                handleRuleChange(p.lista_precio_id, 'valor_ganancia', e.target.value);
+                                                                if (p.es_predeterminada) {
+                                                                    setGeneralPriceRuleError(''); // Limpia el error al escribir
+                                                                }
+                                                            }}
+                                                            class=${`w-full block rounded-l-md border-0 p-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white ${p.es_predeterminada && generalPriceRuleError ? 'ring-red-500' : 'ring-gray-300'}`} 
+                                                            placeholder="0.00" 
+                                                        />
                                                         <div class="inline-flex rounded-r-md shadow-sm">
                                                             <button onClick=${() => handleRuleChange(p.lista_precio_id, 'tipo_ganancia', 'porcentaje')} class=${`relative inline-flex items-center rounded-l-none rounded-r-sm px-2 py-1.5 text-xs font-semibold ring-1 ring-inset ring-gray-300 focus:z-10 transition-colors ${p.tipo_ganancia === 'porcentaje' ? 'bg-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>%</button>
                                                             <button onClick=${() => handleRuleChange(p.lista_precio_id, 'tipo_ganancia', 'fijo')} class=${`relative -ml-px inline-flex items-center rounded-r-md px-2 py-1.5 text-xs font-semibold ring-1 ring-inset ring-gray-300 focus:z-10 transition-colors ${p.tipo_ganancia === 'fijo' ? 'bg-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>Bs</button>
                                                         </div>
                                                     </div>
+                                                    ${p.es_predeterminada && generalPriceRuleError && html`<p class="mt-1 text-sm text-red-600">${generalPriceRuleError}</p>`}
                                                 </div>
                                                 <div class="text-center sm:col-span-1">
                                                     <label class="block text-xs font-medium text-gray-500">Precio Venta</label>
@@ -848,7 +872,6 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
                 
                 <div class="min-h-[30rem]">
                     ${step === 1 && html`<${Step1} formData=${formData} handleInput=${handleInput} setFormData=${setFormData} proveedores=${proveedores} setIsProveedorFormOpen=${setIsProveedorFormOpen} />`}
-                    {/* FIX: Pass handleProductSelected instead of onProductSelected */}
                     ${step === 2 && html`<${Step2} formData=${formData} handleEditItem=${handleEditItem} handleRemoveItem=${handleRemoveItem} total=${total} productos=${productos} onProductSelected=${handleProductSelected} onAddedProductClick=${handleAddedProductClick} setIsProductFormOpen=${setIsProductFormOpen} addedProductIds=${addedProductIds} />`}
                     ${step === 3 && html`<${Step3} formData=${formData} handleInput=${handleInput} setFormData=${setFormData} total=${total} />`}
                 </div>

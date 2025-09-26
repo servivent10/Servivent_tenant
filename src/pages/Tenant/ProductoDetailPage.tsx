@@ -492,17 +492,17 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
                 </div>
             </div>
 
-            ${(!generalPrice || generalPrice <= 0) && html`
-                <div class="mb-6 p-4 rounded-md bg-amber-50 text-amber-800 border border-amber-200 flex items-center justify-between gap-4" role="alert">
-                    <div class="flex items-center gap-3">
-                        <div class="text-2xl">${ICONS.warning}</div>
+            ${(!generalPrice || generalPrice <= 0) && (user.role === 'Propietario' || user.role === 'Administrador') && html`
+                <div class="mb-6 p-4 rounded-md bg-amber-50 text-amber-800 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4" role="alert">
+                    <div class="flex items-start gap-3">
+                        <div class="text-2xl flex-shrink-0 mt-0.5">${ICONS.warning}</div>
                         <div>
-                            <h3 class="font-bold">Precio de Venta no Asignado</h3>
-                            <p class="text-sm">Este producto no aparecerá en el Punto de Venta hasta que se le asigne un precio en la lista "General".</p>
+                            <h3 class="font-bold">Precio de Venta no Definido</h3>
+                            <p class="text-sm">Este producto no aparecerá en el Punto de Venta hasta que se defina su ganancia en la lista 'General'. Ve a la pestaña 'Precios y Costos' para configurarlo.</p>
                         </div>
                     </div>
-                    <button onClick=${handleEdit} class="flex-shrink-0 rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600">
-                        Asignar Precio
+                    <button onClick=${() => setActiveTab('precios')} class="mt-2 sm:mt-0 flex-shrink-0 w-full sm:w-auto rounded-md bg-amber-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600">
+                        Configurar Precios
                     </button>
                 </div>
             `}

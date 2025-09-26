@@ -26,8 +26,6 @@ interface UserPayload {
   // Fields for new company registration
   empresa_nombre?: string;
   empresa_nit?: string;
-  empresa_direccion?: string;
-  empresa_telefono?: string;
   sucursal_nombre?: string;
   sucursal_direccion?: string;
   sucursal_telefono?: string;
@@ -45,7 +43,7 @@ Deno.serve(async (req) => {
     const payload: UserPayload = await req.json();
     const {
         nombre_completo, correo, password, rol, sucursal_id,
-        empresa_nombre, empresa_nit, empresa_direccion, empresa_telefono,
+        empresa_nombre, empresa_nit,
         sucursal_nombre, sucursal_direccion, sucursal_telefono, plan_tipo
     } = payload;
     
@@ -80,7 +78,7 @@ Deno.serve(async (req) => {
       }
 
       const { data: empresaData, error: empresaError } = await supabaseAdmin
-        .from('empresas').insert({ nombre: empresa_nombre, nit: empresa_nit, direccion: empresa_direccion, telefono: empresa_telefono }).select('id').single();
+        .from('empresas').insert({ nombre: empresa_nombre, nit: empresa_nit }).select('id').single();
       if (empresaError) throw new Error(`Error al crear la empresa: ${empresaError.message}`);
       final_empresa_id = empresaData.id;
 
