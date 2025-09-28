@@ -51,8 +51,8 @@ CREATE TABLE IF NOT EXISTS public.compras (
 );
 ALTER TABLE public.compras ENABLE ROW LEVEL SECURITY;
 
--- Secuencia para el Folio de Compra
-CREATE SEQUENCE IF NOT EXISTS compra_folio_seq;
+-- **MODIFICADO:** Se elimina la secuencia global para el folio.
+DROP SEQUENCE IF EXISTS compra_folio_seq;
 
 -- Tabla de Items de Compra (Detalle)
 CREATE TABLE IF NOT EXISTS public.compra_items (
@@ -231,13 +231,20 @@ BEGIN
 END;
 $$;
 
--- Tipos para la función de registrar compra
+-- **FIX**: Tipos corregidos para la función de registrar compra
+DROP TYPE IF EXISTS public.price_rule_input CASCADE;
+CREATE TYPE public.price_rule_input AS (
+    lista_id uuid,
+    tipo_ganancia text,
+    valor_ganancia numeric
+);
+
 DROP TYPE IF EXISTS public.compra_item_input CASCADE;
 CREATE TYPE public.compra_item_input AS (
     producto_id uuid,
     cantidad numeric,
     costo_unitario numeric,
-    nuevo_precio_base numeric
+    precios price_rule_input[]
 );
 DROP TYPE IF EXISTS public.compra_input CASCADE;
 CREATE TYPE public.compra_input AS (
@@ -253,7 +260,7 @@ CREATE TYPE public.compra_input AS (
     metodo_abono text
 );
 
--- FUNCIÓN PRINCIPAL: Registrar una nueva compra y actualizar inventario/costos (CORREGIDA)
+-- **FIX**: FUNCIÓN PRINCIPAL CORREGIDA: Registrar compra con folio por empresa y actualización de precios
 CREATE OR REPLACE FUNCTION registrar_compra(p_compra compra_input, p_items compra_item_input[])
 RETURNS uuid
 LANGUAGE plpgsql
@@ -265,15 +272,17 @@ DECLARE
     caller_user_id uuid := auth.uid();
     new_compra_id uuid;
     item compra_item_input;
+    price_rule price_rule_input;
     total_compra numeric := 0;
     total_compra_bob numeric;
     saldo_final numeric;
     estado_final text;
-    stock_actual numeric;
+    stock_total_actual numeric;
     capp_actual numeric;
     nuevo_capp numeric;
     costo_unitario_bob numeric;
-    v_default_price_list_id uuid;
+    new_price numeric;
+    next_folio_number integer;
 BEGIN
     -- 1. Calcular el total de la compra
     FOREACH item IN ARRAY p_items LOOP
@@ -292,96 +301,98 @@ BEGIN
         estado_final := 'Pagada';
     ELSE -- Crédito
         saldo_final := total_compra - COALESCE(p_compra.abono_inicial, 0);
-        IF saldo_final <= 0 THEN
+        IF saldo_final <= 0.005 THEN
             estado_final := 'Pagada';
             saldo_final := 0;
-        ELSIF saldo_final < total_compra THEN
+        ELSIF COALESCE(p_compra.abono_inicial, 0) > 0 THEN
             estado_final := 'Abono Parcial';
         ELSE
             estado_final := 'Pendiente';
         END IF;
     END IF;
-
-    -- 3. Obtener la lista de precios "General" para la empresa
-    SELECT id INTO v_default_price_list_id FROM public.listas_precios WHERE empresa_id = caller_empresa_id AND es_predeterminada = true;
-    IF v_default_price_list_id IS NULL THEN
-        RAISE EXCEPTION 'No se encontró una lista de precios "General" para la empresa.';
-    END IF;
     
-    -- 4. Insertar la cabecera de la compra
+    -- 3. Calcular el siguiente número de folio para la empresa
+    SELECT COALESCE(MAX(substring(folio from 6)::integer), 0) + 1 
+    INTO next_folio_number 
+    FROM public.compras 
+    WHERE empresa_id = caller_empresa_id;
+
+    -- 4. Insertar la cabecera de la compra con el nuevo folio
     INSERT INTO public.compras (
         empresa_id, sucursal_id, proveedor_id, folio, fecha, moneda, tasa_cambio, total, total_bob,
         tipo_pago, estado_pago, saldo_pendiente, n_factura, fecha_vencimiento
     ) VALUES (
         caller_empresa_id, p_compra.sucursal_id, p_compra.proveedor_id,
-        'COMP-' || lpad(nextval('compra_folio_seq')::text, 5, '0'), p_compra.fecha, p_compra.moneda, p_compra.tasa_cambio, total_compra, total_compra_bob,
+        'COMP-' || lpad(next_folio_number::text, 5, '0'), p_compra.fecha, p_compra.moneda, p_compra.tasa_cambio, total_compra, total_compra_bob,
         p_compra.tipo_pago, estado_final, saldo_final, p_compra.n_factura, p_compra.fecha_vencimiento
     ) RETURNING id INTO new_compra_id;
 
-    -- 5. Procesar cada item: insertar, actualizar inventario y CAPP
+    -- 5. Procesar cada item
     FOREACH item IN ARRAY p_items LOOP
-        -- Insertar el item de la compra
         INSERT INTO public.compra_items (compra_id, producto_id, cantidad, costo_unitario)
         VALUES (new_compra_id, item.producto_id, item.cantidad, item.costo_unitario);
-
-        -- Obtener stock actual y costo promedio ponderado (CAPP)
-        SELECT i.cantidad, p.precio_compra INTO stock_actual, capp_actual
-        FROM public.productos p
-        LEFT JOIN public.inventarios i ON p.id = i.producto_id AND i.sucursal_id = p_compra.sucursal_id
-        WHERE p.id = item.producto_id;
         
-        stock_actual := COALESCE(stock_actual, 0);
+        costo_unitario_bob := CASE WHEN p_compra.moneda = 'USD' THEN item.costo_unitario * p_compra.tasa_cambio ELSE item.costo_unitario END;
+
+        SELECT COALESCE(SUM(i.cantidad), 0), p.precio_compra INTO stock_total_actual, capp_actual
+        FROM public.productos p
+        LEFT JOIN public.inventarios i ON p.id = i.producto_id
+        WHERE p.id = item.producto_id
+        GROUP BY p.id;
         capp_actual := COALESCE(capp_actual, 0);
 
-        -- Convertir costo de compra a BOB si es necesario
-        IF p_compra.moneda = 'USD' THEN
-            costo_unitario_bob := item.costo_unitario * p_compra.tasa_cambio;
+        IF (stock_total_actual + item.cantidad) > 0 THEN
+            nuevo_capp := ((stock_total_actual * capp_actual) + (item.cantidad * costo_unitario_bob)) / (stock_total_actual + item.cantidad);
         ELSE
-            costo_unitario_bob := item.costo_unitario;
+            nuevo_capp := costo_unitario_bob;
         END IF;
-
-        -- Calcular nuevo CAPP
-        IF (stock_actual + item.cantidad) > 0 THEN
-            nuevo_capp := ((stock_actual * capp_actual) + (item.cantidad * costo_unitario_bob)) / (stock_actual + item.cantidad);
-        ELSE
-            nuevo_capp := costo_unitario_bob; -- Si no había stock, el nuevo costo es el de esta compra
-        END IF;
-
-        -- Actualizar el CAPP en la tabla de productos
+        
         UPDATE public.productos SET precio_compra = nuevo_capp WHERE id = item.producto_id;
 
-        -- Actualizar el inventario
-        INSERT INTO public.inventarios (producto_id, sucursal_id, cantidad, updated_at)
-        VALUES (item.producto_id, p_compra.sucursal_id, stock_actual + item.cantidad, now())
-        ON CONFLICT (producto_id, sucursal_id)
-        DO UPDATE SET cantidad = public.inventarios.cantidad + item.cantidad, updated_at = now();
-
-        -- Registrar movimiento de inventario
-        INSERT INTO public.movimientos_inventario (
-            producto_id, sucursal_id, usuario_id, tipo_movimiento,
-            cantidad_ajustada, stock_anterior, stock_nuevo, referencia_id
-        ) VALUES (
-            item.producto_id, p_compra.sucursal_id, caller_user_id, 'Compra',
-            item.cantidad, stock_actual, stock_actual + item.cantidad, new_compra_id
-        );
-
-        -- Actualizar el precio base si se proporcionó
-        IF item.nuevo_precio_base IS NOT NULL AND item.nuevo_precio_base >= 0 THEN
-            INSERT INTO public.precios_productos(producto_id, lista_precio_id, precio)
-            VALUES (item.producto_id, v_default_price_list_id, item.nuevo_precio_base)
-            ON CONFLICT (producto_id, lista_precio_id)
-            DO UPDATE SET
-                precio = EXCLUDED.precio,
-                updated_at = now();
+        IF item.precios IS NOT NULL AND array_length(item.precios, 1) > 0 THEN
+            FOREACH price_rule IN ARRAY item.precios LOOP
+                IF price_rule.tipo_ganancia = 'porcentaje' THEN
+                    new_price := nuevo_capp * (1 + price_rule.valor_ganancia / 100.0);
+                ELSE
+                    new_price := nuevo_capp + price_rule.valor_ganancia;
+                END IF;
+                INSERT INTO public.precios_productos(producto_id, lista_precio_id, tipo_ganancia, valor_ganancia, precio)
+                VALUES(item.producto_id, price_rule.lista_id, price_rule.tipo_ganancia, price_rule.valor_ganancia, new_price)
+                ON CONFLICT (producto_id, lista_precio_id) DO UPDATE SET
+                    tipo_ganancia = EXCLUDED.tipo_ganancia,
+                    valor_ganancia = EXCLUDED.valor_ganancia,
+                    precio = EXCLUDED.precio,
+                    updated_at = now();
+            END LOOP;
         END IF;
 
+        DECLARE
+            stock_sucursal_anterior numeric;
+        BEGIN
+            SELECT cantidad INTO stock_sucursal_anterior FROM public.inventarios WHERE producto_id = item.producto_id AND sucursal_id = p_compra.sucursal_id;
+            stock_sucursal_anterior := COALESCE(stock_sucursal_anterior, 0);
+
+            INSERT INTO public.inventarios (producto_id, sucursal_id, cantidad)
+            VALUES (item.producto_id, p_compra.sucursal_id, stock_sucursal_anterior + item.cantidad)
+            ON CONFLICT (producto_id, sucursal_id) DO UPDATE SET
+                cantidad = public.inventarios.cantidad + item.cantidad,
+                updated_at = now();
+
+            INSERT INTO public.movimientos_inventario (
+                producto_id, sucursal_id, usuario_id, tipo_movimiento,
+                cantidad_ajustada, stock_anterior, stock_nuevo, referencia_id
+            ) VALUES (
+                item.producto_id, p_compra.sucursal_id, caller_user_id, 'Compra',
+                item.cantidad, stock_sucursal_anterior, stock_sucursal_anterior + item.cantidad, new_compra_id
+            );
+        END;
     END LOOP;
 
     -- 6. Registrar pago
     IF p_compra.tipo_pago = 'Contado' THEN
         INSERT INTO public.pagos_compras (compra_id, monto, metodo_pago)
         VALUES (new_compra_id, total_compra, 'Contado');
-    ELSIF p_compra.tipo_pago = 'Crédito' AND p_compra.abono_inicial > 0 THEN
+    ELSIF p_compra.tipo_pago = 'Crédito' AND COALESCE(p_compra.abono_inicial, 0) > 0 THEN
         INSERT INTO public.pagos_compras (compra_id, monto, metodo_pago)
         VALUES (new_compra_id, p_compra.abono_inicial, COALESCE(p_compra.metodo_abono, 'Abono Inicial'));
     END IF;

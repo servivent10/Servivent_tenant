@@ -139,8 +139,10 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
 
     const handleSave = () => {
         const generalRule = priceRules.find(p => p.es_predeterminada);
-        if (!generalRule || generalRule.valor_ganancia === null || generalRule.valor_ganancia === '' || Number(generalRule.valor_ganancia) < 1) {
-            const errorMessage = 'La ganancia debe ser al menos 1.';
+        const gainValue = generalRule?.valor_ganancia;
+        // Check if the value is null, an empty string, or not a finite number.
+        if (gainValue === null || gainValue === '' || !isFinite(Number(gainValue))) {
+            const errorMessage = 'Debe ingresar un valor de ganancia numérico.';
             setGeneralPriceRuleError(errorMessage);
             addToast({ message: `Para el precio General: ${errorMessage}`, type: 'error' });
             setActiveTab('prices'); // Asegura que el usuario vea el error
@@ -496,28 +498,36 @@ const ProductoSearch = ({ productos, onProductSelected, onAddedProductClick, set
     `;
 };
 
-const Step1 = ({ formData, handleInput, setFormData, proveedores, setIsProveedorFormOpen }) => (
-    html`
+function Step1({ formData, handleInput, setFormData, proveedores, setIsProveedorFormOpen }) {
+    return html`
         <h3 class="text-lg font-semibold text-gray-900 mb-4">Información General</h3>
-        <div class="space-y-4">
-            <${ProveedorSelector} formData=${formData} setFormData=${setFormData} proveedores=${proveedores} setIsProveedorFormOpen=${setIsProveedorFormOpen} />
-            <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="md:col-span-1">
+                <${ProveedorSelector} formData=${formData} setFormData=${setFormData} proveedores=${proveedores} setIsProveedorFormOpen=${setIsProveedorFormOpen} />
+            </div>
+            <div class="md:col-span-1">
+                 <${FormInput} label="N° de Factura o Nota" name="n_factura" type="text" value=${formData.n_factura} onInput=${handleInput} required=${false} />
+            </div>
+            <div class="md:col-span-1">
                 <${FormInput} label="Fecha de Compra" name="fecha" type="date" value=${formData.fecha} onInput=${handleInput} />
-                <${FormInput} label="N° Factura/Nota" name="n_factura" type="text" value=${formData.n_factura} onInput=${handleInput} required=${false} />
             </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Moneda</label>
-                <div class="mt-2 grid grid-cols-2 gap-3">
-                    <button type="button" onClick=${() => setFormData({...formData, moneda: 'BOB'})} class="inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-semibold transition-colors ${formData.moneda === 'BOB' ? 'bg-primary text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}">BOB</button>
-                    <button type="button" onClick=${() => setFormData({...formData, moneda: 'USD'})} class="inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-semibold transition-colors ${formData.moneda === 'USD' ? 'bg-primary text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}">USD</button>
+            <div class="md:col-span-1 grid grid-cols-2 gap-4">
+                <div>
+                    <label for="moneda" class="block text-sm font-medium text-gray-700">Moneda</label>
+                    <select id="moneda" name="moneda" value=${formData.moneda} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
+                        <option value="BOB">BOB</option>
+                        <option value="USD">USD</option>
+                    </select>
                 </div>
+                ${formData.moneda === 'USD' && html`
+                    <div>
+                        <${FormInput} label="Tasa de Cambio" name="tasa_cambio" type="number" value=${formData.tasa_cambio} onInput=${handleInput} />
+                    </div>
+                `}
             </div>
-            ${formData.moneda === 'USD' && html`
-                <${FormInput} label="Tasa de Cambio (1 USD a BOB)" name="tasa_cambio" type="number" value=${formData.tasa_cambio} onInput=${handleInput} />
-            `}
         </div>
-    `
-);
+    `;
+}
 
 const Step2 = ({ formData, handleEditItem, handleRemoveItem, total, productos, onProductSelected, onAddedProductClick, setIsProductFormOpen, addedProductIds }) => (
     html`
@@ -525,38 +535,87 @@ const Step2 = ({ formData, handleEditItem, handleRemoveItem, total, productos, o
     <div class="mb-4">
         <${ProductoSearch} productos=${productos} onProductSelected=${onProductSelected} onAddedProductClick=${onAddedProductClick} setIsProductFormOpen=${setIsProductFormOpen} addedProductIds=${addedProductIds} />
     </div>
-    <div class="space-y-3 max-h-80 overflow-y-auto pr-2 -mr-2">
-        ${formData.items.length === 0 ? html`
-             <div class="text-center py-10 rounded-lg border-2 border-dashed border-gray-200">
-                <p class="text-gray-500">Añade productos usando el buscador.</p>
+
+    ${formData.items.length === 0 ? html`
+        <div class="text-center py-10 rounded-lg border-2 border-dashed border-gray-200">
+            <p class="text-gray-500">Añade productos usando el buscador.</p>
+        </div>
+    ` : html`
+        <div class="space-y-3 max-h-96 overflow-y-auto pr-2 -mr-2">
+            <!-- Mobile/Tablet Card View -->
+            <div class="md:hidden space-y-3">
+                ${formData.items.map((item, index) => html`
+                    <div key=${item.producto_id} class="p-3 bg-slate-50 rounded-lg border">
+                        <div class="flex items-center gap-3">
+                            <div class="flex-shrink-0">
+                                ${item.imagen_principal ? html`<img src=${item.imagen_principal} class="h-14 w-14 rounded-md object-cover bg-white" />` : html`<div class="h-14 w-14 rounded-md bg-white flex items-center justify-center text-slate-400">${ICONS.products}</div>`}
+                            </div>
+                            <div class="flex-grow min-w-0">
+                                <p class="font-medium text-sm text-gray-800 truncate">${item.producto_nombre}</p>
+                                <p class="text-xs text-gray-500">Subtotal: <span class="font-bold text-primary">${(item.cantidad * item.costo_unitario).toFixed(2)}</span></p>
+                            </div>
+                            <div class="flex-shrink-0 flex items-center gap-1">
+                                <button onClick=${() => handleEditItem(item)} class="p-2 bg-white rounded-md shadow-sm text-gray-500 hover:bg-blue-100 hover:text-blue-600">${ICONS.edit}</button>
+                                <button onClick=${() => handleRemoveItem(index)} class="p-2 bg-white rounded-md shadow-sm text-gray-500 hover:bg-red-100 hover:text-red-600">${ICONS.delete}</button>
+                            </div>
+                        </div>
+                        <div class="mt-2 pt-2 border-t grid grid-cols-2 gap-2 text-center">
+                            <div>
+                                <p class="text-xs text-gray-500">Cantidad</p>
+                                <p class="font-semibold text-gray-900">${item.cantidad}</p>
+                            </div>
+                             <div>
+                                <p class="text-xs text-gray-500">Costo Unitario</p>
+                                <p class="font-semibold text-gray-900">${Number(item.costo_unitario).toFixed(2)}</p>
+                            </div>
+                        </div>
+                    </div>
+                `)}
             </div>
-        ` : formData.items.map((item, index) => html`
-            <div key=${item.producto_id} class="flex items-center gap-4 p-2 bg-slate-50 rounded-lg border">
-                <div class="flex-shrink-0">
-                    ${item.imagen_principal ? html`<img src=${item.imagen_principal} class="h-12 w-12 rounded-md object-cover bg-white" />` : html`<div class="h-12 w-12 rounded-md bg-white flex items-center justify-center text-slate-400">${ICONS.products}</div>`}
-                </div>
-                <div class="flex-grow min-w-0">
-                    <p class="font-medium text-sm text-gray-800 truncate">${item.producto_nombre}</p>
-                </div>
-                <div class="flex-shrink-0 text-sm text-center w-16">
-                    <p class="text-xs text-gray-500">Cant.</p>
-                    <p class="font-semibold">${item.cantidad}</p>
-                </div>
-                <div class="flex-shrink-0 text-sm text-center w-20">
-                    <p class="text-xs text-gray-500">Costo U.</p>
-                    <p class="font-semibold">${Number(item.costo_unitario).toFixed(2)}</p>
-                </div>
-                <div class="flex-shrink-0 text-sm text-center w-24">
-                    <p class="text-xs text-gray-500">Subtotal</p>
-                    <p class="font-bold text-primary">${(item.cantidad * item.costo_unitario).toFixed(2)}</p>
-                </div>
-                <div class="flex-shrink-0 flex items-center gap-2">
-                    <button onClick=${() => handleEditItem(item)} class="p-2 bg-white rounded-md shadow-sm text-gray-500 hover:bg-blue-100 hover:text-blue-600">${ICONS.edit}</button>
-                    <button onClick=${() => handleRemoveItem(index)} class="p-2 bg-white rounded-md shadow-sm text-gray-500 hover:bg-red-100 hover:text-red-600">${ICONS.delete}</button>
-                </div>
+
+            <!-- Desktop Table View -->
+            <div class="hidden md:block overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
+                <table class="min-w-full divide-y divide-gray-300">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Producto</th>
+                            <th scope="col" class="px-3 py-3.5 text-center text-sm font-semibold text-gray-900">Cantidad</th>
+                            <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Costo U. (${formData.moneda})</th>
+                            <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Subtotal (${formData.moneda})</th>
+                            <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6"><span class="sr-only">Acciones</span></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 bg-white">
+                        ${formData.items.map((item, index) => html`
+                            <tr key=${item.producto_id}>
+                                <td class="py-2 pl-4 pr-3 text-sm sm:pl-6">
+                                    <div class="flex items-center">
+                                        <div class="h-11 w-11 flex-shrink-0">
+                                            ${item.imagen_principal ? html`<img class="h-11 w-11 rounded-md object-cover bg-white" src=${item.imagen_principal} />` : html`<div class="h-11 w-11 rounded-md bg-white flex items-center justify-center text-slate-400 border">${ICONS.products}</div>`}
+                                        </div>
+                                        <div class="ml-4 min-w-0">
+                                            <div class="font-medium text-gray-900 truncate">${item.producto_nombre}</div>
+                                            <div class="text-gray-500 text-xs truncate">${item.modelo || `SKU: ${item.sku || 'N/A'}`}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-3 py-4 text-sm text-center font-medium text-gray-800">${item.cantidad}</td>
+                                <td class="px-3 py-4 text-sm text-right font-medium text-gray-800">${Number(item.costo_unitario).toFixed(2)}</td>
+                                <td class="px-3 py-4 text-sm text-right font-bold text-primary">${(item.cantidad * item.costo_unitario).toFixed(2)}</td>
+                                <td class="relative py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <button onClick=${() => handleEditItem(item)} class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-100 rounded-md">${ICONS.edit}</button>
+                                        <button onClick=${() => handleRemoveItem(index)} class="p-2 text-gray-500 hover:text-red-600 hover:bg-red-100 rounded-md">${ICONS.delete}</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `)}
+                    </tbody>
+                </table>
             </div>
-        `)}
-    </div>
+        </div>
+    `}
+    
     <div class="mt-4 pt-4 border-t text-right">
          <p class="text-sm text-gray-500">Total Compra</p>
          <p class="text-2xl font-bold text-gray-900">${total.toFixed(2)} <span class="text-base font-normal">${formData.moneda}</span></p>
@@ -612,13 +671,25 @@ const Step3 = ({ formData, handleInput, setFormData, total }) => {
             </div>
         `}
         <div class="mt-6 p-4 rounded-lg bg-slate-50 border">
-            <h4 class="font-semibold">Resumen</h4>
+            <h4 class="font-semibold text-gray-800">Resumen</h4>
             <dl class="mt-2 text-sm space-y-1">
-                <div class="flex justify-between"><dt class="text-gray-600">Total:</dt><dd class="font-medium">${total.toFixed(2)} ${formData.moneda}</dd></div>
-                <div class="flex justify-between"><dt class="text-gray-600">Tipo Pago:</dt><dd class="font-medium">${formData.tipo_pago}</dd></div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-600">Total:</dt>
+                    <dd class="font-medium text-gray-900">${total.toFixed(2)} ${formData.moneda}</dd>
+                </div>
+                <div class="flex justify-between">
+                    <dt class="text-gray-600">Tipo Pago:</dt>
+                    <dd class="font-medium text-gray-900">${formData.tipo_pago}</dd>
+                </div>
                 ${formData.tipo_pago === 'Crédito' && html`
-                    <div class="flex justify-between"><dt class="text-gray-600">Abono Inicial:</dt><dd class="font-medium">${Number(formData.abono_inicial).toFixed(2)} ${formData.moneda}</dd></div>
-                    <div class="flex justify-between font-bold"><dt>Saldo Pendiente:</dt><dd class="text-red-600">${(total - Number(formData.abono_inicial)).toFixed(2)} ${formData.moneda}</dd></div>
+                    <div class="flex justify-between">
+                        <dt class="text-gray-600">Abono Inicial:</dt>
+                        <dd class="font-medium text-gray-900">${Number(formData.abono_inicial).toFixed(2)} ${formData.moneda}</dd>
+                    </div>
+                    <div class="flex justify-between font-bold">
+                        <dt class="text-gray-900">Saldo Pendiente:</dt>
+                        <dd class="text-red-600">${(total - Number(formData.abono_inicial)).toFixed(2)} ${formData.moneda}</dd>
+                    </div>
                 `}
             </dl>
         </div>
@@ -684,6 +755,10 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
     const addedProductIds = useMemo(() => new Set(formData.items.map(item => item.producto_id)), [formData.items]);
     
     const handleNext = () => {
+        if (step === 1 && !formData.proveedor_id) {
+            addToast({ message: 'Debes seleccionar un proveedor para continuar.', type: 'warning' });
+            return;
+        }
         if (step === 2 && formData.items.length === 0) {
             addToast({ message: 'Debes añadir al menos un producto a la compra.', type: 'warning' });
             return;
