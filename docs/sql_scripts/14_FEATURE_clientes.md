@@ -163,10 +163,15 @@ BEGIN
 
     SELECT json_agg(c_info) INTO clients_list
     FROM (
-        SELECT id, nombre, nit_ci
+        SELECT id, nombre, nit_ci, telefono, avatar_url
         FROM public.clientes
         WHERE empresa_id = caller_empresa_id
-        ORDER BY nombre
+        ORDER BY
+          CASE
+            WHEN nombre = 'Consumidor Final' THEN 0
+            ELSE 1
+          END,
+          nombre
     ) AS c_info;
 
     SELECT json_agg(p_info) INTO products_list FROM (

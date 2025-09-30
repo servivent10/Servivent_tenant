@@ -13,41 +13,52 @@ import { useLoading } from '../../hooks/useLoading.js';
 import { FilterPanel } from '../../components/FilterPanel.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 import { ClienteFormModal } from '../../components/modals/ClienteFormModal.js';
+import { Avatar } from '../../components/Avatar.js';
 
 const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isDropdownOpen, setDropdownOpen] = useState(false);
     const wrapperRef = useRef(null);
 
-    const selectedClientName = useMemo(() => {
-        if (!selectedClientId) return '';
-        const client = clients.find(c => c.id === selectedClientId);
-        return client ? client.nombre : '';
+    const selectedClient = useMemo(() => {
+        if (!selectedClientId) return null;
+        return clients.find(c => c.id === selectedClientId);
     }, [selectedClientId, clients]);
     
+    // When a client is selected from the cart, update the search term to show their name
     useEffect(() => {
-        setSearchTerm(selectedClientName);
-    }, [selectedClientName]);
+        setSearchTerm(selectedClient ? selectedClient.nombre : '');
+    }, [selectedClient]);
 
     const filteredClients = useMemo(() => {
         const allOptions = [{ id: 'add_new', nombre: 'Añadir Nuevo Cliente' }, ...clients];
-        if (!searchTerm || searchTerm === selectedClientName) return allOptions;
+        // Don't filter if the input is the selected client's name
+        if (!searchTerm || (selectedClient && searchTerm === selectedClient.nombre)) {
+             return allOptions;
+        }
         const lowerCaseTerm = searchTerm.toLowerCase();
         return [
             { id: 'add_new', nombre: 'Añadir Nuevo Cliente' },
             ...clients.filter(c => c.nombre.toLowerCase().includes(lowerCaseTerm))
         ];
-    }, [searchTerm, clients, selectedClientName]);
+    }, [searchTerm, clients, selectedClient]);
 
      useEffect(() => {
         const handleClickOutside = (event) => {
             if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
                 setDropdownOpen(false);
+                // If dropdown closes and input is empty, ensure selection is cleared
+                if (!searchTerm) {
+                    onSelect(null);
+                } else if (selectedClient) {
+                    // If dropdown closes and there's a selection, restore the name
+                    setSearchTerm(selectedClient.nombre);
+                }
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [wrapperRef, searchTerm, selectedClient, onSelect]);
 
     const handleSelect = (client) => {
         if (client.id === 'add_new') {
@@ -57,33 +68,58 @@ const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
         }
         setDropdownOpen(false);
     };
+    
+    const handleClear = () => {
+        setSearchTerm('');
+        onSelect(null);
+        wrapperRef.current?.querySelector('input')?.focus();
+    };
+
 
     return html`
         <div ref=${wrapperRef} class="relative">
-            <label for="client" class="block text-sm font-medium text-gray-700">Cliente</label>
-            <input
-                id="client-search"
-                type="text"
-                value=${searchTerm}
-                onInput=${e => { setSearchTerm(e.target.value); setDropdownOpen(true); }}
-                onFocus=${() => setDropdownOpen(true)}
-                placeholder="Buscar cliente..."
-                class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm"
-            />
+            <label for="client-search" class="block text-sm font-medium text-gray-700">Cliente</label>
+            <div class="relative mt-1">
+                <input
+                    id="client-search"
+                    type="text"
+                    value=${searchTerm}
+                    onInput=${e => { setSearchTerm(e.target.value); if (!isDropdownOpen) setDropdownOpen(true); }}
+                    onFocus=${() => setDropdownOpen(true)}
+                    placeholder="Buscar cliente..."
+                    class="w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm"
+                />
+                ${searchTerm && html`
+                    <button 
+                        onClick=${handleClear}
+                        class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                        aria-label="Limpiar búsqueda"
+                    >
+                        ${ICONS.close}
+                    </button>
+                `}
+            </div>
              ${isDropdownOpen && html`
                 <ul class="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
                     ${filteredClients.map(c => html`
                         <li 
                             key=${c.id}
                             onClick=${() => handleSelect(c)} 
-                            class="relative cursor-pointer select-none py-2 pl-3 pr-9
+                            class="relative cursor-pointer select-none p-2
                             ${c.id === 'add_new' ? 'text-primary font-semibold' : 'text-gray-900'}
                             hover:bg-slate-100"
                         >
-                           <span class="flex items-center gap-2">
-                             ${c.id === 'add_new' ? ICONS.add : ''}
-                             ${c.nombre}
-                           </span>
+                           ${c.id === 'add_new' ? html`
+                                <span class="flex items-center gap-2">${ICONS.add} ${c.nombre}</span>
+                           ` : html`
+                                <div class="flex items-center gap-3">
+                                    <${Avatar} name=${c.nombre} avatarUrl=${c.avatar_url} size="h-8 w-8" />
+                                    <div class="flex-1 min-w-0">
+                                        <p class="font-medium truncate">${c.nombre}</p>
+                                        <p class="text-xs text-gray-500 truncate">${c.telefono || 'Sin teléfono'}</p>
+                                    </div>
+                                </div>
+                           `}
                         </li>
                     `)}
                     ${filteredClients.length <= 1 && searchTerm && html`
@@ -523,12 +559,6 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             } else if (data.price_lists.length > 0) {
                 setDefaultPriceListId(data.price_lists[0].id);
                 setActivePriceListId(data.price_lists[0].id);
-            }
-            const defaultClient = data.clients.find(c => c.nombre === 'Consumidor Final');
-            if(defaultClient) {
-                setSelectedClientId(defaultClient.id);
-            } else if (data.clients.length > 0) {
-                setSelectedClientId(data.clients[0].id);
             }
         } catch (err) {
             console.error("Error fetching POS data:", err);
