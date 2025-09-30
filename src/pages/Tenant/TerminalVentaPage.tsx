@@ -12,14 +12,88 @@ import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { useLoading } from '../../hooks/useLoading.js';
 import { FilterPanel } from '../../components/FilterPanel.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
+import { ClienteFormModal } from '../../components/modals/ClienteFormModal.js';
 
-// --- MOCK DATA ---
-const mockClients = [
-    { id: '1', name: 'Consumidor Final' },
-    { id: '2', name: 'Juan Perez' },
-    { id: '3', name: 'Empresa XYZ S.R.L.' }
-];
-// --- END MOCK DATA ---
+const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isDropdownOpen, setDropdownOpen] = useState(false);
+    const wrapperRef = useRef(null);
+
+    const selectedClientName = useMemo(() => {
+        if (!selectedClientId) return '';
+        const client = clients.find(c => c.id === selectedClientId);
+        return client ? client.nombre : '';
+    }, [selectedClientId, clients]);
+    
+    useEffect(() => {
+        setSearchTerm(selectedClientName);
+    }, [selectedClientName]);
+
+    const filteredClients = useMemo(() => {
+        const allOptions = [{ id: 'add_new', nombre: 'Añadir Nuevo Cliente' }, ...clients];
+        if (!searchTerm || searchTerm === selectedClientName) return allOptions;
+        const lowerCaseTerm = searchTerm.toLowerCase();
+        return [
+            { id: 'add_new', nombre: 'Añadir Nuevo Cliente' },
+            ...clients.filter(c => c.nombre.toLowerCase().includes(lowerCaseTerm))
+        ];
+    }, [searchTerm, clients, selectedClientName]);
+
+     useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+                setDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleSelect = (client) => {
+        if (client.id === 'add_new') {
+            onAddNew();
+        } else {
+            onSelect(client.id);
+        }
+        setDropdownOpen(false);
+    };
+
+    return html`
+        <div ref=${wrapperRef} class="relative">
+            <label for="client" class="block text-sm font-medium text-gray-700">Cliente</label>
+            <input
+                id="client-search"
+                type="text"
+                value=${searchTerm}
+                onInput=${e => { setSearchTerm(e.target.value); setDropdownOpen(true); }}
+                onFocus=${() => setDropdownOpen(true)}
+                placeholder="Buscar cliente..."
+                class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm"
+            />
+             ${isDropdownOpen && html`
+                <ul class="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                    ${filteredClients.map(c => html`
+                        <li 
+                            key=${c.id}
+                            onClick=${() => handleSelect(c)} 
+                            class="relative cursor-pointer select-none py-2 pl-3 pr-9
+                            ${c.id === 'add_new' ? 'text-primary font-semibold' : 'text-gray-900'}
+                            hover:bg-slate-100"
+                        >
+                           <span class="flex items-center gap-2">
+                             ${c.id === 'add_new' ? ICONS.add : ''}
+                             ${c.nombre}
+                           </span>
+                        </li>
+                    `)}
+                    ${filteredClients.length <= 1 && searchTerm && html`
+                        <li class="relative select-none py-2 px-4 text-gray-500">No se encontraron clientes.</li>
+                    `}
+                </ul>
+            `}
+        </div>
+    `;
+};
 
 const SetPricePopover = ({ item, targetElement, onClose, onApply, getPriceInfo, addToast }) => {
     const { originalPrice, minPrice } = useMemo(() => {
@@ -279,7 +353,7 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
     `;
 };
 
-function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, mockClients, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, taxRate, setTaxRate, discountValue, onDiscountChange, selectedPaymentMethod, setSelectedPaymentMethod, onOpenPricePopover, customPrices, defaultPriceListId, isPriceRuleActive }) {
+function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, taxRate, setTaxRate, discountValue, onDiscountChange, selectedPaymentMethod, setSelectedPaymentMethod, onOpenPricePopover, customPrices, defaultPriceListId, isPriceRuleActive, selectedClientId, setSelectedClientId, setIsClienteFormOpen }) {
     const activePriceListName = useMemo(() => {
         return posData.price_lists.find(pl => pl.id === activePriceListId)?.nombre || '';
     }, [activePriceListId, posData.price_lists]);
@@ -300,10 +374,12 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, moc
                 </select>
             </div>
              <div>
-                <label for="client" class="block text-sm font-medium text-gray-700">Cliente</label>
-                <select id="client" class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
-                    ${mockClients.map(c => html`<option value=${c.id}>${c.name}</option>`)}
-                </select>
+                <${ClienteSelector}
+                    clients=${posData.clients || []}
+                    selectedClientId=${selectedClientId}
+                    onSelect=${setSelectedClientId}
+                    onAddNew=${() => setIsClienteFormOpen(true)}
+                />
             </div>
         </div>
 
@@ -409,7 +485,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
     
-    const [posData, setPosData] = useState({ products: [], price_lists: [] });
+    const [posData, setPosData] = useState({ products: [], price_lists: [], clients: [] });
     const [cart, setCart] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilters, setActiveFilters] = useState({ category: [], brand: [] });
@@ -429,6 +505,10 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     
     const [customPrices, setCustomPrices] = useState<{ [key: string]: { newPrice: number } }>({});
     const [pricePopover, setPricePopover] = useState({ isOpen: false, item: null, target: null });
+    
+    const [isClienteFormOpen, setIsClienteFormOpen] = useState(false);
+    const [clienteToEdit, setClienteToEdit] = useState(null);
+    const [selectedClientId, setSelectedClientId] = useState(null);
 
     const fetchData = async () => {
         startLoading();
@@ -443,6 +523,12 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             } else if (data.price_lists.length > 0) {
                 setDefaultPriceListId(data.price_lists[0].id);
                 setActivePriceListId(data.price_lists[0].id);
+            }
+            const defaultClient = data.clients.find(c => c.nombre === 'Consumidor Final');
+            if(defaultClient) {
+                setSelectedClientId(defaultClient.id);
+            } else if (data.clients.length > 0) {
+                setSelectedClientId(data.clients[0].id);
             }
         } catch (err) {
             console.error("Error fetching POS data:", err);
@@ -644,6 +730,16 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         handleClosePricePopover();
     };
 
+    const handleSaveCliente = (action, savedClient) => {
+        setIsClienteFormOpen(false);
+        addToast({ message: `Cliente ${action === 'edit' ? 'actualizado' : 'creado'} con éxito.`, type: 'success' });
+        fetchData().then(() => {
+             if (action === 'create') {
+                setSelectedClientId(savedClient.id);
+             }
+        });
+    };
+
     const totals = useMemo(() => {
         // Calculate the subtotal based on the *effective price* (custom or original)
         const subtotal = cart.reduce((total, item) => {
@@ -719,13 +815,14 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
 
     const cartPanelProps = {
         cart, posData, activePriceListId, setActivePriceListId,
-        mockClients, handleClearCart, getPriceForProduct: getActivePriceForProduct,
+        handleClearCart, getPriceForProduct: getActivePriceForProduct,
         handleUpdateQuantity, handleRemoveFromCart, totals,
         taxRate, setTaxRate, discountValue,
         onDiscountChange: handleDiscountChange,
         selectedPaymentMethod, setSelectedPaymentMethod,
         onOpenPricePopover: handleOpenPricePopover, customPrices,
-        defaultPriceListId, isPriceRuleActive
+        defaultPriceListId, isPriceRuleActive, selectedClientId,
+        setSelectedClientId, setIsClienteFormOpen
     };
 
     return html`
@@ -849,6 +946,14 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                     addToast=${addToast}
                 />
             `}
+            
+            <${ClienteFormModal}
+                isOpen=${isClienteFormOpen}
+                onClose=${() => setIsClienteFormOpen(false)}
+                onSave=${handleSaveCliente}
+                clienteToEdit=${clienteToEdit}
+                user=${user}
+            />
 
             <${ProductDetailModal} 
                 isOpen=${isDetailModalOpen}
