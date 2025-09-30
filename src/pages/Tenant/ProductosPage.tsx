@@ -13,6 +13,8 @@ import { KPI_Card } from '../../components/KPI_Card.js';
 import { ProductFormModal } from '../../components/modals/ProductFormModal.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { ProductImportModal } from '../../components/modals/ProductImportModal.js';
+import { FilterPanel } from '../../components/FilterPanel.js';
+import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 
 const StockPill = ({ stock }) => {
     let pillClass, text;
@@ -42,42 +44,29 @@ const ProductCard = ({ product, navigate, onEdit, onDelete, user }) => {
         actionFn(product);
     };
     
-    const getInfoLine = (p) => {
-        if (p.marca && p.modelo) return `${p.marca} - ${p.modelo}`;
-        if (p.marca) return p.marca;
-        if (p.sku) return `SKU: ${p.sku}`;
-        return 'Sin detalles';
-    };
-
     const stockToShow = user.role === 'Propietario' ? product.stock_total : product.stock_sucursal;
 
     return html`
         <div onClick=${handleCardClick} class="group bg-white rounded-lg shadow-sm border overflow-hidden flex flex-row transition-shadow hover:shadow-md cursor-pointer">
             <div class="w-24 sm:w-28 flex-shrink-0 bg-gray-100 relative">
-                 ${product.imagen_principal ? html`
-                    <img 
-                        src=${product.imagen_principal} 
-                        alt=${product.nombre} 
-                        class="w-full h-full object-cover" 
-                    />
-                ` : html`
-                    <div class="w-full h-full flex items-center justify-center bg-slate-100">
-                        <div class="text-slate-400 text-4xl">${ICONS.products}</div>
-                    </div>
-                `}
+                <img 
+                    src=${product.imagen_principal || NO_IMAGE_ICON_URL} 
+                    alt=${product.nombre} 
+                    class="w-full h-full object-cover" 
+                />
             </div>
             <div class="p-3 flex-grow flex flex-col justify-between w-full min-w-0">
                  <div>
                     <div class="flex justify-between items-start gap-2">
-                        <h3 class="font-bold text-gray-800 group-hover:text-primary transition-colors" title=${product.nombre}>${product.nombre}</h3>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-bold text-gray-800 group-hover:text-primary transition-colors truncate" title=${product.nombre}>${product.nombre}</h3>
+                            <p class="text-sm text-gray-500 truncate" title=${product.modelo || ''}>${product.modelo || 'Sin modelo'}</p>
+                        </div>
                         <div class="flex items-center flex-shrink-0">
                             <button onClick=${(e) => handleActionClick(e, onEdit)} title="Editar" class="text-gray-400 hover:text-primary p-1 rounded-full">${ICONS.edit}</button>
                             <button onClick=${(e) => handleActionClick(e, onDelete)} title="Eliminar" class="text-gray-400 hover:text-red-600 p-1 rounded-full">${ICONS.delete}</button>
                         </div>
                     </div>
-                    <p class="text-sm text-gray-500 mt-1 truncate">
-                        ${getInfoLine(product)}
-                    </p>
                 </div>
                 <div class="mt-2 flex items-end justify-between">
                     <p class="text-lg font-semibold text-gray-900">
@@ -102,13 +91,11 @@ const ProductTable = ({ products, navigate, onEdit, onDelete, user }) => {
                 <col />
                 <col class="w-[150px]" />
                 <col class="w-[150px]" />
-                <col class="w-[150px]" />
                 <col class="w-[100px]" />
             </colgroup>
             <thead class="bg-gray-50">
                 <tr>
                     <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Producto</th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Modelo</th>
                     <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Precio Base</th>
                     <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Stock</th>
                     <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6 text-right text-sm font-semibold text-gray-900">Acciones</th>
@@ -122,23 +109,13 @@ const ProductTable = ({ products, navigate, onEdit, onDelete, user }) => {
                 <td class="py-4 pl-4 pr-3 text-sm sm:pl-6">
                     <div class="flex items-center">
                     <div class="h-10 w-10 flex-shrink-0">
-                        ${p.imagen_principal ? html`
-                        <img class="h-10 w-10 rounded-md object-cover" src=${p.imagen_principal} alt=${p.nombre} />
-                        ` : html`
-                        <div class="h-10 w-10 rounded-md bg-slate-100 flex items-center justify-center">
-                            <div class="text-slate-400 text-2xl">${ICONS.products}</div>
-                        </div>
-                        `}
+                        <img class="h-10 w-10 rounded-md object-cover" src=${p.imagen_principal || NO_IMAGE_ICON_URL} alt=${p.nombre} />
                     </div>
                     <div class="ml-4 min-w-0">
                         <div class="font-medium text-gray-900 group-hover:text-primary truncate" title=${p.nombre}>${p.nombre}</div>
-                        <div class="text-gray-500 truncate" title=${p.marca || ''}>${p.marca || 'Sin marca'}</div>
+                        <div class="text-gray-500 truncate" title=${p.modelo || ''}>${p.modelo || 'Sin modelo'}</div>
                     </div>
                     </div>
-                </td>
-
-                <td class="px-3 py-4 text-sm text-gray-500 w-[100px] max-w-[100px] truncate" title=${p.modelo || ''}>
-                    ${p.modelo || 'N/A'}
                 </td>
                 
                 <td class="whitespace-nowrap px-3 py-4 text-sm font-semibold text-gray-800">
@@ -164,81 +141,6 @@ const ProductTable = ({ products, navigate, onEdit, onDelete, user }) => {
         </table>
     </div>
 `};
-
-const FilterPanel = ({ counts, activeFilters, onFilterChange, onClearFilters }) => {
-    const [activeTab, setActiveTab] = useState('categorias');
-    const [filterSearchTerm, setFilterSearchTerm] = useState('');
-
-    const lowercasedFilterSearch = filterSearchTerm.toLowerCase();
-    
-    const categories = Object.entries(counts.categories || {})
-        .filter(([name]) => name.toLowerCase().includes(lowercasedFilterSearch))
-        .sort((a, b) => a[0].localeCompare(b[0]));
-        
-    const brands = Object.entries(counts.brands || {})
-        .filter(([name]) => name.toLowerCase().includes(lowercasedFilterSearch))
-        .sort((a, b) => a[0].localeCompare(b[0]));
-    
-    return html`
-        <div class="flex flex-col">
-            <div class="p-4 border-b flex justify-between items-center">
-                <h3 class="text-lg font-semibold text-gray-900">Filtros</h3>
-                 <button onClick=${onClearFilters} class="text-sm font-medium text-primary hover:text-primary-dark">
-                    Limpiar
-                </button>
-            </div>
-            <div class="flex-grow p-4">
-                <div class="border-b border-gray-200">
-                    <nav class="-mb-px flex space-x-4" aria-label="Tabs">
-                        <button onClick=${() => setActiveTab('categorias')} class=${`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium ${activeTab === 'categorias' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-                            Categorías
-                        </button>
-                        <button onClick=${() => setActiveTab('marcas')} class=${`whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium ${activeTab === 'marcas' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-                            Marcas
-                        </button>
-                    </nav>
-                </div>
-
-                <div class="mt-4 relative">
-                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">${ICONS.search}</div>
-                    <input 
-                        type="text" 
-                        placeholder="Buscar..." 
-                        value=${filterSearchTerm} 
-                        onInput=${e => setFilterSearchTerm(e.target.value)}
-                        class="block w-full rounded-md border-0 pl-10 p-2 bg-white text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm"
-                    />
-                </div>
-                
-                <div class="mt-4">
-                    <ul class="divide-y divide-gray-200">
-                        ${activeTab === 'categorias' && categories.map(([name, count]) => {
-                            const isActive = activeFilters.category.includes(name);
-                            return html`
-                            <li key=${name} class="py-2">
-                                <button onClick=${() => onFilterChange('category', name)} class="w-full flex items-center justify-between text-left text-sm text-gray-600 hover:text-primary">
-                                    <span class=${`truncate ${isActive ? 'font-bold text-primary' : ''}`}>${name}</span>
-                                    <span class=${`ml-2 flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${isActive ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'}`}>${count}</span>
-                                </button>
-                            </li>
-                        `})}
-                        ${activeTab === 'marcas' && brands.map(([name, count]) => {
-                             const isActive = activeFilters.brand.includes(name);
-                            return html`
-                            <li key=${name} class="py-2">
-                                <button onClick=${() => onFilterChange('brand', name)} class="w-full flex items-center justify-between text-left text-sm text-gray-600 hover:text-primary">
-                                    <span class=${`truncate ${isActive ? 'font-bold text-primary' : ''}`}>${name}</span>
-                                    <span class=${`ml-2 flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${isActive ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'}`}>${count}</span>
-                                </button>
-                            </li>
-                        `})}
-                    </ul>
-                </div>
-            </div>
-        </div>
-    `;
-};
-
 
 export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
     const { addToast } = useToast();
@@ -325,9 +227,11 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     
     const handleDownloadTemplate = () => {
         const headers = "sku,nombre,marca,modelo,descripcion,categoria_nombre,unidad_medida,precio_base";
-        const example1 = "SKU001,Laptop Gamer XYZ,GamerCorp,Nitro 5,,Teclado RGB y pantalla 144Hz,Laptops,Unidad,8500.50";
-        const example2 = ",Mouse Inalámbrico,Tech,M1,Diseño ergonómico,Periféricos,Pieza,150";
-        const csvContent = "data:text/csv;charset=utf-8," + [headers, example1, example2].join("\n");
+        const example1 = "SKU001,Laptop Gamer XYZ,GamerCorp,Nitro 5,Teclado RGB y pantalla 144Hz,Laptops,Unidad,8500.5";
+        const example2 = "SKU002,Mouse Inalámbrico,Tech,M1,Diseño ergonómico,Periféricos,Pieza,150";
+        // Prepend BOM for correct UTF-8 encoding in Excel
+        const bom = "\uFEFF";
+        const csvContent = "data:text/csv;charset=utf-8," + bom + [headers, example1, example2].join("\n");
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -422,7 +326,7 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
 
             <div class="mt-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <div class="hidden lg:block lg:col-span-1">
-                    <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="bg-white rounded-lg shadow-sm border h-full">
                        <${FilterPanel} counts=${filterCounts} activeFilters=${activeFilters} onFilterChange=${handleFilterChange} onClearFilters=${handleClearFilters} />
                     </div>
                 </div>

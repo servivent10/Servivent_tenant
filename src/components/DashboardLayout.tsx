@@ -60,7 +60,7 @@ const NotificationBell = ({ icon, notifications = [], onClick }) => {
     `;
 };
 
-export function DashboardLayout({ user, onLogout, onProfileUpdate, sidebarLinks, children, activeLink, breadcrumbs = [], footerLinks, companyInfo = null, notifications = { support: [], system: [] }, disableNavigation = false }) {
+export function DashboardLayout({ user, onLogout, onProfileUpdate, sidebarLinks, children, activeLink, breadcrumbs = [], footerLinks, companyInfo = null, notifications = { support: [], system: [] }, disableNavigation = false, disablePadding = false }) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [supportPanelOpen, setSupportPanelOpen] = useState(false);
     const [systemPanelOpen, setSystemPanelOpen] = useState(false);
@@ -268,13 +268,15 @@ export function DashboardLayout({ user, onLogout, onProfileUpdate, sidebarLinks,
                     </div>
                 </div>
 
-                <main class="flex-1 relative overflow-y-auto focus:outline-none">
+                <main class="flex-1 relative focus:outline-none overflow-y-auto">
                     <${ProgressBar} />
-                    <div class="py-6">
-                        <div class="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
-                            ${children}
+                    ${disablePadding ? children : html`
+                        <div class="py-6">
+                            <div class="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
+                                ${children}
+                            </div>
                         </div>
-                    </div>
+                    `}
                 </main>
             </div>
         </div>

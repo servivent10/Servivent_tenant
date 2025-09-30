@@ -19,6 +19,7 @@ export const ICONS = {
     close: html`<${Icon} name="close" />`,
     chevron_right: html`<${Icon} name="chevron_right" className="text-xl" />`,
     chevron_left: html`<${Icon} name="chevron_left" className="text-xl" />`,
+    chevron_down: html`<${Icon} name="expand_more" />`,
     settings: html`<${Icon} name="settings" />`,
     business: html`<${Icon} name="business_center" />`,
     add: html`<${Icon} name="add" />`,
@@ -66,6 +67,7 @@ export const ICONS = {
     clients: html`<${Icon} name="people" />`,
     transfers: html`<${Icon} name="sync_alt" />`,
     expenses: html`<${Icon} name="payments" />`,
+    local_offer: html`<${Icon} name="local_offer" />`,
 
     // Toast & Modal Icons
     success: html`<${Icon} name="check_circle" className="text-green-500 text-2xl" />`,

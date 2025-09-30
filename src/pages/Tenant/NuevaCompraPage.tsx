@@ -15,6 +15,7 @@ import { supabase } from '../../lib/supabaseClient.js';
 import { ProveedorFormModal } from '../../components/modals/ProveedorFormModal.js';
 import { ProductFormModal } from '../../components/modals/ProductFormModal.js';
 import { Tabs } from '../../components/Tabs.js';
+import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 
 
 // --- NEW PURCHASE WIZARD PAGE COMPONENTS ---
@@ -27,40 +28,37 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
     const [productDetails, setProductDetails] = useState(null);
     const [localItem, setLocalItem] = useState < any > (item);
     
-    const [priceRules, setPriceRules] = useState([]); // Array of { lista_id, nombre, ..., tipo_ganancia, valor_ganancia }
-    const [calculatedPrices, setCalculatedPrices] = useState({}); // Map of { lista_id: calculated_price }
+    const [priceRules, setPriceRules] = useState([]);
+    const [calculatedPrices, setCalculatedPrices] = useState({});
     
     const [errors, setErrors] = useState < { cantidad?: string; costo_unitario?: string; } > ({});
-    const [generalPriceRuleError, setGeneralPriceRuleError] = useState('');
-
-    const stock_sucursal_actual = Number(item.stock_sucursal || 0);
-    const stock_total_actual = useMemo(() =>
-        productDetails?.inventory.reduce((sum, inv) => sum + Number(inv.cantidad), 0) || 0,
-        [productDetails]);
+    // FIX: Add explicit type for validationErrors state to prevent TypeScript errors.
+    const [validationErrors, setValidationErrors] = useState<{ [key: string]: { ganancia_maxima?: string; ganancia_minima?: string } }>({});
+    const [collapsedLists, setCollapsedLists] = useState({});
 
     const capp_actual = Number(productDetails?.details.precio_compra || 0);
     const cantidad_comprada = Number(localItem.cantidad || 0);
     const costo_unitario_ingresado = Number(localItem.costo_unitario || 0);
     const tasa_cambio = Number(exchangeRate || 1);
     const costo_compra_bob = currency === 'USD' ? costo_unitario_ingresado * tasa_cambio : costo_unitario_ingresado;
-
-    const nuevo_stock_sucursal = stock_sucursal_actual + cantidad_comprada;
-    const nuevo_stock_total = stock_total_actual + cantidad_comprada;
+    
+    const stock_total_actual = useMemo(() =>
+        productDetails?.inventory.reduce((sum, inv) => sum + Number(inv.cantidad), 0) || 0,
+        [productDetails]);
 
     const nuevo_capp = (stock_total_actual + cantidad_comprada) > 0
         ? ((stock_total_actual * capp_actual) + (cantidad_comprada * costo_compra_bob)) / (stock_total_actual + cantidad_comprada)
         : costo_compra_bob;
 
+    const toggleCollapse = (listId) => {
+        setCollapsedLists(prev => ({ ...prev, [listId]: !prev[listId] }));
+    };
+
     const recalculateAllPrices = (rules, cost) => {
         const newCalculatedPrices = {};
         rules.forEach(rule => {
-            const valor = Number(rule.valor_ganancia || 0);
-            let finalPrice = cost;
-            if (rule.tipo_ganancia === 'porcentaje') {
-                finalPrice = cost * (1 + valor / 100);
-            } else { // 'fijo'
-                finalPrice = cost + valor;
-            }
+            const ganancia = Number(rule.ganancia_maxima || 0);
+            const finalPrice = cost + ganancia;
             newCalculatedPrices[rule.lista_precio_id] = finalPrice.toFixed(2);
         });
         setCalculatedPrices(newCalculatedPrices);
@@ -76,10 +74,17 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
                 
                 const initialRules = data.prices.map(p => ({
                     ...p,
-                    tipo_ganancia: p.tipo_ganancia || 'fijo',
-                    valor_ganancia: p.valor_ganancia || 0,
+                    ganancia_maxima: p.ganancia_maxima ?? '',
+                    ganancia_minima: p.ganancia_minima ?? '',
                 }));
                 setPriceRules(initialRules);
+
+                const initialCollapsedState = {};
+                data.prices.forEach(p => {
+                    initialCollapsedState[p.lista_precio_id] = !p.es_predeterminada;
+                });
+                setCollapsedLists(initialCollapsedState);
+
             } catch (err) {
                 addToast({ message: `Error al cargar detalles: ${err.message}`, type: 'error' });
                 onClose();
@@ -91,7 +96,7 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
             setLocalItem(item);
             setActiveTab('inventory');
             setErrors({});
-            setGeneralPriceRuleError('');
+            setValidationErrors({});
             fetchDetails();
         }
     }, [isOpen, item.producto_id]);
@@ -117,45 +122,72 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
             const newRules = prevRules.map(rule => 
                 rule.lista_precio_id === listId ? { ...rule, [field]: value } : rule
             );
-            
-            // Retro-cálculo si cambia el TIPO de ganancia
-            if (field === 'tipo_ganancia') {
-                const updatedRule = newRules.find(r => r.lista_precio_id === listId);
-                const currentPrice = Number(calculatedPrices[listId] || 0);
-                if (currentPrice > 0) {
-                    let newGainValue = '';
-                    if (value === 'fijo') { // changed to 'fijo'
-                        newGainValue = (currentPrice - nuevo_capp).toFixed(2);
-                    } else if (value === 'porcentaje' && nuevo_capp > 0) { // changed to 'porcentaje'
-                        newGainValue = (((currentPrice / nuevo_capp) - 1) * 100).toFixed(1);
-                    }
-                    updatedRule.valor_ganancia = newGainValue;
-                }
-            }
             recalculateAllPrices(newRules, nuevo_capp);
             return newRules;
         });
     };
 
     const handleSave = () => {
-        const generalRule = priceRules.find(p => p.es_predeterminada);
-        const gainValue = generalRule?.valor_ganancia;
-        // Check if the value is null, an empty string, or not a finite number.
-        if (gainValue === null || gainValue === '' || !isFinite(Number(gainValue))) {
-            const errorMessage = 'Debe ingresar un valor de ganancia numérico.';
-            setGeneralPriceRuleError(errorMessage);
-            addToast({ message: `Para el precio General: ${errorMessage}`, type: 'error' });
-            setActiveTab('prices'); // Asegura que el usuario vea el error
-            return; // Detiene el proceso de guardado
+        let isValid = true;
+        // FIX: Add explicit type for newErrors to prevent TypeScript errors.
+        const newErrors: { [key: string]: { ganancia_maxima?: string; ganancia_minima?: string } } = {};
+
+        priceRules.forEach(rule => {
+            const maxGainStr = String(rule.ganancia_maxima);
+            const minGainStr = String(rule.ganancia_minima);
+            const maxGain = parseFloat(maxGainStr);
+            const minGain = parseFloat(minGainStr);
+            // FIX: Add explicit type for errorsForList to prevent TypeScript errors.
+            const errorsForList: { ganancia_maxima?: string; ganancia_minima?: string } = {};
+
+            // Regla 1: Ganancias de la lista "General" son obligatorias
+            if (rule.es_predeterminada) {
+                if (maxGainStr.trim() === '' || isNaN(maxGain)) {
+                    errorsForList.ganancia_maxima = 'Obligatorio';
+                    isValid = false;
+                }
+                if (minGainStr.trim() === '' || isNaN(minGain)) {
+                    errorsForList.ganancia_minima = 'Obligatorio';
+                    isValid = false;
+                }
+            }
+
+            // Regla 2: Si hay ganancia máxima, la mínima es obligatoria
+            if (maxGainStr.trim() !== '' && !isNaN(maxGain) && (minGainStr.trim() === '' || isNaN(minGain))) {
+                errorsForList.ganancia_minima = 'Obligatorio';
+                isValid = false;
+            }
+            
+            // Regla 3: Mínima no puede ser mayor que máxima
+            if (!isNaN(maxGain) && !isNaN(minGain) && minGain > maxGain) {
+                errorsForList.ganancia_minima = 'No puede ser mayor';
+                isValid = false;
+            }
+
+            if (Object.keys(errorsForList).length > 0) {
+                newErrors[rule.lista_precio_id] = errorsForList;
+            }
+        });
+
+        setValidationErrors(newErrors);
+
+        if (!isValid) {
+            addToast({ message: 'Por favor, corrige los errores en los precios de venta.', type: 'error' });
+            // Expande la primera pestaña con error
+            const firstErrorListId = Object.keys(newErrors)[0];
+            if (firstErrorListId) {
+                setCollapsedLists(prev => ({ ...prev, [firstErrorListId]: false }));
+            }
+            setActiveTab('prices');
+            return;
         }
 
-        setGeneralPriceRuleError('');
         onSave({
             ...localItem,
             prices: priceRules.map(p => ({
                 lista_id: p.lista_precio_id,
-                tipo_ganancia: p.tipo_ganancia,
-                valor_ganancia: Number(p.valor_ganancia)
+                ganancia_maxima: Number(p.ganancia_maxima || 0),
+                ganancia_minima: Number(p.ganancia_minima || 0)
             }))
         });
     };
@@ -182,7 +214,7 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
         >
             <div class="space-y-4">
                 <div class="flex items-center gap-4 p-2 bg-slate-50 rounded-lg">
-                    <img src=${item.imagen_principal || 'https://via.placeholder.com/150'} class="h-14 w-14 rounded-md object-cover flex-shrink-0 bg-white" />
+                    <img src=${item.imagen_principal || NO_IMAGE_ICON_URL} class="h-14 w-14 rounded-md object-cover flex-shrink-0 bg-white" />
                     <p class="font-bold text-lg text-gray-800">${item.producto_nombre}</p>
                 </div>
                 
@@ -217,40 +249,70 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
                                     <span class="text-gray-600">Nuevo Costo Aplicado (CAPP): </span>
                                     <span class="font-bold text-lg text-gray-800">Bs ${nuevo_capp.toFixed(2)}</span>
                                 </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    ${priceRules.map(p => html`
-                                        <div key=${p.lista_precio_id} class="p-3 rounded-lg border ${p.es_predeterminada ? 'bg-blue-50/50' : 'bg-white'}">
-                                            <p class="font-semibold text-gray-800 text-sm">${p.lista_nombre} ${p.es_predeterminada ? '(General)' : ''}</p>
-                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end mt-2">
-                                                <div class="sm:col-span-2">
-                                                    <label class="block text-xs font-medium text-gray-700">Ganancia</label>
-                                                    <div class="mt-1 flex">
-                                                        <input 
-                                                            type="number" 
-                                                            value=${p.valor_ganancia} 
-                                                            onInput=${e => {
-                                                                handleRuleChange(p.lista_precio_id, 'valor_ganancia', e.target.value);
-                                                                if (p.es_predeterminada) {
-                                                                    setGeneralPriceRuleError(''); // Limpia el error al escribir
-                                                                }
-                                                            }}
-                                                            class=${`w-full block rounded-l-md border-0 p-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white ${p.es_predeterminada && generalPriceRuleError ? 'ring-red-500' : 'ring-gray-300'}`} 
-                                                            placeholder="0.00" 
-                                                        />
-                                                        <div class="inline-flex rounded-r-md shadow-sm">
-                                                            <button onClick=${() => handleRuleChange(p.lista_precio_id, 'tipo_ganancia', 'porcentaje')} class=${`relative inline-flex items-center rounded-l-none rounded-r-sm px-2 py-1.5 text-xs font-semibold ring-1 ring-inset ring-gray-300 focus:z-10 transition-colors ${p.tipo_ganancia === 'porcentaje' ? 'bg-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>%</button>
-                                                            <button onClick=${() => handleRuleChange(p.lista_precio_id, 'tipo_ganancia', 'fijo')} class=${`relative -ml-px inline-flex items-center rounded-r-md px-2 py-1.5 text-xs font-semibold ring-1 ring-inset ring-gray-300 focus:z-10 transition-colors ${p.tipo_ganancia === 'fijo' ? 'bg-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>Bs</button>
+                                <div class="space-y-3">
+                                    ${priceRules.map(p => {
+                                        const isCollapsed = collapsedLists[p.lista_precio_id];
+                                        const errorsForList = validationErrors[p.lista_precio_id] || {};
+                                        const maxGain = Number(p.ganancia_maxima);
+                                        const minGain = Number(p.ganancia_minima);
+                                        const isPriceActive = p.es_predeterminada
+                                            ? !isNaN(maxGain) && maxGain > 0 && !isNaN(minGain) && minGain >= 0
+                                            : !isNaN(maxGain) && maxGain > 0;
+                                        
+                                        return html`
+                                        <div key=${p.lista_precio_id} class="rounded-lg border ${p.es_predeterminada ? 'bg-blue-50/50' : 'bg-white'}">
+                                            <button onClick=${() => toggleCollapse(p.lista_precio_id)} class="w-full flex justify-between items-center text-left p-3">
+                                                <div class="flex items-center gap-3">
+                                                    <p class="font-semibold text-gray-800 text-sm">${p.lista_nombre} ${p.es_predeterminada ? '(General)' : ''}</p>
+                                                    ${isCollapsed && !isPriceActive && html`
+                                                        <span class="flex items-center gap-1.5 text-xs text-amber-600 font-medium">
+                                                            <span class="text-base">⚠️</span>
+                                                            Establece las ganancias para activar el precio.
+                                                        </span>
+                                                    `}
+                                                    ${isCollapsed && isPriceActive && html`
+                                                        <span class="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                                                            <span class="material-symbols-outlined text-base">check_circle</span>
+                                                            Precio de venta activado.
+                                                        </span>
+                                                    `}
+                                                </div>
+                                                <div class="text-gray-500 transform transition-transform ${!isCollapsed ? 'rotate-180' : ''}">
+                                                    ${ICONS.chevron_down}
+                                                </div>
+                                            </button>
+                                            ${!isCollapsed && html`
+                                                <div class="p-3 pt-0 animate-fade-in-down">
+                                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+                                                        <div>
+                                                            <label class="block text-xs font-medium text-gray-700">Ganancia Máxima (Bs)</label>
+                                                            <input 
+                                                                type="number"
+                                                                value=${p.ganancia_maxima} 
+                                                                onInput=${e => handleRuleChange(p.lista_precio_id, 'ganancia_maxima', e.target.value)}
+                                                                class=${`mt-1 w-full block rounded-md border-0 p-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white ${errorsForList.ganancia_maxima ? 'ring-red-500' : 'ring-gray-300'}`}
+                                                            />
+                                                            ${errorsForList.ganancia_maxima && html`<p class="mt-1 text-xs text-red-600">${errorsForList.ganancia_maxima}</p>`}
+                                                        </div>
+                                                        <div>
+                                                            <label class="block text-xs font-medium text-gray-700">Ganancia Mínima (Bs)</label>
+                                                            <input 
+                                                                type="number" 
+                                                                value=${p.ganancia_minima} 
+                                                                onInput=${e => handleRuleChange(p.lista_precio_id, 'ganancia_minima', e.target.value)} 
+                                                                class=${`mt-1 w-full block rounded-md border-0 p-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white ${errorsForList.ganancia_minima ? 'ring-red-500' : 'ring-gray-300'}`}
+                                                            />
+                                                            ${errorsForList.ganancia_minima && html`<p class="mt-1 text-xs text-red-600">${errorsForList.ganancia_minima}</p>`}
                                                         </div>
                                                     </div>
-                                                    ${p.es_predeterminada && generalPriceRuleError && html`<p class="mt-1 text-sm text-red-600">${generalPriceRuleError}</p>`}
+                                                    <div class="mt-3 pt-2 border-t text-center">
+                                                        <label class="block text-xs font-medium text-gray-500">Precio de Venta Resultante</label>
+                                                        <p class="font-bold text-primary text-base">Bs ${calculatedPrices[p.lista_precio_id] || '0.00'}</p>
+                                                    </div>
                                                 </div>
-                                                <div class="text-center sm:col-span-1">
-                                                    <label class="block text-xs font-medium text-gray-500">Precio Venta</label>
-                                                    <p class="font-bold text-primary text-base">Bs ${calculatedPrices[p.lista_precio_id] || '0.00'}</p>
-                                                </div>
-                                            </div>
+                                            `}
                                         </div>
-                                    `)}
+                                    `})}
                                 </div>
                             </div>
                         `}
@@ -470,7 +532,7 @@ const ProductoSearch = ({ productos, onProductSelected, onAddedProductClick, set
                             ${p.id === 'add_new' ? html`<span class="flex items-center gap-2">${ICONS.add} ${p.nombre}</span>` : html`
                                 <div class="flex items-center gap-3">
                                      <div class="relative h-10 w-10 flex-shrink-0">
-                                        ${p.imagen_principal ? html`<img src=${p.imagen_principal} class="h-10 w-10 rounded object-cover" />` : html`<div class="h-10 w-10 rounded bg-slate-100 flex items-center justify-center text-slate-400">${ICONS.products}</div>`}
+                                        <img src=${p.imagen_principal || NO_IMAGE_ICON_URL} class="h-10 w-10 rounded object-cover" />
                                         ${isAdded && html`
                                             <div class="absolute inset-0 bg-green-600/70 flex items-center justify-center rounded">
                                                 <span class="material-symbols-outlined text-white" style="font-size: 2rem;">check_circle</span>
@@ -529,11 +591,11 @@ function Step1({ formData, handleInput, setFormData, proveedores, setIsProveedor
     `;
 }
 
-const Step2 = ({ formData, handleEditItem, handleRemoveItem, total, productos, onProductSelected, onAddedProductClick, setIsProductFormOpen, addedProductIds }) => (
+const Step2 = ({ formData, handleEditItem, handleRemoveItem, total, productos, handleProductSelected, handleAddedProductClick, setIsProductFormOpen, addedProductIds }) => (
     html`
     <h3 class="text-lg font-semibold text-gray-900 mb-4">Detalle de Productos</h3>
     <div class="mb-4">
-        <${ProductoSearch} productos=${productos} onProductSelected=${onProductSelected} onAddedProductClick=${onAddedProductClick} setIsProductFormOpen=${setIsProductFormOpen} addedProductIds=${addedProductIds} />
+        <${ProductoSearch} productos=${productos} onProductSelected=${handleProductSelected} onAddedProductClick=${handleAddedProductClick} setIsProductFormOpen=${setIsProductFormOpen} addedProductIds=${addedProductIds} />
     </div>
 
     ${formData.items.length === 0 ? html`
@@ -548,7 +610,7 @@ const Step2 = ({ formData, handleEditItem, handleRemoveItem, total, productos, o
                     <div key=${item.producto_id} class="p-3 bg-slate-50 rounded-lg border">
                         <div class="flex items-center gap-3">
                             <div class="flex-shrink-0">
-                                ${item.imagen_principal ? html`<img src=${item.imagen_principal} class="h-14 w-14 rounded-md object-cover bg-white" />` : html`<div class="h-14 w-14 rounded-md bg-white flex items-center justify-center text-slate-400">${ICONS.products}</div>`}
+                                <img src=${item.imagen_principal || NO_IMAGE_ICON_URL} class="h-14 w-14 rounded-md object-cover bg-white" />
                             </div>
                             <div class="flex-grow min-w-0">
                                 <p class="font-medium text-sm text-gray-800 truncate">${item.producto_nombre}</p>
@@ -591,7 +653,7 @@ const Step2 = ({ formData, handleEditItem, handleRemoveItem, total, productos, o
                                 <td class="py-2 pl-4 pr-3 text-sm sm:pl-6">
                                     <div class="flex items-center">
                                         <div class="h-11 w-11 flex-shrink-0">
-                                            ${item.imagen_principal ? html`<img class="h-11 w-11 rounded-md object-cover bg-white" src=${item.imagen_principal} />` : html`<div class="h-11 w-11 rounded-md bg-white flex items-center justify-center text-slate-400 border">${ICONS.products}</div>`}
+                                            <img class="h-11 w-11 rounded-md object-cover bg-white" src=${item.imagen_principal || NO_IMAGE_ICON_URL} />
                                         </div>
                                         <div class="ml-4 min-w-0">
                                             <div class="font-medium text-gray-900 truncate">${item.producto_nombre}</div>
@@ -947,7 +1009,7 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
                 
                 <div class="min-h-[30rem]">
                     ${step === 1 && html`<${Step1} formData=${formData} handleInput=${handleInput} setFormData=${setFormData} proveedores=${proveedores} setIsProveedorFormOpen=${setIsProveedorFormOpen} />`}
-                    ${step === 2 && html`<${Step2} formData=${formData} handleEditItem=${handleEditItem} handleRemoveItem=${handleRemoveItem} total=${total} productos=${productos} onProductSelected=${handleProductSelected} onAddedProductClick=${handleAddedProductClick} setIsProductFormOpen=${setIsProductFormOpen} addedProductIds=${addedProductIds} />`}
+                    ${step === 2 && html`<${Step2} formData=${formData} handleEditItem=${handleEditItem} handleRemoveItem=${handleRemoveItem} total=${total} productos=${productos} handleProductSelected=${handleProductSelected} handleAddedProductClick=${handleAddedProductClick} setIsProductFormOpen=${setIsProductFormOpen} addedProductIds=${addedProductIds} />`}
                     ${step === 3 && html`<${Step3} formData=${formData} handleInput=${handleInput} setFormData=${setFormData} total=${total} />`}
                 </div>
             </div>

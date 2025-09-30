@@ -14,6 +14,7 @@ import { KPI_Card } from '../../components/KPI_Card.js';
 import { ProductFormModal } from '../../components/modals/ProductFormModal.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { Spinner } from '../../components/Spinner.js';
+import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 
 const InventoryBreakdown = ({ inventory = [], allBranches = [], user, onAdjust }) => {
     // Determine which branches are visible based on the user's role
@@ -88,51 +89,48 @@ const PriceManagementTab = ({ details, initialPrices, productId, user, onPricesU
     const { addToast } = useToast();
     const canEdit = user.role !== 'Empleado';
     const cost = useMemo(() => Number(details.precio_compra || 0), [details.precio_compra]);
+    const [collapsedLists, setCollapsedLists] = useState({});
 
     const recalculateAllPrices = (rules, currentCost) => {
         const newCalculatedPrices = {};
         rules.forEach(rule => {
-            const valor = Number(rule.valor_ganancia || 0);
-            let finalPrice = currentCost;
-            if (rule.tipo_ganancia === 'porcentaje') {
-                finalPrice = currentCost * (1 + valor / 100);
-            } else { // 'fijo'
-                finalPrice = currentCost + valor;
-            }
+            const ganancia = Number(rule.ganancia_maxima || 0);
+            const finalPrice = currentCost + ganancia;
             newCalculatedPrices[rule.lista_precio_id] = finalPrice.toFixed(2);
         });
         setCalculatedPrices(newCalculatedPrices);
     };
-    
+
     useEffect(() => {
         const initialRules = (initialPrices || []).map(p => ({
             ...p,
-            tipo_ganancia: p.tipo_ganancia || 'fijo',
-            valor_ganancia: p.valor_ganancia || 0,
+            ganancia_maxima: p.ganancia_maxima ?? 0,
+            ganancia_minima: p.ganancia_minima ?? 0,
         }));
         setPriceRules(initialRules);
         recalculateAllPrices(initialRules, cost);
+
+        const initialCollapsedState = {};
+        if (initialPrices) {
+            initialPrices.forEach(p => {
+                initialCollapsedState[p.lista_precio_id] = !p.es_predeterminada;
+            });
+        }
+        setCollapsedLists(initialCollapsedState);
     }, [initialPrices, cost]);
+
+    const toggleCollapse = (listId) => {
+        setCollapsedLists(prev => ({
+            ...prev,
+            [listId]: !prev[listId]
+        }));
+    };
 
     const handleRuleChange = (listId, field, value) => {
         setPriceRules(prevRules => {
             const newRules = prevRules.map(rule => 
                 rule.lista_precio_id === listId ? { ...rule, [field]: value } : rule
             );
-            
-            if (field === 'tipo_ganancia') {
-                const updatedRule = newRules.find(r => r.lista_precio_id === listId);
-                const currentPrice = Number(calculatedPrices[listId] || 0);
-                if (currentPrice > 0) {
-                    let newGainValue = '';
-                    if (value === 'fijo') {
-                        newGainValue = (currentPrice - cost).toFixed(2);
-                    } else if (value === 'porcentaje' && cost > 0) {
-                        newGainValue = (((currentPrice / cost) - 1) * 100).toFixed(1);
-                    }
-                    updatedRule.valor_ganancia = newGainValue;
-                }
-            }
             recalculateAllPrices(newRules, cost);
             return newRules;
         });
@@ -143,8 +141,8 @@ const PriceManagementTab = ({ details, initialPrices, productId, user, onPricesU
         try {
             const updates = priceRules.map(p => ({
                 lista_id: p.lista_precio_id,
-                tipo_ganancia: p.tipo_ganancia,
-                valor_ganancia: Number(p.valor_ganancia)
+                ganancia_maxima: Number(p.ganancia_maxima),
+                ganancia_minima: Number(p.ganancia_minima)
             }));
 
             const { error } = await supabase.rpc('update_product_prices', {
@@ -175,50 +173,94 @@ const PriceManagementTab = ({ details, initialPrices, productId, user, onPricesU
                 <p class="text-xs text-gray-500 mt-2">Este valor se actualiza automáticamente con cada compra registrada.</p>
             </div>
             <div class="bg-white p-6 rounded-lg shadow-md border">
-                <h3 class="text-lg font-semibold text-gray-800">Precios de Venta</h3>
-                <p class="text-sm text-gray-600 mt-1">Define tu ganancia y el sistema calculará el precio de venta final.</p>
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800">Precios de Venta</h3>
+                        <p class="text-sm text-gray-600 mt-1">Define tus márgenes de ganancia para cada lista de precios.</p>
+                    </div>
+                     ${canEdit && html`
+                        <button onClick=${handleSaveChanges} disabled=${isSaving} class="min-w-[150px] w-full sm:w-auto flex justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400">
+                            ${isSaving ? html`<${Spinner}/>` : 'Guardar Precios'}
+                        </button>
+                    `}
+                </div>
                 <div class="mt-4 flow-root">
                     <div class="space-y-4">
-                        ${priceRules.map(p => html`
-                            <div key=${p.lista_precio_id} class="p-4 rounded-lg border ${p.es_predeterminada ? 'bg-blue-50/50' : 'bg-white'}">
-                                <p class="font-semibold text-gray-800">${p.lista_nombre} ${p.es_predeterminada ? '(General)' : ''}</p>
-                                <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end mt-2">
-                                    <div class="sm:col-span-2">
-                                        <label class="block text-sm font-medium text-gray-700">Ganancia</label>
-                                        <div class="mt-1 flex">
-                                            <input 
-                                                type="number" 
-                                                value=${p.valor_ganancia} 
-                                                onInput=${(e) => handleRuleChange(p.lista_precio_id, 'valor_ganancia', e.target.value)} 
-                                                class="w-full block rounded-l-md border-0 p-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white" placeholder="0.00"
-                                                disabled=${!canEdit}
-                                            />
-                                            <div class="inline-flex rounded-r-md shadow-sm">
-                                                <button onClick=${() => handleRuleChange(p.lista_precio_id, 'tipo_ganancia', 'porcentaje')} disabled=${!canEdit} class=${`relative inline-flex items-center rounded-l-none rounded-r-sm px-2 py-2 text-xs font-semibold ring-1 ring-inset ring-gray-300 focus:z-10 transition-colors ${p.tipo_ganancia === 'porcentaje' ? 'bg-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>%</button>
-                                                <button onClick=${() => handleRuleChange(p.lista_precio_id, 'tipo_ganancia', 'fijo')} disabled=${!canEdit} class=${`relative -ml-px inline-flex items-center rounded-r-md px-2 py-2 text-xs font-semibold ring-1 ring-inset ring-gray-300 focus:z-10 transition-colors ${p.tipo_ganancia === 'fijo' ? 'bg-primary text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>Bs</button>
+                        ${priceRules.map(p => {
+                            const isCollapsed = collapsedLists[p.lista_precio_id];
+                            const maxGain = Number(p.ganancia_maxima);
+                            const minGain = Number(p.ganancia_minima);
+                            const isPriceActive = p.es_predeterminada
+                                ? !isNaN(maxGain) && maxGain > 0 && !isNaN(minGain) && minGain >= 0
+                                : !isNaN(maxGain) && maxGain > 0;
+
+                            return html`
+                            <div key=${p.lista_precio_id} class="rounded-lg border ${p.es_predeterminada ? 'bg-blue-50/50' : 'bg-white'}">
+                                <button onClick=${() => toggleCollapse(p.lista_precio_id)} class="w-full flex justify-between items-center text-left p-4">
+                                    <div class="flex items-center gap-3">
+                                        <p class="font-semibold text-gray-800">${p.lista_nombre} ${p.es_predeterminada ? '(General)' : ''}</p>
+                                        ${isCollapsed && !isPriceActive && html`
+                                            <span class="flex items-center gap-1.5 text-xs text-amber-600 font-medium">
+                                                <span class="text-base">⚠️</span>
+                                                Establece las ganancias para activar el precio.
+                                            </span>
+                                        `}
+                                        ${isCollapsed && isPriceActive && html`
+                                            <span class="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                                                <span class="material-symbols-outlined text-base">check_circle</span>
+                                                Precio de venta activado.
+                                            </span>
+                                        `}
+                                    </div>
+                                    <div class="text-gray-500 transform transition-transform ${!isCollapsed ? 'rotate-180' : ''}">
+                                        ${ICONS.chevron_down}
+                                    </div>
+                                </button>
+                                
+                                ${!isCollapsed && html`
+                                    <div class="p-4 pt-0 animate-fade-in-down">
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                                            <div class="sm:col-span-1">
+                                                <label class="block text-sm font-medium text-gray-700">Ganancia Máxima (Bs)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value=${p.ganancia_maxima} 
+                                                    onInput=${(e) => handleRuleChange(p.lista_precio_id, 'ganancia_maxima', e.target.value)} 
+                                                    class="mt-1 w-full block rounded-md border-0 p-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white" placeholder="0.00"
+                                                    disabled=${!canEdit}
+                                                />
+                                            </div>
+                                             <div class="sm:col-span-1">
+                                                <label class="block text-sm font-medium text-gray-700">Ganancia Mínima (Bs)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value=${p.ganancia_minima} 
+                                                    onInput=${(e) => handleRuleChange(p.lista_precio_id, 'ganancia_minima', e.target.value)} 
+                                                    class="mt-1 w-full block rounded-md border-0 p-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white" placeholder="0.00"
+                                                    disabled=${!canEdit}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div class="mt-4 pt-3 border-t grid grid-cols-3 gap-2 text-center">
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-500">Descuento Máx.</label>
+                                                <p class="font-bold text-amber-600 text-base">Bs ${(Number(p.ganancia_maxima || 0) - Number(p.ganancia_minima || 0)).toFixed(2)}</p>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-500">Costo</label>
+                                                <p class="font-bold text-gray-800 text-base">Bs ${cost.toFixed(2)}</p>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-500">Precio Venta</label>
+                                                <p class="font-bold text-primary text-base">Bs ${calculatedPrices[p.lista_precio_id] || '0.00'}</p>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="text-center">
-                                        <label class="block text-sm font-medium text-gray-500">Costo</label>
-                                        <p class="font-bold text-gray-800 text-lg">Bs ${cost.toFixed(2)}</p>
-                                    </div>
-                                    <div class="text-center">
-                                        <label class="block text-sm font-medium text-gray-500">Precio Venta</label>
-                                        <p class="font-bold text-primary text-lg">Bs ${calculatedPrices[p.lista_precio_id] || '0.00'}</p>
-                                    </div>
-                                </div>
+                                `}
                             </div>
-                        `)}
+                        `})}
                     </div>
                 </div>
-                ${canEdit && html`
-                    <div class="mt-6 flex justify-end">
-                        <button onClick=${handleSaveChanges} disabled=${isSaving} class="min-w-[150px] flex justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400">
-                            ${isSaving ? html`<${Spinner}/>` : 'Guardar Precios'}
-                        </button>
-                    </div>
-                `}
             </div>
         </div>
     `;
@@ -511,13 +553,11 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
                 <div class="lg:col-span-1">
                     <div class="bg-white p-4 rounded-lg shadow-md border sticky top-6">
                         <div class="aspect-square bg-gray-100 rounded-md mb-4">
-                             ${images && images.length > 0 ? html`
-                                <img src=${images[activeImage]?.imagen_url} alt="Producto" class="w-full h-full object-contain rounded-md" />
-                             ` : html`
-                                <div class="w-full h-full flex items-center justify-center bg-slate-100 rounded-md">
-                                    <div class="text-slate-400 text-6xl">${ICONS.products}</div>
-                                </div>
-                             `}
+                            <img 
+                                src=${(images && images.length > 0 && images[activeImage]?.imagen_url) || NO_IMAGE_ICON_URL} 
+                                alt="Producto" 
+                                class="w-full h-full object-contain rounded-md" 
+                            />
                         </div>
                         ${images.length > 1 && html`
                             <div class="flex space-x-2 overflow-x-auto p-1">
