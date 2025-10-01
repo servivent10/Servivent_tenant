@@ -20,14 +20,22 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
   const isDark = theme === 'dark';
 
   const labelClasses = isDark ? 'text-gray-300' : 'text-gray-900';
-  const baseRingClasses = isDark ? 'ring-gray-500 focus:ring-primary' : 'ring-gray-300 focus:ring-primary';
-  const errorRingClasses = 'ring-red-500 focus:ring-red-500';
+  const baseClasses = isDark 
+    ? 'ring-1 ring-inset ring-gray-500 focus:ring-primary' 
+    : 'border border-gray-300 focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25';
+  
+  const errorClasses = isDark 
+    ? 'ring-1 ring-inset ring-red-500 focus:ring-red-500'
+    : 'border border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/25';
+    
   const inputClasses = isDark 
     ? 'bg-gray-700/50 text-white placeholder-gray-400' 
     : 'bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500';
   
   const disabledClasses = disabled ? 'cursor-not-allowed' : '';
   const buttonClasses = isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700';
+
+  const handleFocus = (e) => e.target.select();
 
   if (type === 'date') {
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -91,9 +99,10 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
             required=${required} 
             value=${displayValue}
             onInput=${handleTextInput}
+            onFocus=${handleFocus}
             placeholder="dd/mm/aaaa"
             disabled=${disabled}
-            class="block w-full rounded-md border-0 p-2 pr-10 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorRingClasses : baseRingClasses} ${disabledClasses}" 
+            class="block w-full rounded-md p-2 pr-10 shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses}" 
             aria-invalid=${hasError}
           />
           <button 
@@ -129,8 +138,9 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
           required=${required} 
           value=${value}
           onInput=${onInput}
+          onFocus=${handleFocus}
           disabled=${disabled}
-          class="block w-full rounded-md border-0 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorRingClasses : baseRingClasses} ${disabledClasses} ${paddingClasses}" 
+          class="block w-full rounded-md shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses} ${paddingClasses}" 
           aria-invalid=${hasError}
           aria-describedby=${hasError ? `${name}-error` : undefined}
         />

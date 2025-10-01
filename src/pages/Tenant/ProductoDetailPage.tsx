@@ -226,7 +226,7 @@ const PriceManagementTab = ({ details, initialPrices, productId, user, onPricesU
                                                     type="number" 
                                                     value=${p.ganancia_maxima} 
                                                     onInput=${(e) => handleRuleChange(p.lista_precio_id, 'ganancia_maxima', e.target.value)} 
-                                                    class="mt-1 w-full block rounded-md border-0 p-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white" placeholder="0.00"
+                                                    class="mt-1 w-full block rounded-md border border-gray-300 p-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm bg-white" placeholder="0.00"
                                                     disabled=${!canEdit}
                                                 />
                                             </div>
@@ -236,7 +236,7 @@ const PriceManagementTab = ({ details, initialPrices, productId, user, onPricesU
                                                     type="number" 
                                                     value=${p.ganancia_minima} 
                                                     onInput=${(e) => handleRuleChange(p.lista_precio_id, 'ganancia_minima', e.target.value)} 
-                                                    class="mt-1 w-full block rounded-md border-0 p-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white" placeholder="0.00"
+                                                    class="mt-1 w-full block rounded-md border border-gray-300 p-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm bg-white" placeholder="0.00"
                                                     disabled=${!canEdit}
                                                 />
                                             </div>
@@ -357,7 +357,7 @@ const InventoryAdjustModal = ({ isOpen, onClose, onSave, product, inventory, all
                                     <td class="px-3 py-2 whitespace-nowrap">
                                         <input 
                                             type="number" 
-                                            class="w-24 text-center rounded-md border-0 p-2 bg-white text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200"
+                                            class="w-24 text-center rounded-md border border-gray-300 p-2 bg-white text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm transition-colors duration-200"
                                             value=${adjustments[branch.id] || ''}
                                             onInput=${e => handleAdjustmentChange(branch.id, e.target.value)}
                                         />
@@ -377,7 +377,7 @@ const InventoryAdjustModal = ({ isOpen, onClose, onSave, product, inventory, all
                         id="reason"
                         value=${reason}
                         onInput=${e => setReason(e.target.value)}
-                        class="mt-1 block w-full rounded-md border-0 p-2 text-gray-900 bg-white shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200"
+                        class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-gray-900 bg-white shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm transition-colors duration-200"
                     />
                 </div>
             </div>

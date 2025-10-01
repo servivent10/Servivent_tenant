@@ -297,14 +297,14 @@ export function UserFormModal({ isOpen, onClose, onSave, userToEdit, branches, c
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label for="rol" class="block font-medium leading-6 text-gray-900">Rol</label>
-                            <select id="rol" name="rol" value=${formData.rol} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
+                            <select id="rol" name="rol" value=${formData.rol} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
                                 ${currentUser.role === 'Propietario' && html`<option value="Administrador">Administrador</option>`}
                                 <option value="Empleado">Empleado</option>
                             </select>
                         </div>
                         <div>
                             <label for="sucursal_id" class="block font-medium leading-6 text-gray-900">Sucursal</label>
-                            <select id="sucursal_id" name="sucursal_id" value=${formData.sucursal_id} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
+                            <select id="sucursal_id" name="sucursal_id" value=${formData.sucursal_id} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
                                 ${branches.map(branch => html`<option value=${branch.id}>${branch.nombre}</option>`)}
                             </select>
                         </div>

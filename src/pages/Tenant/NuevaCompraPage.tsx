@@ -417,9 +417,10 @@ const ProveedorSelector = ({ formData, setFormData, proveedores, setIsProveedorF
                             key=${p.id}
                             ref=${el => itemRefs.current[index] = el}
                             onClick=${() => handleSelect(p)} 
+                            onMouseEnter=${() => setHighlightedIndex(index)}
                             class="relative cursor-pointer select-none py-2 pl-3 pr-9
                             ${p.id === 'add_new' ? 'text-primary font-semibold' : 'text-gray-900'}
-                            ${highlightedIndex === index ? 'bg-primary-light' : 'hover:bg-slate-100'}"
+                            ${highlightedIndex === index ? 'bg-primary-light' : ''} hover:bg-primary-light"
                         >
                             ${p.id === 'add_new' ? html`<span class="flex items-center gap-2">${ICONS.add} ${p.nombre}</span>` : html`
                                 <span class="block truncate font-medium">${p.nombre}</span>
@@ -525,9 +526,10 @@ const ProductoSearch = ({ productos, onProductSelected, onAddedProductClick, set
                             key=${p.id}
                             ref=${el => itemRefs.current[index] = el}
                             onClick=${() => handleSelect(p)} 
+                            onMouseEnter=${() => setHighlightedIndex(index)}
                             class="cursor-pointer select-none relative p-2 text-gray-900
                             ${p.id === 'add_new' ? 'text-primary font-semibold' : ''}
-                            ${highlightedIndex === index ? 'bg-primary-light' : 'hover:bg-slate-100'}"
+                            ${highlightedIndex === index ? 'bg-primary-light' : ''} hover:bg-primary-light"
                         >
                             ${p.id === 'add_new' ? html`<span class="flex items-center gap-2">${ICONS.add} ${p.nombre}</span>` : html`
                                 <div class="flex items-center gap-3">

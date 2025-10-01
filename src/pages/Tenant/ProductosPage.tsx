@@ -335,7 +335,7 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
                     <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border">
                         <div class="relative flex-grow">
                             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">${ICONS.search}</div>
-                            <input type="text" placeholder="Buscar por SKU, nombre o modelo..." value=${searchTerm} onInput=${e => setSearchTerm(e.target.value)} class="block w-full rounded-md border-0 pl-10 p-2 bg-white text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200" />
+                            <input type="text" placeholder="Buscar por SKU, nombre o modelo..." value=${searchTerm} onInput=${e => setSearchTerm(e.target.value)} class="block w-full rounded-md border border-gray-300 p-2 pl-10 bg-white text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm transition-colors duration-200" />
                         </div>
                          <div class="hidden xl:flex items-center gap-2">
                             <button onClick=${() => addToast({ message: 'Funcionalidad de exportar no implementada.'})} class="flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">${ICONS.download} Exportar</button>

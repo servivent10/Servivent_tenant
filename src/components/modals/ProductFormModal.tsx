@@ -256,13 +256,13 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
                                 <label for="categoria_id" class="block font-medium leading-6 text-gray-900">Categoría</label>
                                 ${isAddingCategory ? html`
                                     <div class="flex items-center gap-2 mt-1">
-                                        <input type="text" value=${newCategoryName} onInput=${e => setNewCategoryName(e.target.value)} placeholder="Nueva categoría" class="flex-grow block w-full rounded-md border-0 p-2 text-gray-900 bg-white shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200" />
+                                        <input type="text" value=${newCategoryName} onInput=${e => setNewCategoryName(e.target.value)} placeholder="Nueva categoría" class="flex-grow block w-full rounded-md border border-gray-300 p-2 text-gray-900 bg-white shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm transition-colors duration-200" />
                                         <button onClick=${handleCreateCategory} disabled=${isLoading} class="p-2 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white">${ICONS.success}</button>
                                         <button onClick=${() => setIsAddingCategory(false)} class="p-2 rounded-md bg-gray-500 hover:bg-gray-400 text-white">${ICONS.close}</button>
                                     </div>
                                 ` : html`
                                     <div class="flex items-center gap-2 mt-1">
-                                        <select id="categoria_id" name="categoria_id" value=${formData.categoria_id} onInput=${handleInput} class="flex-grow block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
+                                        <select id="categoria_id" name="categoria_id" value=${formData.categoria_id} onInput=${handleInput} class="flex-grow block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
                                             <option value="">Sin categoría</option>
                                             ${categories.map(cat => html`<option value=${cat.id}>${cat.nombre}</option>`)}
                                         </select>
@@ -273,14 +273,14 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
 
                             <div>
                                 <label for="unidad_medida" class="block font-medium leading-6 text-gray-900">Unidad de Medida</label>
-                                <select id="unidad_medida" name="unidad_medida" value=${formData.unidad_medida} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
+                                <select id="unidad_medida" name="unidad_medida" value=${formData.unidad_medida} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
                                     ${unidadesDeMedida.map(unidad => html`<option value=${unidad}>${unidad}</option>`)}
                                 </select>
                             </div>
                             
                             <div>
                                 <label for="descripcion" class="block font-medium leading-6 text-gray-900">Descripción (Opcional)</label>
-                                <textarea id="descripcion" name="descripcion" rows="3" onInput=${handleInput} value=${formData.descripcion} class="mt-1 block w-full rounded-md border-0 p-2 bg-white text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200"></textarea>
+                                <textarea id="descripcion" name="descripcion" rows="3" onInput=${handleInput} value=${formData.descripcion} class="mt-1 block w-full rounded-md border border-gray-300 p-2 bg-white text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm transition-colors duration-200"></textarea>
                             </div>
                         </div>
                     </div>

@@ -14,10 +14,12 @@ import { FilterPanel } from '../../components/FilterPanel.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 import { ClienteFormModal } from '../../components/modals/ClienteFormModal.js';
 import { Avatar } from '../../components/Avatar.js';
+import { CheckoutModal } from '../../components/modals/CheckoutModal.js';
 
 const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isDropdownOpen, setDropdownOpen] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const wrapperRef = useRef(null);
 
     const selectedClient = useMemo(() => {
@@ -43,6 +45,15 @@ const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
         ];
     }, [searchTerm, clients, selectedClient]);
 
+    const itemRefs = useRef([]);
+    useEffect(() => {
+        if (isDropdownOpen && highlightedIndex >= 0 && itemRefs.current[highlightedIndex]) {
+            itemRefs.current[highlightedIndex].scrollIntoView({
+                block: 'nearest'
+            });
+        }
+    }, [highlightedIndex, isDropdownOpen]);
+
      useEffect(() => {
         const handleClickOutside = (event) => {
             if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
@@ -67,12 +78,38 @@ const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
             onSelect(client.id);
         }
         setDropdownOpen(false);
+        setHighlightedIndex(-1);
     };
     
     const handleClear = () => {
         setSearchTerm('');
         onSelect(null);
         wrapperRef.current?.querySelector('input')?.focus();
+    };
+
+    const handleKeyDown = (e) => {
+        if (!isDropdownOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+            e.preventDefault();
+            setDropdownOpen(true);
+            setHighlightedIndex(0);
+            return;
+        }
+        if (!isDropdownOpen) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedIndex(prev => (prev + 1) % filteredClients.length);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedIndex(prev => (prev - 1 + filteredClients.length) % filteredClients.length);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (highlightedIndex >= 0) {
+                handleSelect(filteredClients[highlightedIndex]);
+            }
+        } else if (e.key === 'Escape') {
+            setDropdownOpen(false);
+        }
     };
 
 
@@ -85,9 +122,10 @@ const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
                     type="text"
                     value=${searchTerm}
                     onInput=${e => { setSearchTerm(e.target.value); if (!isDropdownOpen) setDropdownOpen(true); }}
-                    onFocus=${() => setDropdownOpen(true)}
+                    onFocus=${(e) => { e.target.select(); setDropdownOpen(true); }}
+                    onKeyDown=${handleKeyDown}
                     placeholder="Buscar cliente..."
-                    class="w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm"
+                    class="w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm"
                 />
                 ${searchTerm && html`
                     <button 
@@ -101,13 +139,15 @@ const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
             </div>
              ${isDropdownOpen && html`
                 <ul class="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-                    ${filteredClients.map(c => html`
+                    ${filteredClients.map((c, index) => html`
                         <li 
                             key=${c.id}
+                            ref=${el => itemRefs.current[index] = el}
                             onClick=${() => handleSelect(c)} 
+                            onMouseEnter=${() => setHighlightedIndex(index)}
                             class="relative cursor-pointer select-none p-2
                             ${c.id === 'add_new' ? 'text-primary font-semibold' : 'text-gray-900'}
-                            hover:bg-slate-100"
+                            ${highlightedIndex === index ? 'bg-primary-light' : ''} hover:bg-primary-light"
                         >
                            ${c.id === 'add_new' ? html`
                                 <span class="flex items-center gap-2">${ICONS.add} ${c.nombre}</span>
@@ -192,7 +232,7 @@ const SetPricePopover = ({ item, targetElement, onClose, onApply, getPriceInfo, 
                     onInput=${e => setNewPrice(e.target.value)} 
                     onKeyDown=${e => e.key === 'Enter' && handleApply()}
                     placeholder=${originalPrice.toFixed(2)}
-                    class="block w-full rounded-md border-0 pl-8 p-2 text-gray-900 bg-white shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                    class="block w-full rounded-md border border-gray-300 pl-8 p-2 text-gray-900 bg-white shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25"
                 />
             </div>
             <div class="mt-4 flex justify-end gap-2">
@@ -357,9 +397,9 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
                         ${hasCustomPrice && html`<span class="line-through mr-1">Bs ${originalPrice.toFixed(2)}</span>`}
                         <span class=${hasCustomPrice ? 'font-bold text-primary' : ''}>Bs ${effectivePrice.toFixed(2)} c/u</span>
                     </p>
-                    ${priceSource === 'specific' && html`
-                        <span title=${priceListTooltip} class="inline-flex items-center rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-800">
-                           ${ICONS.local_offer}
+                    ${priceSource === 'specific' && activePriceListName && html`
+                        <span title=${priceListTooltip} class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                           ${activePriceListName}
                         </span>
                     `}
                  </div>
@@ -369,7 +409,7 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
                         type="number"
                         value=${item.quantity}
                         onInput=${e => onUpdateQuantity(item.product.id, parseInt(e.target.value, 10))}
-                        class="w-14 text-center rounded-md border-gray-300 shadow-sm p-1 text-sm font-semibold focus:ring-primary focus:border-primary bg-white text-gray-900"
+                        class="w-14 text-center rounded-md border-gray-300 shadow-sm p-1 text-sm font-semibold focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 bg-white text-gray-900"
                         min="1"
                         aria-label="Cantidad"
                     />
@@ -389,7 +429,7 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
     `;
 };
 
-function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, taxRate, setTaxRate, discountValue, onDiscountChange, selectedPaymentMethod, setSelectedPaymentMethod, onOpenPricePopover, customPrices, defaultPriceListId, isPriceRuleActive, selectedClientId, setSelectedClientId, setIsClienteFormOpen }) {
+function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, taxRate, setTaxRate, discountValue, onDiscountChange, onFinalizeSale, onOpenPricePopover, customPrices, defaultPriceListId, isPriceRuleActive, selectedClientId, setSelectedClientId, setIsClienteFormOpen }) {
     const activePriceListName = useMemo(() => {
         return posData.price_lists.find(pl => pl.id === activePriceListId)?.nombre || '';
     }, [activePriceListId, posData.price_lists]);
@@ -402,20 +442,22 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
             </button>
         </div>
 
-        <div class="p-4 space-y-4 flex-shrink-0 border-b">
-            <div>
-                <label for="price-list" class="block text-sm font-medium text-gray-700">Lista de Precios</label>
-                <select id="price-list" value=${activePriceListId} onChange=${e => setActivePriceListId(e.target.value)} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
-                    ${posData.price_lists.map(pl => html`<option value=${pl.id}>${pl.nombre}</option>`)}
-                </select>
-            </div>
-             <div>
-                <${ClienteSelector}
-                    clients=${posData.clients || []}
-                    selectedClientId=${selectedClientId}
-                    onSelect=${setSelectedClientId}
-                    onAddNew=${() => setIsClienteFormOpen(true)}
-                />
+        <div class="p-4 flex-shrink-0 border-b">
+            <div class="flex items-start gap-4">
+                <div class="w-2/3">
+                    <${ClienteSelector}
+                        clients=${posData.clients || []}
+                        selectedClientId=${selectedClientId}
+                        onSelect=${setSelectedClientId}
+                        onAddNew=${() => setIsClienteFormOpen(true)}
+                    />
+                </div>
+                <div class="w-1/3">
+                    <label for="price-list" class="block text-sm font-medium text-gray-700">Lista de Precios</label>
+                    <select id="price-list" value=${activePriceListId} onChange=${e => setActivePriceListId(e.target.value)} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
+                        ${posData.price_lists.map(pl => html`<option value=${pl.id}>${pl.nombre}</option>`)}
+                    </select>
+                </div>
             </div>
         </div>
 
@@ -459,7 +501,7 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
                 <div class="flex justify-between items-center">
                     <span class="text-gray-600">Impuesto</span>
                     <div class="flex items-center gap-2">
-                        <div class="flex items-center rounded-md shadow-sm bg-white ring-1 ring-inset ring-gray-300 focus-within:ring-primary transition-colors duration-150 w-24">
+                        <div class="flex items-center rounded-md shadow-sm bg-white border border-gray-300 focus-within:border-[#0d6efd] focus-within:ring-4 focus-within:ring-[#0d6efd]/25 transition-colors duration-150 w-24">
                             <span class="pl-2 text-gray-500 text-sm">%</span>
                             <input type="number" value=${taxRate} onInput=${e => setTaxRate(e.target.value)} placeholder="0" class="w-full border-0 bg-transparent p-1 text-sm text-right text-gray-900 focus:ring-0 focus:outline-none" />
                         </div>
@@ -471,7 +513,7 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
                     <span class="text-gray-600 pt-1">Descuento</span>
                     <div class="flex flex-col items-end">
                         <div class="flex items-center gap-2">
-                            <div class="flex items-center rounded-md shadow-sm bg-white ring-1 ring-inset ring-gray-300 focus-within:ring-primary w-24">
+                            <div class="flex items-center rounded-md shadow-sm bg-white border border-gray-300 focus-within:border-[#0d6efd] focus-within:ring-4 focus-within:ring-[#0d6efd]/25 w-24">
                                 <span class="pl-2 text-gray-500 text-sm">Bs</span>
                                 <input 
                                     type="number" 
@@ -494,21 +536,7 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
                     <span class="text-primary">Bs ${totals.finalTotal.toFixed(2)}</span>
                 </div>
             </div>
-            <div class="grid grid-cols-3 gap-2">
-                 <button 
-                    onClick=${() => setSelectedPaymentMethod('Efectivo')}
-                    class="flex flex-col items-center justify-center p-2 rounded-md text-sm font-semibold transition-colors ${selectedPaymentMethod === 'Efectivo' ? 'bg-primary text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}"
-                >${ICONS.payments} Efectivo</button>
-                 <button 
-                    onClick=${() => setSelectedPaymentMethod('Tarjeta')}
-                    class="flex flex-col items-center justify-center p-2 rounded-md text-sm font-semibold transition-colors ${selectedPaymentMethod === 'Tarjeta' ? 'bg-primary text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}"
-                >${ICONS.credit_card} Tarjeta</button>
-                 <button 
-                    onClick=${() => setSelectedPaymentMethod('QR')}
-                    class="flex flex-col items-center justify-center p-2 rounded-md text-sm font-semibold transition-colors ${selectedPaymentMethod === 'QR' ? 'bg-primary text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}"
-                >${ICONS.qr_code_2} QR</button>
-            </div>
-            <button disabled=${cart.length === 0} class="w-full flex items-center justify-center gap-2 text-center rounded-lg bg-green-600 px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
+            <button onClick=${onFinalizeSale} disabled=${cart.length === 0} class="w-full flex items-center justify-center gap-2 text-center rounded-lg bg-green-600 px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
                 ${ICONS.pos}
                 Finalizar Venta
             </button>
@@ -526,7 +554,6 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilters, setActiveFilters] = useState({ category: [], brand: [] });
     const [isFilterSidebarOpen, setFilterSidebarOpen] = useState(false);
-    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('Efectivo');
     
     const [defaultPriceListId, setDefaultPriceListId] = useState(null);
     const [activePriceListId, setActivePriceListId] = useState(null);
@@ -545,6 +572,8 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const [isClienteFormOpen, setIsClienteFormOpen] = useState(false);
     const [clienteToEdit, setClienteToEdit] = useState(null);
     const [selectedClientId, setSelectedClientId] = useState(null);
+
+    const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
 
     const fetchData = async () => {
         startLoading();
@@ -732,6 +761,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         setTaxRate('');
         setDiscountValue('');
         setCustomPrices({});
+        setSelectedClientId(null);
     };
 
     const handleOpenPricePopover = (e, item) => {
@@ -843,13 +873,61 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         }
     };
 
+    const handleConfirmSale = async (saleDetails) => {
+        startLoading();
+        setIsCheckoutModalOpen(false); // Close modal immediately
+        try {
+            const saleItems = cart.map(item => {
+                const originalPrice = getActivePriceForProduct(item.product);
+                const effectivePrice = customPrices[item.product.id]?.newPrice ?? originalPrice;
+                const fullProduct = posData.products.find(p => p.id === item.product.id);
+                return {
+                    producto_id: item.product.id,
+                    cantidad: item.quantity,
+                    precio_unitario_aplicado: effectivePrice,
+                    costo_unitario_en_venta: fullProduct?.prices?.[defaultPriceListId]?.precio - fullProduct?.prices?.[defaultPriceListId]?.ganancia_maxima || 0
+                };
+            });
+
+            const payload = {
+                p_venta: {
+                    cliente_id: selectedClientId,
+                    sucursal_id: user.sucursal_id,
+                    total: totals.finalTotal,
+                    subtotal: totals.subtotal,
+                    descuento: totals.totalDiscount,
+                    impuestos: totals.taxAmount,
+                    metodo_pago: saleDetails.metodoPago,
+                    tipo_venta: saleDetails.tipoVenta,
+                    abono_inicial: saleDetails.montoRecibido,
+                    fecha_vencimiento: saleDetails.fechaVencimiento
+                },
+                p_items: saleItems
+            };
+
+            const { error } = await supabase.rpc('registrar_venta', payload);
+
+            if (error) throw error;
+            
+            addToast({ message: 'Venta registrada con éxito.', type: 'success' });
+            handleClearCart();
+            fetchData(); // Refrescar stock de productos
+
+        } catch (err) {
+            console.error('Error al registrar la venta:', err);
+            addToast({ message: `Error al registrar la venta: ${err.message}`, type: 'error' });
+        } finally {
+            stopLoading();
+        }
+    };
+
     const cartPanelProps = {
         cart, posData, activePriceListId, setActivePriceListId,
         handleClearCart, getPriceForProduct: getActivePriceForProduct,
         handleUpdateQuantity, handleRemoveFromCart, totals,
         taxRate, setTaxRate, discountValue,
         onDiscountChange: handleDiscountChange,
-        selectedPaymentMethod, setSelectedPaymentMethod,
+        onFinalizeSale: () => setIsCheckoutModalOpen(true),
         onOpenPricePopover: handleOpenPricePopover, customPrices,
         defaultPriceListId, isPriceRuleActive, selectedClientId,
         setSelectedClientId, setIsClienteFormOpen
@@ -878,7 +956,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                                     placeholder="Buscar por SKU, nombre o modelo..." 
                                     value=${searchTerm} 
                                     onInput=${e => setSearchTerm(e.target.value)} 
-                                    class="block w-full rounded-md border-0 pl-10 p-2 pr-10 bg-white text-gray-900 placeholder-gray-500 shadow-sm ring-1 ring-inset ring-gray-300 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200" 
+                                    class="block w-full rounded-md border border-gray-300 p-2 pl-10 bg-white text-gray-900 placeholder-gray-500 shadow-sm focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm transition-colors duration-200" 
                                 />
                                 ${searchTerm && html`
                                     <button 
@@ -990,6 +1068,14 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                 onClose=${() => setDetailModalOpen(false)}
                 product=${productForDetailView}
                 currentUserSucursal=${user.sucursal}
+            />
+
+            <${CheckoutModal}
+                isOpen=${isCheckoutModalOpen}
+                onClose=${() => setIsCheckoutModalOpen(false)}
+                onConfirm=${handleConfirmSale}
+                total=${totals.finalTotal}
+                clienteId=${selectedClientId}
             />
         <//>
     `;

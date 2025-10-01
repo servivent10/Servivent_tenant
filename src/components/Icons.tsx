@@ -19,7 +19,9 @@ export const ICONS = {
     close: html`<${Icon} name="close" />`,
     chevron_right: html`<${Icon} name="chevron_right" className="text-xl" />`,
     chevron_left: html`<${Icon} name="chevron_left" className="text-xl" />`,
-    chevron_down: html`<${Icon} name="expand_more" />`,
+    chevron_down: html`<${Icon} name="expand_more" className="text-xl" />`,
+    // FIX: Add missing 'chevron_up' icon.
+    chevron_up: html`<${Icon} name="expand_less" className="text-xl" />`,
     settings: html`<${Icon} name="settings" />`,
     business: html`<${Icon} name="business_center" />`,
     add: html`<${Icon} name="add" />`,

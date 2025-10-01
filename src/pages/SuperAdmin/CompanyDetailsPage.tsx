@@ -460,24 +460,24 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
                 <div class="space-y-4 text-sm text-gray-600">
                     <div>
                         <label for="planId" class="block font-medium leading-6 text-gray-900">Plan</label>
-                        <select id="planId" name="planId" value=${paymentData.planId} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
+                        <select id="planId" name="planId" value=${paymentData.planId} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
                             ${UPGRADE_PLANS.filter(p => p.prices.custom === undefined).map(plan => html`<option value=${plan.id}>${plan.title}</option>`)}
                         </select>
                     </div>
                      <div>
                         <label for="cycle" class="block font-medium leading-6 text-gray-900">Ciclo de Facturación</label>
-                        <select id="cycle" name="cycle" value=${paymentData.cycle} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
+                        <select id="cycle" name="cycle" value=${paymentData.cycle} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
                             ${availableCyclesForSelectedPlan.map(cycle => html`<option value=${cycle}>${{monthly: 'Mensual', yearly: 'Anual', lifetime: 'Pago Único'}[cycle]}</option>`)}
                         </select>
                     </div>
                     <${FormInput} label="Monto a Pagar (Bs)" name="monto" type="number" value=${paymentData.monto} onInput=${handlePaymentInput} />
                      <div>
                         <label for="fecha_vencimiento" class="block font-medium leading-6 text-gray-900">Nueva Fecha de Vencimiento</label>
-                         <input id="fecha_vencimiento" name="fecha_vencimiento" type="date" value=${paymentData.fecha_vencimiento} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-0 p-2 bg-white text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm transition-colors duration-200" />
+                         <input id="fecha_vencimiento" name="fecha_vencimiento" type="date" value=${paymentData.fecha_vencimiento} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border border-gray-300 p-2 bg-white text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm transition-colors duration-200" />
                     </div>
                     <div>
                         <label for="metodo_pago" class="block font-medium leading-6 text-gray-900">Método de Pago</label>
-                        <select id="metodo_pago" name="metodo_pago" value=${paymentData.metodo_pago} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
+                        <select id="metodo_pago" name="metodo_pago" value=${paymentData.metodo_pago} onInput=${handlePaymentInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
                             <option>Transferencia Bancaria</option>
                             <option>Efectivo</option>
                             <option>QR</option>

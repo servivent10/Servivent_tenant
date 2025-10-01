@@ -47,7 +47,7 @@ export function FilterPanel({ counts, activeFilters, onFilterChange, onClearFilt
                         placeholder="Buscar..." 
                         value=${filterSearchTerm} 
                         onInput=${e => setFilterSearchTerm(e.target.value)}
-                        class="block w-full rounded-md border-0 pl-10 p-2 bg-white text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm"
+                        class="block w-full rounded-md border border-gray-300 p-2 pl-10 bg-white text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm"
                     />
                 </div>
                 
