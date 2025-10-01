@@ -74,7 +74,7 @@ function StepPlan({ onBack, onSelectPlan, error }) {
             ${error && html`<div class="mt-4 p-4 rounded-md bg-red-50 text-red-700 text-sm" aria-live="assertive"><p>${error}</p></div>`}
             
             <div class="isolate mx-auto mt-6 grid grid-cols-1 gap-8 md:grid-cols-2">
-                ${REGISTRATION_PLANS.map(plan => html`<${PlanCard} plan=${plan} onSelect=${onSelectPlan} />`)}
+                ${REGISTRATION_PLANS.filter(p => !p.prices.free).map(plan => html`<${PlanCard} plan=${plan} onSelect=${onSelectPlan} showTrialInfo=${true} />`)}
             </div>
 
             <div class="mt-8 flex justify-start">
@@ -90,18 +90,17 @@ function RegistrationSuccess({ successData, navigate }) {
             <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
                 <div class="text-green-600 text-4xl">${ICONS.success}</div>
             </div>
-            <h3 class="mt-6 text-2xl font-bold text-gray-900">¡Registro Completado!</h3>
+            <h3 class="mt-6 text-2xl font-bold text-gray-900">¡Solicitud Enviada!</h3>
             <div class="mt-4 text-gray-600 space-y-2">
-                <p>Tu empresa <span class="font-semibold text-gray-800">${successData.empresa}</span> ha sido registrada exitosamente.</p>
-                <p>Se ha creado una cuenta de Propietario para el correo <span class="font-semibold text-gray-800">${successData.email}</span>.</p>
-                <p class="mt-4">Ya puedes iniciar sesión para empezar a configurar tu negocio.</p>
+                <p>Tu empresa <span class="font-semibold text-gray-800">${successData.empresa}</span> ha sido registrada y está pendiente de aprobación.</p>
+                <p>Nuestro equipo revisará tu solicitud y activará tu cuenta a la brevedad posible. Recibirás una notificación por correo electrónico a <span class="font-semibold text-gray-800">${successData.email}</span> una vez que esté lista.</p>
             </div>
             <div class="mt-8">
                 <button 
                     onClick=${() => navigate('/login')}
                     class="w-full rounded-md bg-primary px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
-                    Aceptar e Iniciar Sesión
+                    Finalizar
                 </button>
             </div>
         </div>

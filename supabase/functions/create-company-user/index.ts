@@ -88,18 +88,15 @@ Deno.serve(async (req) => {
       final_sucursal_id = sucursalData.id;
       
       const fecha_fin = new Date();
-      if (plan_tipo.includes('Prueba Gratuita')) fecha_fin.setDate(fecha_fin.getDate() + 30);
-      else if (plan_tipo.includes('Mensual')) fecha_fin.setMonth(fecha_fin.getMonth() + 1);
-      else if (plan_tipo.includes('Anual')) fecha_fin.setFullYear(fecha_fin.getFullYear() + 1);
-      else if (plan_tipo.includes('Pago Único')) fecha_fin.setFullYear(fecha_fin.getFullYear() + 99);
-      else fecha_fin.setDate(fecha_fin.getDate() + 30); // Default fallback
+      // Todos los planes ahora tienen 30 días de prueba inicial
+      fecha_fin.setDate(fecha_fin.getDate() + 30);
 
       const { error: licenciaError } = await supabaseAdmin.from('licencias').insert({
           empresa_id: final_empresa_id,
           tipo_licencia: plan_tipo,
           fecha_inicio: new Date().toISOString(),
           fecha_fin: fecha_fin.toISOString(),
-          estado: 'Activa'
+          estado: 'Pendiente de Aprobación' // CAMBIO: Ahora el estado inicial es pendiente
         });
        if (licenciaError) throw new Error(`Error al crear la licencia: ${licenciaError.message}`);
 

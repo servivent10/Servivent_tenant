@@ -4,8 +4,9 @@
 */
 import { html } from 'htm/preact';
 import { useState } from 'preact/hooks';
+import { ICONS } from './Icons.js';
 
-export function PlanCard({ plan, onSelect, isCurrentPlan = false }) {
+export function PlanCard({ plan, onSelect, isCurrentPlan = false, showTrialInfo = false }) {
     const { title, prices, description, features, recommended } = plan;
 
     const availableCycles = Object.keys(prices).filter(c => c !== 'custom' && c !== 'free');
@@ -68,6 +69,10 @@ export function PlanCard({ plan, onSelect, isCurrentPlan = false }) {
         <h3 class="text-lg font-semibold leading-8 text-gray-900">${title}</h3>
         <p class="mt-4 text-sm leading-6 text-gray-600">${description}</p>
         
+        ${showTrialInfo && !prices.custom && html`
+            <p class="mt-4 text-sm font-semibold text-emerald-600 flex items-center gap-2">${ICONS.bolt} Incluye 30 días de prueba gratuita</p>
+        `}
+        
         ${availableCycles.length > 1 && html`
             <div class="mt-6">
                 <div class="flex items-center justify-center rounded-full bg-gray-100 p-1">
@@ -97,7 +102,7 @@ export function PlanCard({ plan, onSelect, isCurrentPlan = false }) {
           `)}
         </ul>
         <button onClick=${handleSelect} disabled=${isCurrentPlan} class=${buttonClass}>
-            ${isCurrentPlan ? 'Seleccionado' : (prices.custom ? 'Contactar' : 'Seleccionar Plan')}
+            ${isCurrentPlan ? 'Seleccionado' : (prices.custom ? 'Contactar' : 'Elegir Plan')}
         </button>
       </div>
     `;

@@ -25,6 +25,8 @@ const CompanyTable = ({ companies, onAction, onRowClick }) => {
                 return `${baseClasses} bg-red-100 text-red-800`;
             case 'Expirada':
                 return `${baseClasses} bg-yellow-100 text-yellow-800`;
+            case 'Pendiente de Aprobación':
+                return `${baseClasses} bg-blue-100 text-blue-800`;
             default:
                 return `${baseClasses} bg-gray-100 text-gray-800`;
         }
@@ -302,14 +304,16 @@ export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
                     icon: ICONS.suspend,
                     body: html`<p class="text-sm text-gray-600">Esto bloqueará el acceso a todos los usuarios de <span class="font-bold text-gray-800">${company.nombre}</span>. ¿Estás seguro?</p>`
                 };
-            case 'activate':
+            case 'activate': {
+                const isSuspended = company.estado_licencia === 'Suspendida';
                  return {
-                    title: `Reactivar Empresa`,
-                    confirmText: 'Sí, reactivar',
+                    title: isSuspended ? `Reactivar Empresa` : `Activar Empresa`,
+                    confirmText: isSuspended ? 'Sí, reactivar' : 'Sí, activar',
                     variant: 'primary',
                     icon: ICONS.activate,
-                    body: html`<p class="text-sm text-gray-600">Esto restaurará el acceso a todos los usuarios de <span class="font-bold text-gray-800">${company.nombre}</span>. ¿Estás seguro?</p>`
+                    body: html`<p class="text-sm text-gray-600">Esto ${isSuspended ? 'restaurará el' : 'dará'} acceso a todos los usuarios de <span class="font-bold text-gray-800">${company.nombre}</span>. ¿Estás seguro?</p>`
                 };
+            }
             default:
                 return {};
         }

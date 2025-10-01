@@ -24,11 +24,15 @@ Estos scripts añaden la lógica de backend para los diferentes módulos de la a
 -   `06_FEATURE_superadmin.md`
 -   `07_FEATURE_company_details.md`
 -   `08_FEATURE_productos.md`
--   `09_FIX_CASCADE_DELETES.md`: **(IMPORTANTE)** Asegura la integridad referencial para eliminaciones.
+-   `09_FIX_CASCADE_DELETES.md`: **(OBSOLETO)** Reemplazado por el script 17.
 -   `10_FEATURE_categorias.md`
 -   `11_FEATURE_compras.md`
 -   `12_SCHEMA_cleanup_empresa_contact_info.md`: Elimina columnas redundantes de la tabla de empresas.
--   `13_FIX_price_function_ambiguity.md`: **(NUEVO)** Resuelve un error de ambigüedad al guardar precios de productos.
+-   `13_FIX_price_function_ambiguity.md`: Resuelve un error de ambigüedad al guardar precios de productos.
+-   `14_FEATURE_clientes.md`
+-   `15_FEATURE_ventas.md`
+-   `16_FEATURE_compras_filtros_y_roles.md`
+-   `17_FIX_FULL_CASCADE_DELETES.md`: **(IMPORTANTE)** Solución completa que asegura la integridad referencial para la eliminación de empresas.
 
 ## Scripts de Corrección (Fixes)
 

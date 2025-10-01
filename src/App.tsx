@@ -32,6 +32,7 @@ import { GastosPage } from './pages/Tenant/GastosPage.js';
 import { LicenciaPage } from './pages/Tenant/LicenciaPage.js';
 import { ConfiguracionPage } from './pages/Tenant/ConfiguracionPage.js';
 import { SuspendedLicensePage } from './pages/Tenant/SuspendedLicensePage.js';
+import { PendingApprovalPage } from './pages/Tenant/PendingApprovalPage.js';
 import { AdminToolPage } from './pages/Admin/AdminToolPage.js';
 import { ToastProvider, useToast } from './hooks/useToast.js';
 import { LoadingProvider } from './hooks/useLoading.js';
@@ -196,8 +197,8 @@ function AppContent() {
                     sucursal: profile.rol === 'SuperAdmin' ? 'Global' : branchName,
                 });
 
-                if (companyData && companyData.licenseStatus === 'Suspendida') {
-                    // Renderer will handle showing the suspended page.
+                if (companyData && (companyData.licenseStatus === 'Suspendida' || companyData.licenseStatus === 'Pendiente de Aprobación')) {
+                    // Renderer will handle showing the appropriate page.
                 } else {
                     const expectedPath = profile.rol === 'SuperAdmin' ? '/superadmin' : '/dashboard';
                     const currentHash = window.location.hash.substring(1);
@@ -339,6 +340,8 @@ function AppContent() {
                 <//>`;
         } else if (companyInfo && companyInfo.licenseStatus === 'Suspendida' && displayUser.role !== 'SuperAdmin') {
             content = html`<${SuspendedLicensePage} user=${displayUser} onLogout=${handleLogout} onProfileUpdate=${handleProfileUpdate} companyInfo=${companyInfo} />`;
+        } else if (companyInfo && companyInfo.licenseStatus === 'Pendiente de Aprobación' && displayUser.role !== 'SuperAdmin') {
+            content = html`<${PendingApprovalPage} user=${displayUser} onLogout=${handleLogout} onProfileUpdate=${handleProfileUpdate} companyInfo=${companyInfo} />`;
         } else if (displayUser.role === 'SuperAdmin') {
             const companyDetailsMatch = currentPath.match(/^\/superadmin\/empresa\/(.+)$/);
             if (companyDetailsMatch) {

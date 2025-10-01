@@ -101,25 +101,8 @@ export const UPGRADE_PLANS: Plan[] = [
 // =================================================================
 // PLANES PARA EL FLUJO DE REGISTRO
 // =================================================================
-// Esta lista incluye la Prueba Gratuita y luego todos los planes de pago.
+// Esta lista ahora solo contiene los planes de pago, a los que se les añadirá
+// la información de la prueba gratuita de 30 días en la UI.
 export const REGISTRATION_PLANS: Plan[] = [
-    {
-        id: 'trial',
-        title: 'Prueba Gratuita',
-        prices: {
-            free: true,
-        },
-        // La prueba gratuita tiene los límites del plan Profesional
-        limits: {
-            maxUsers: 10,
-            maxBranches: 3,
-        },
-        description: 'Prueba las funciones del Plan Profesional durante 30 días.',
-        features: [
-            'Acceso completo a funciones premium',
-            'Sin compromiso de pago',
-            'Soporte por correo electrónico'
-        ],
-    },
     ...UPGRADE_PLANS, // Reutiliza los planes de pago definidos arriba
 ];
