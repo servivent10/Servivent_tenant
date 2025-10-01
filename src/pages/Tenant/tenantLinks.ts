@@ -23,6 +23,8 @@ export function getTenantSidebarLinks(role) {
             { name: 'Compras', href: '#/compras', icon: ICONS.purchases },
             { name: 'Ventas', href: '#/ventas', icon: ICONS.sales }
         );
+    } else if (role === 'Empleado') {
+        links.push({ name: 'Ventas', href: '#/ventas', icon: ICONS.sales });
     }
     
     // Add Sucursales link with dynamic name
