@@ -12,10 +12,6 @@ export function getTenantSidebarLinks(role) {
         { name: 'Productos', href: '#/productos', icon: ICONS.products },
     ];
     
-    if (role === 'Propietario' || role === 'Administrador') {
-        links.push({ name: 'Categorías', href: '#/categorias', icon: ICONS.category });
-    }
-
     links.push({ name: 'Inventarios', href: '#/inventarios', icon: ICONS.inventory });
 
     if (role === 'Propietario' || role === 'Administrador') {

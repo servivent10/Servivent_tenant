@@ -1,15 +1,21 @@
 -- =============================================================================
--- CLIENTS (CLIENTES) MODULE - DATABASE SETUP
+-- CLIENTS (CLIENTES) MODULE - DATABASE SETUP (V3 - Secure Client Code)
 -- =============================================================================
--- Este script crea toda la estructura de base de datos y la lógica de negocio
--- para el nuevo módulo de Clientes.
+-- Este script actualiza la lógica de negocio para el módulo de Clientes,
+-- reemplazando el código de cliente predecible por uno aleatorio, corto y
+-- globalmente único, ideal para ser usado de cara al cliente.
 --
 -- **INSTRUCCIONES:**
 -- Ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- Paso 1: Creación de la Tabla `clientes`
+-- Paso 1: Habilitar la extensión pgcrypto para generar UUIDs aleatorios
+-- -----------------------------------------------------------------------------
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- -----------------------------------------------------------------------------
+-- Paso 2: Creación y Modificación de la Tabla `clientes`
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.clientes (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
@@ -24,6 +30,16 @@ CREATE TABLE IF NOT EXISTS public.clientes (
     created_at timestamptz DEFAULT now() NOT NULL
 );
 
+-- ACTUALIZADO: Añadir columna `codigo_cliente` y constraint de unicidad GLOBAL
+ALTER TABLE public.clientes ADD COLUMN IF NOT EXISTS codigo_cliente text;
+-- Eliminar la constraint antigua si existe (por empresa)
+ALTER TABLE public.clientes DROP CONSTRAINT IF EXISTS clientes_codigo_cliente_empresa_id_key;
+-- Eliminar la nueva constraint si ya se ejecutó una versión anterior de este script
+ALTER TABLE public.clientes DROP CONSTRAINT IF EXISTS clientes_codigo_cliente_key;
+-- Añadir la nueva constraint de unicidad GLOBAL
+ALTER TABLE public.clientes ADD CONSTRAINT clientes_codigo_cliente_key UNIQUE (codigo_cliente);
+
+
 -- Habilitar RLS y crear política de seguridad
 ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Enable all for own company" ON public.clientes;
@@ -32,10 +48,15 @@ FOR ALL USING (empresa_id = (SELECT empresa_id FROM public.usuarios WHERE id = a
 
 
 -- -----------------------------------------------------------------------------
--- Paso 2: Funciones RPC para Clientes
+-- Paso 3: Funciones RPC para Clientes
 -- -----------------------------------------------------------------------------
 
--- Función para obtener todos los clientes de una empresa
+-- ELIMINADO: La función get_initials ya no es necesaria.
+DROP FUNCTION IF EXISTS public.get_initials(text);
+
+
+-- ACTUALIZADO: Función para obtener todos los clientes de una empresa
+DROP FUNCTION IF EXISTS public.get_company_clients();
 CREATE OR REPLACE FUNCTION get_company_clients()
 RETURNS TABLE (
     id uuid,
@@ -45,7 +66,8 @@ RETURNS TABLE (
     email text,
     direccion text,
     avatar_url text,
-    saldo_pendiente numeric
+    saldo_pendiente numeric,
+    codigo_cliente text
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -56,7 +78,7 @@ DECLARE
 BEGIN
     RETURN QUERY
     SELECT
-        c.id, c.nombre, c.nit_ci, c.telefono, c.email, c.direccion, c.avatar_url, c.saldo_pendiente
+        c.id, c.nombre, c.nit_ci, c.telefono, c.email, c.direccion, c.avatar_url, c.saldo_pendiente, c.codigo_cliente
     FROM
         public.clientes c
     WHERE
@@ -67,7 +89,8 @@ END;
 $$;
 
 
--- Función para crear o actualizar un cliente (Upsert)
+-- ACTUALIZADO: Función para crear o actualizar un cliente (Upsert) con código aleatorio
+DROP FUNCTION IF EXISTS public.upsert_client(uuid, text, text, text, text, text, text);
 CREATE OR REPLACE FUNCTION upsert_client(
     p_id uuid,
     p_nombre text,
@@ -77,7 +100,7 @@ CREATE OR REPLACE FUNCTION upsert_client(
     p_direccion text,
     p_avatar_url text
 )
-RETURNS uuid
+RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
@@ -85,12 +108,29 @@ AS $$
 DECLARE
     caller_empresa_id uuid := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid());
     v_cliente_id uuid;
+    v_new_client_code text;
 BEGIN
     IF p_id IS NULL THEN
-        INSERT INTO public.clientes(empresa_id, nombre, nit_ci, telefono, email, direccion, avatar_url)
-        VALUES (caller_empresa_id, p_nombre, p_nit_ci, p_telefono, p_email, p_direccion, p_avatar_url)
-        RETURNING id INTO v_cliente_id;
+        -- Crear un nuevo cliente con un código único aleatorio
+        LOOP
+            -- Generar un código alfanumérico de 8 caracteres
+            v_new_client_code := upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 8));
+            
+            BEGIN
+                -- Intentar insertar el nuevo cliente con el código generado
+                INSERT INTO public.clientes(empresa_id, nombre, nit_ci, telefono, email, direccion, avatar_url, codigo_cliente)
+                VALUES (caller_empresa_id, p_nombre, p_nit_ci, p_telefono, p_email, p_direccion, p_avatar_url, v_new_client_code)
+                RETURNING id INTO v_cliente_id;
+                
+                -- Si la inserción es exitosa, salir del bucle
+                EXIT;
+            EXCEPTION WHEN unique_violation THEN
+                -- Si el código ya existe, el bucle continuará para generar uno nuevo
+                RAISE NOTICE 'Colisión de código de cliente detectada. Reintentando...';
+            END;
+        END LOOP;
     ELSE
+        -- Actualizar un cliente existente (sin cambiar el código)
         UPDATE public.clientes
         SET
             nombre = p_nombre,
@@ -102,11 +142,12 @@ BEGIN
         WHERE id = p_id AND empresa_id = caller_empresa_id;
         v_cliente_id := p_id;
     END IF;
-    RETURN v_cliente_id;
+    
+    RETURN json_build_object('id', v_cliente_id);
 END;
 $$;
 
--- Función para eliminar un cliente
+-- Función para eliminar un cliente (sin cambios)
 CREATE OR REPLACE FUNCTION delete_client(p_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -119,19 +160,13 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM public.clientes WHERE id = p_id AND empresa_id = caller_empresa_id) THEN
         RAISE EXCEPTION 'Cliente no encontrado o no pertenece a tu empresa.';
     END IF;
-
-    -- Futura validación: No permitir eliminar si tiene saldo pendiente o ventas asociadas.
-    -- IF (SELECT saldo_pendiente FROM public.clientes WHERE id = p_id) > 0 THEN
-    --     RAISE EXCEPTION 'No se puede eliminar un cliente con saldo pendiente.';
-    -- END IF;
-
     DELETE FROM public.clientes WHERE id = p_id;
 END;
 $$;
 
 
 -- -----------------------------------------------------------------------------
--- Paso 3: Actualizar la función `get_pos_data` para incluir clientes
+-- Paso 4: Actualizar la función `get_pos_data` para incluir clientes
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_pos_data()
 RETURNS json
@@ -176,8 +211,17 @@ BEGIN
 
     SELECT json_agg(p_info) INTO products_list FROM (
         SELECT
-            p.id, p.nombre, p.sku, p.marca, p.modelo, p.descripcion, p.unidad_medida,
+            p.id, p.nombre, p.sku, p.marca, p.modelo, p.descripcion, p.unidad_medida, p.created_at,
             c.nombre as categoria_nombre,
+            p.categoria_id,
+            (
+                SELECT COALESCE(SUM(vi.cantidad), 0)
+                FROM public.venta_items vi
+                JOIN public.ventas v ON vi.venta_id = v.id
+                WHERE vi.producto_id = p.id
+                  AND v.empresa_id = caller_empresa_id
+                  AND v.fecha >= (now() - interval '90 days')
+            ) as unidades_vendidas_90_dias,
             (SELECT img.imagen_url FROM public.imagenes_productos img WHERE img.producto_id = p.id ORDER BY img.orden, img.created_at LIMIT 1) as imagen_principal,
             COALESCE((SELECT i.cantidad FROM public.inventarios i WHERE i.producto_id = p.id AND i.sucursal_id = caller_sucursal_id), 0) as stock_sucursal,
             (

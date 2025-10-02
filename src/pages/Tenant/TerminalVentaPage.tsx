@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabaseClient.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { useLoading } from '../../hooks/useLoading.js';
-import { FilterPanel } from '../../components/FilterPanel.js';
+import { FilterBar, AdvancedFilterPanel } from '../../components/shared/FilterComponents.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 import { ClienteFormModal } from '../../components/modals/ClienteFormModal.js';
 import { Avatar } from '../../components/Avatar.js';
@@ -544,6 +544,21 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
     `;
 }
 
+const initialFilters = {
+    searchTerm: '',
+    status: 'all',
+    category_ids: [],
+    brand_names: [],
+};
+
+const posStatusOptions = [
+    { value: 'all', label: 'Todos' },
+    { value: 'in_stock', label: 'En Stock' },
+    { value: 'most_sold', label: 'Los Más Vendidos' },
+    { value: 'on_sale', label: 'En Oferta' },
+    { value: 'new_arrival', label: 'Nuevos Productos' },
+];
+
 export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo, notifications }) {
     const breadcrumbs = [ { name: 'Punto de Venta', href: '#/terminal-venta' } ];
     const { addToast } = useToast();
@@ -551,9 +566,9 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     
     const [posData, setPosData] = useState({ products: [], price_lists: [], clients: [] });
     const [cart, setCart] = useState([]);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [activeFilters, setActiveFilters] = useState({ category: [], brand: [] });
-    const [isFilterSidebarOpen, setFilterSidebarOpen] = useState(false);
+    const [filters, setFilters] = useState(initialFilters);
+    const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
+    const [filterOptions, setFilterOptions] = useState({ categories: [], brands: [] });
     
     const [defaultPriceListId, setDefaultPriceListId] = useState(null);
     const [activePriceListId, setActivePriceListId] = useState(null);
@@ -578,16 +593,24 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const fetchData = async () => {
         startLoading();
         try {
-            const { data, error } = await supabase.rpc('get_pos_data');
-            if (error) throw error;
-            setPosData(data);
-            const defaultList = data.price_lists.find(pl => pl.es_predeterminada);
+             const [posDataRes, optionsRes] = await Promise.all([
+                supabase.rpc('get_pos_data'),
+                supabase.rpc('get_inventory_filter_data')
+            ]);
+
+            if (posDataRes.error) throw posDataRes.error;
+            if (optionsRes.error) throw optionsRes.error;
+
+            setPosData(posDataRes.data);
+            setFilterOptions(optionsRes.data || { categories: [], brands: [] });
+            
+            const defaultList = posDataRes.data.price_lists.find(pl => pl.es_predeterminada);
             if (defaultList) {
                 setDefaultPriceListId(defaultList.id);
                 setActivePriceListId(defaultList.id);
-            } else if (data.price_lists.length > 0) {
-                setDefaultPriceListId(data.price_lists[0].id);
-                setActivePriceListId(data.price_lists[0].id);
+            } else if (posDataRes.data.price_lists.length > 0) {
+                setDefaultPriceListId(posDataRes.data.price_lists[0].id);
+                setActivePriceListId(posDataRes.data.price_lists[0].id);
             }
         } catch (err) {
             console.error("Error fetching POS data:", err);
@@ -602,13 +625,13 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     }, []);
 
     useEffect(() => {
-        if (isCartSidebarOpen || isFilterSidebarOpen) {
+        if (isCartSidebarOpen) {
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = 'auto';
         }
         return () => { document.body.style.overflow = 'auto'; };
-    }, [isCartSidebarOpen, isFilterSidebarOpen]);
+    }, [isCartSidebarOpen]);
 
 
     const cartMap = useMemo(() => {
@@ -617,47 +640,48 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
 
     const totalItemsInCart = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
 
-    const filterCounts = useMemo(() => {
-        if (!posData?.products) return { categories: {}, brands: {} };
-        const categories = posData.products.reduce((acc, p) => {
-            const cat = p.categoria_nombre || 'Sin Categoría';
-            acc[cat] = (acc[cat] || 0) + 1;
-            return acc;
-        }, {});
-        const brands = posData.products.reduce((acc, p) => {
-            const brand = p.marca || 'Sin Marca';
-            acc[brand] = (acc[brand] || 0) + 1;
-            return acc;
-        }, {});
-        return { categories, brands };
-    }, [posData.products]);
-
     const filteredProducts = useMemo(() => {
-        return posData.products.filter(p => {
-            const matchesCategory = activeFilters.category.length === 0 || activeFilters.category.includes(p.categoria_nombre || 'Sin Categoría');
-            const matchesBrand = activeFilters.brand.length === 0 || activeFilters.brand.includes(p.marca || 'Sin Marca');
-            const searchTermLower = searchTerm.toLowerCase();
-            const matchesSearch = searchTerm === '' ||
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const baseFiltered = posData.products.filter(p => {
+            let matchesStatus = true;
+            if (filters.status === 'in_stock') {
+                matchesStatus = p.stock_sucursal > 0;
+            } else if (filters.status === 'on_sale') {
+                matchesStatus = p.prices && Object.keys(p.prices).some(priceListId => 
+                    priceListId !== defaultPriceListId && p.prices[priceListId]?.precio > 0
+                );
+            } else if (filters.status === 'new_arrival') {
+                matchesStatus = p.created_at && new Date(p.created_at) > thirtyDaysAgo;
+            }
+
+            const matchesCategory = filters.category_ids.length === 0 || filters.category_ids.includes(p.categoria_id);
+            const matchesBrand = filters.brand_names.length === 0 || filters.brand_names.includes(p.marca || 'Sin Marca');
+            const searchTermLower = filters.searchTerm.toLowerCase();
+            const matchesSearch = filters.searchTerm === '' ||
                 p.nombre?.toLowerCase().includes(searchTermLower) ||
                 p.sku?.toLowerCase().includes(searchTermLower) ||
                 p.modelo?.toLowerCase().includes(searchTermLower);
-            return matchesCategory && matchesBrand && matchesSearch;
+            
+            return matchesStatus && matchesCategory && matchesBrand && matchesSearch;
         });
-    }, [posData.products, activeFilters, searchTerm]);
 
-    const handleFilterChange = (type, value) => {
-        setActiveFilters(prev => {
-            const currentValues = prev[type];
-            const newValues = currentValues.includes(value)
-                ? currentValues.filter(v => v !== value)
-                : [...currentValues, value];
-            return { ...prev, [type]: newValues };
-        });
+        if (filters.status === 'most_sold') {
+            return [...baseFiltered].sort((a, b) => (b.unidades_vendidas_90_dias || 0) - (a.unidades_vendidas_90_dias || 0));
+        }
+
+        return baseFiltered;
+    }, [posData.products, filters, defaultPriceListId]);
+
+    const handleFilterChange = (e) => {
+        const { name, value } = e.target;
+        setFilters(prev => ({ ...prev, [name]: value }));
     };
     
     const handleClearFilters = () => {
-        setActiveFilters({ category: [], brand: [] });
-        if(isFilterSidebarOpen) setFilterSidebarOpen(false);
+        setFilters(initialFilters);
+        if(isAdvancedSearchOpen) setIsAdvancedSearchOpen(false);
     };
 
     const isPriceRuleActive = (priceInfo) => {
@@ -948,34 +972,20 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                 
                 <div class="bg-white rounded-lg border shadow-sm h-full flex flex-col lg:h-auto">
                     <div class="flex-shrink-0 p-4 border-b lg:sticky lg:top-0 lg:bg-white/80 lg:backdrop-blur-sm z-10">
-                        <div class="flex items-center gap-2">
-                            <div class="relative flex-grow">
-                                <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">${ICONS.search}</div>
-                                <input 
-                                    type="text" 
-                                    placeholder="Buscar por SKU, nombre o modelo..." 
-                                    value=${searchTerm} 
-                                    onInput=${e => setSearchTerm(e.target.value)} 
-                                    class="block w-full rounded-md border border-gray-300 p-2 pl-10 bg-white text-gray-900 placeholder-gray-500 shadow-sm focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm transition-colors duration-200" 
-                                />
-                                ${searchTerm && html`
-                                    <button 
-                                        onClick=${() => setSearchTerm('')}
-                                        class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 transition-colors"
-                                        aria-label="Limpiar búsqueda"
-                                    >
-                                        ${ICONS.close}
-                                    </button>
-                                `}
-                            </div>
-                            <button onClick=${() => setFilterSidebarOpen(true)} class="relative flex-shrink-0 flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
-                                ${ICONS.settings}
-                                <span class="hidden sm:inline">Filtrar</span>
-                                 ${(activeFilters.category.length > 0 || activeFilters.brand.length > 0) && html`
-                                    <span class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-white text-xs font-bold">${activeFilters.category.length + activeFilters.brand.length}</span>
-                                `}
-                            </button>
-                        </div>
+                         <${FilterBar} 
+                            filters=${filters}
+                            onFilterChange=${handleFilterChange}
+                            onClear=${handleClearFilters}
+                            onToggleAdvanced=${() => setIsAdvancedSearchOpen(p => !p)}
+                            isAdvancedOpen=${isAdvancedSearchOpen}
+                            statusOptions=${posStatusOptions}
+                        />
+                        <${AdvancedFilterPanel}
+                            isOpen=${isAdvancedSearchOpen}
+                            filters=${filters}
+                            onFilterChange=${handleFilterChange}
+                            filterOptions=${filterOptions}
+                        />
                     </div>
 
                     <div class="p-4 flex-grow lg:flex-grow-0 overflow-y-auto lg:overflow-visible">
@@ -1026,19 +1036,6 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                         <div class="flex flex-col h-full overflow-hidden">
                             <${CartPanel} ...${cartPanelProps} />
                         </div>
-                    </div>
-                </div>
-
-                <div class=${`fixed inset-0 z-40 flex transition-opacity duration-300 ease-linear ${isFilterSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} role="dialog" aria-modal="true">
-                    <div class="fixed inset-0 bg-gray-600 bg-opacity-75" aria-hidden="true" onClick=${() => setFilterSidebarOpen(false)}></div>
-                    <div class=${`relative flex w-full max-w-xs flex-1 flex-col bg-white shadow-xl overflow-y-auto transform transition duration-300 ease-in-out ${isFilterSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-                        <div class="absolute top-0 right-0 -mr-12 pt-2">
-                            <button type="button" class="ml-1 flex h-10 w-10 items-center justify-center rounded-full text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white" onClick=${() => setFilterSidebarOpen(false)}>
-                                <span class="sr-only">Cerrar filtros</span>
-                                ${ICONS.close}
-                            </button>
-                        </div>
-                        <${FilterPanel} counts=${filterCounts} activeFilters=${activeFilters} onFilterChange=${handleFilterChange} onClearFilters=${handleClearFilters} />
                     </div>
                 </div>
 

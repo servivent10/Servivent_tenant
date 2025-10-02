@@ -60,8 +60,8 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
     };
 
     const handleConfirm = async () => {
-        if (!formData.nombre.trim()) {
-            addToast({ message: 'El nombre del cliente es obligatorio.', type: 'error' });
+        if (!formData.nombre.trim() || !formData.telefono.trim()) {
+            addToast({ message: 'El nombre completo y el teléfono son obligatorios.', type: 'error' });
             return;
         }
         setIsLoading(true);
@@ -69,7 +69,7 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
             let avatarUrl = isEditMode ? clienteToEdit.avatar_url : null;
             let clienteId = isEditMode ? clienteToEdit.id : null;
 
-            const { data: upsertedId, error: upsertError } = await supabase.rpc('upsert_client', {
+            const { data: upsertedData, error: upsertError } = await supabase.rpc('upsert_client', {
                 p_id: clienteId,
                 p_nombre: formData.nombre,
                 p_nit_ci: formData.nit_ci,
@@ -77,9 +77,10 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
                 p_email: formData.email,
                 p_direccion: formData.direccion,
                 p_avatar_url: avatarUrl
-            });
+            }).single();
+
             if (upsertError) throw upsertError;
-            clienteId = upsertedId;
+            clienteId = upsertedData.id;
 
             if (avatarFile) {
                 const fileExt = avatarFile.name.split('.').pop();
@@ -138,12 +139,12 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
                     <input ref=${fileInputRef} type="file" class="hidden" accept="image/png, image/jpeg" onChange=${handleFileChange} />
                 </div>
                 <div class="md:col-span-2 space-y-4">
-                    <${FormInput} label="Nombre Completo" name="nombre" type="text" value=${formData.nombre} onInput=${handleInput} />
-                    <${FormInput} label="NIT o CI (Opcional)" name="nit_ci" type="text" value=${formData.nit_ci} onInput=${handleInput} required=${false} />
+                    <${FormInput} label="Nombre Completo" name="nombre" type="text" value=${formData.nombre} onInput=${handleInput} required=${true} />
                     <div class="grid grid-cols-2 gap-4">
-                        <${FormInput} label="Teléfono (Opcional)" name="telefono" type="tel" value=${formData.telefono} onInput=${handleInput} required=${false} />
-                        <${FormInput} label="Correo Electrónico (Opcional)" name="email" type="email" value=${formData.email} onInput=${handleInput} required=${false} />
+                        <${FormInput} label="Teléfono" name="telefono" type="tel" value=${formData.telefono} onInput=${handleInput} required=${true} />
+                        <${FormInput} label="NIT o CI (Opcional)" name="nit_ci" type="text" value=${formData.nit_ci} onInput=${handleInput} required=${false} />
                     </div>
+                    <${FormInput} label="Correo Electrónico (Opcional)" name="email" type="email" value=${formData.email} onInput=${handleInput} required=${false} />
                     <${FormInput} label="Dirección (Opcional)" name="direccion" type="text" value=${formData.direccion} onInput=${handleInput} required=${false} />
                 </div>
             </div>
