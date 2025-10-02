@@ -145,7 +145,8 @@ const ProductTable = ({ products, navigate, onEdit, onDelete, user }) => {
 export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
-    const [data, setData] = useState({ products: [], kpis: { total_products: 0, total_stock_items: 0, products_without_stock: 0 } });
+    const [products, setProducts] = useState([]);
+    const [kpis, setKpis] = useState({ total_products: 0, total_stock_items: 0, products_without_stock: 0 });
     const [isFormModalOpen, setFormModalOpen] = useState(false);
     const [productToEdit, setProductToEdit] = useState(null);
     const [productToDelete, setProductToDelete] = useState(null);
@@ -159,9 +160,20 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     const fetchData = async () => {
         startLoading();
         try {
-            const { data, error } = await supabase.rpc('get_company_products_with_stock');
+            const { data, error } = await supabase.rpc('get_company_products_with_stock_and_cost');
             if (error) throw error;
-            setData(data);
+            
+            const productData = data || [];
+            setProducts(productData);
+
+            const totalStock = productData.reduce((sum, p) => sum + Number(p.stock_total || 0), 0);
+            const withoutStock = productData.filter(p => (p.stock_total || 0) <= 0).length;
+
+            setKpis({
+                total_products: productData.length,
+                total_stock_items: totalStock,
+                products_without_stock: withoutStock
+            });
         } catch (err) {
             console.error("Error fetching products:", err);
             addToast({ message: `Error al cargar productos: ${err.message}`, type: 'error' });
@@ -242,23 +254,23 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     };
     
     const filterCounts = useMemo(() => {
-        if (!data?.products) return { categories: {}, brands: {} };
-        const categories = data.products.reduce((acc, p) => {
+        if (!products) return { categories: {}, brands: {} };
+        const categories = products.reduce((acc, p) => {
             const cat = p.categoria_nombre || 'Sin Categoría';
             acc[cat] = (acc[cat] || 0) + 1;
             return acc;
         }, {});
-        const brands = data.products.reduce((acc, p) => {
+        const brands = products.reduce((acc, p) => {
             const brand = p.marca || 'Sin Marca';
             acc[brand] = (acc[brand] || 0) + 1;
             return acc;
         }, {});
         return { categories, brands };
-    }, [data]);
+    }, [products]);
 
     const filteredProducts = useMemo(() => {
-        if (!data?.products) return [];
-        return data.products.filter(p => {
+        if (!products) return [];
+        return products.filter(p => {
             const lowercasedFilter = searchTerm.toLowerCase();
             const matchesSearch = searchTerm === '' ||
                 p.nombre?.toLowerCase().includes(lowercasedFilter) ||
@@ -270,7 +282,7 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
 
             return matchesSearch && matchesCategory && matchesBrand;
         }).sort((a, b) => a.nombre.localeCompare(b.nombre));
-    }, [data, searchTerm, activeFilters]);
+    }, [products, searchTerm, activeFilters]);
 
     const handleFilterChange = (type, value) => {
         setActiveFilters(prev => {
@@ -288,7 +300,6 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     };
 
     const breadcrumbs = [ { name: 'Productos', href: '#/productos' } ];
-    const kpis = data?.kpis || { total_products: 0, total_stock_items: 0, products_without_stock: 0 };
 
     const ProductList = () => html`
         <div class="grid grid-cols-1 xl:hidden gap-4">

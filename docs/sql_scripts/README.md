@@ -33,6 +33,7 @@ Estos scripts añaden la lógica de backend para los diferentes módulos de la a
 -   `15_FEATURE_ventas.md`
 -   `16_FEATURE_compras_filtros_y_roles.md`
 -   `17_FIX_FULL_CASCADE_DELETES.md`: **(IMPORTANTE)** Solución completa que asegura la integridad referencial para la eliminación de empresas.
+-   `18_FIX_inventory_view_and_cost.md`: **(NUEVO)** Corrige la función de vista de productos para incluir el costo y el stock mínimo, necesarios para el nuevo módulo de inventario.
 
 ## Scripts de Corrección (Fixes)
 
