@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { html } from 'htm/preact';
-import { useState, useEffect, useMemo } from 'preact/hooks';
+import { useState, useEffect, useMemo, useCallback } from 'preact/hooks';
 import { DashboardLayout } from '../../components/DashboardLayout.js';
 import { ICONS } from '../../components/Icons.js';
 import { supabase } from '../../lib/supabaseClient.js';
@@ -398,7 +398,7 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
     const [isAdjustModalOpen, setAdjustModalOpen] = useState(false);
     const [branchToAdjust, setBranchToAdjust] = useState(null);
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         startLoading();
         try {
             const { data, error } = await supabase.rpc('get_product_details', { p_producto_id: productoId });
@@ -411,11 +411,54 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
         } finally {
             stopLoading();
         }
-    };
+    }, [productoId, startLoading, stopLoading, addToast, navigate]);
 
     useEffect(() => {
         fetchData();
-    }, [productoId]);
+
+        const channel = supabase.channel(`db-changes-producto-${productoId}`);
+        const subscription = channel.on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'productos',
+                filter: `id=eq.${productoId}`
+            },
+            () => { 
+                addToast({ message: 'Los detalles del producto se han actualizado.', type: 'info', duration: 3000 });
+                fetchData();
+            }
+        ).on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'inventarios',
+                filter: `producto_id=eq.${productoId}`
+            },
+            () => {
+                addToast({ message: 'El inventario de este producto se ha actualizado.', type: 'info', duration: 3000 });
+                fetchData();
+            }
+        ).on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'precios_productos',
+                filter: `producto_id=eq.${productoId}`
+            },
+            () => {
+                addToast({ message: 'Los precios de este producto se han actualizado.', type: 'info', duration: 3000 });
+                fetchData();
+            }
+        ).subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [productoId, fetchData, addToast]);
 
     const handleEdit = () => {
         setFormModalOpen(true);
@@ -650,5 +693,4 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
                 />
             `}
         <//>
-    `;
-}
+    `;}

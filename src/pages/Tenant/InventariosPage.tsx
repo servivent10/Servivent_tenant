@@ -77,16 +77,30 @@ export function InventariosPage({ user, onLogout, onProfileUpdate, companyInfo, 
 
     useEffect(() => {
         fetchData();
-    }, [fetchData]);
-    
-    useEffect(() => {
-        const channel = supabase
-            .channel('realtime_inventarios')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'inventarios' }, (payload) => {
-                addToast({ message: 'El inventario se ha actualizado en tiempo real.', type: 'info', duration: 3000 });
+
+        const channel = supabase.channel('db-changes-inventory');
+        const subscription = channel.on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'inventarios' },
+            () => {
+                addToast({ message: 'El inventario se ha actualizado.', type: 'info', duration: 3000 });
                 fetchData();
-            })
-            .subscribe();
+            }
+        ).on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'productos' },
+            () => {
+                addToast({ message: 'Los datos de productos se han actualizado.', type: 'info', duration: 3000 });
+                fetchData();
+            }
+        ).on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'precios_productos' },
+            () => {
+                addToast({ message: 'Los costos o precios se han actualizado.', type: 'info', duration: 3000 });
+                fetchData();
+            }
+        ).subscribe();
 
         return () => {
             supabase.removeChannel(channel);

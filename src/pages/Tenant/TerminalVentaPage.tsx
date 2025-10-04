@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { html } from 'htm/preact';
-import { useState, useEffect, useMemo, useRef } from 'preact/hooks';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks';
 import { DashboardLayout } from '../../components/DashboardLayout.js';
 import { ICONS } from '../../components/Icons.js';
 import { supabase } from '../../lib/supabaseClient.js';
@@ -590,7 +590,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
 
     const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         startLoading();
         try {
              const [posDataRes, optionsRes] = await Promise.all([
@@ -607,22 +607,60 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             const defaultList = posDataRes.data.price_lists.find(pl => pl.es_predeterminada);
             if (defaultList) {
                 setDefaultPriceListId(defaultList.id);
-                setActivePriceListId(defaultList.id);
             } else if (posDataRes.data.price_lists.length > 0) {
                 setDefaultPriceListId(posDataRes.data.price_lists[0].id);
-                setActivePriceListId(posDataRes.data.price_lists[0].id);
             }
+
+            // Only set the active price list if it hasn't been set yet, to avoid overriding user selection
+            setActivePriceListId(currentId => {
+                if (currentId) return currentId; // Keep current selection if it exists
+
+                if (defaultList) {
+                    return defaultList.id;
+                } else if (posDataRes.data.price_lists.length > 0) {
+                    return posDataRes.data.price_lists[0].id;
+                }
+                return null;
+            });
         } catch (err) {
             console.error("Error fetching POS data:", err);
             addToast({ message: `Error crítico al cargar datos: ${err.message}`, type: 'error', duration: 10000 });
         } finally {
             stopLoading();
         }
-    };
+    }, [startLoading, stopLoading, addToast]);
 
     useEffect(() => {
         fetchData();
-    }, []);
+
+        const channel = supabase.channel('db-changes-pos');
+        const subscription = channel.on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'productos' },
+            () => { 
+                addToast({ message: 'El catálogo de productos se ha actualizado.', type: 'info', duration: 3000 });
+                fetchData();
+            }
+        ).on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'inventarios' },
+            () => { 
+                addToast({ message: 'El stock de productos se ha actualizado.', type: 'info', duration: 3000 });
+                fetchData();
+            }
+        ).on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'precios_productos' },
+            () => { 
+                addToast({ message: 'Los precios de productos se han actualizado.', type: 'info', duration: 3000 });
+                fetchData();
+            }
+        ).subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [fetchData, addToast]);
 
     useEffect(() => {
         if (isCartSidebarOpen) {
@@ -935,7 +973,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             
             addToast({ message: 'Venta registrada con éxito.', type: 'success' });
             handleClearCart();
-            fetchData(); // Refrescar stock de productos
+            fetchData(); // Immediately refetch data for the current user's screen
 
         } catch (err) {
             console.error('Error al registrar la venta:', err);

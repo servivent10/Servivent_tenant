@@ -335,10 +335,49 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
         }
     }, [addToast, startLoading, stopLoading]);
 
-
     useEffect(() => {
         fetchData();
-    }, [fetchData]);
+
+        const channel = supabase.channel('db-changes-productos');
+        const subscription = channel.on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'productos'
+            },
+            () => {
+                addToast({ message: 'El catálogo de productos se ha actualizado.', type: 'info', duration: 3000 });
+                fetchData();
+            }
+        ).on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'inventarios'
+            },
+            () => {
+                addToast({ message: 'El inventario se ha actualizado.', type: 'info', duration: 3000 });
+                fetchData();
+            }
+        ).on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'precios_productos'
+            },
+            () => {
+                addToast({ message: 'Los precios se han actualizado.', type: 'info', duration: 3000 });
+                fetchData();
+            }
+        ).subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [fetchData, addToast]);
 
     const handleAddProduct = () => {
         setIsFabOpen(false);
@@ -551,5 +590,4 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
                 onRefreshRequired=${fetchData}
             />
         <//>
-    `;
-}
+    `;}
