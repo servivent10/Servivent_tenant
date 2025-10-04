@@ -331,7 +331,10 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
         const cuentasPorCobrar = filteredVentas.reduce((sum, v) => v.estado_pago !== 'Pagada' ? sum + Number(v.saldo_pendiente || 0) : sum, 0);
         const ventasCredito = filteredVentas.filter(v => v.tipo_venta === 'Crédito').length;
         
-        return { totalMes, cuentasPorCobrar, ventasCredito, totalFiltrado };
+        const totalImpuestos = filteredVentas.reduce((sum, v) => sum + Number(v.impuestos || 0), 0);
+        const ventasConImpuestos = filteredVentas.filter(v => Number(v.impuestos || 0) > 0).length;
+        
+        return { totalMes, cuentasPorCobrar, ventasCredito, totalFiltrado, totalImpuestos, ventasConImpuestos };
     }, [filteredVentas, ventas]);
 
     const breadcrumbs = [ { name: 'Ventas', href: '#/ventas' } ];
@@ -385,13 +388,17 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
     return html`
         <${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink="Ventas" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo} notifications=${notifications}>
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"><h1 class="text-2xl font-semibold text-gray-900">Historial de Ventas</h1></div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mt-6">
                  <${KPI_Card} title="Total Vendido (Filtro)" value=${`Bs ${kpis.totalFiltrado.toFixed(2)}`} icon=${ICONS.sales} color="primary" />
+                 {/* FIX: Corrected icon name from 'ICONS.receipt_long' to 'ICONS.newExpense' which uses the 'receipt_long' icon. */}
+                 <${KPI_Card} title="Total Impuestos (Filtro)" value=${`Bs ${kpis.totalImpuestos.toFixed(2)}`} icon=${ICONS.newExpense} color="green" />
                  <${KPI_Card} title="Cuentas por Cobrar (Filtro)" value=${`Bs ${kpis.cuentasPorCobrar.toFixed(2)}`} icon=${ICONS.credit_score} color="amber" />
-                 <${KPI_Card} title="Ventas a Crédito (Filtro)" value=${kpis.ventasCredito} icon=${ICONS.newSale} color="green" />
+                 <${KPI_Card} title="Ventas con Impuesto (Filtro)" value=${kpis.ventasConImpuestos} icon=${ICONS.paid} />
+                 <${KPI_Card} title="Ventas a Crédito (Filtro)" value=${kpis.ventasCredito} icon=${ICONS.newSale} />
                  <${KPI_Card} title="Total Vendido (Este Mes)" value=${`Bs ${kpis.totalMes.toFixed(2)}`} icon=${ICONS.calendar_month} />
             </div>
             <div class="mt-8">
+                 {/* FIX: Changed variable 'isAdvancedOpen' to 'isAdvancedSearchOpen' to match the state variable name. */}
                  <${FilterBar} filters=${filters} onFilterChange=${handleFilterChange} onClear=${handleClearFilters} onToggleAdvanced=${() => setIsAdvancedSearchOpen(prev => !prev)} isAdvancedOpen=${isAdvancedSearchOpen} />
                  <${AdvancedFilterPanel} isOpen=${isAdvancedSearchOpen} filters=${filters} onFilterChange=${handleFilterChange} filterOptions=${filterOptions} user=${user} />
                  <div class="mt-6 md:mt-0">

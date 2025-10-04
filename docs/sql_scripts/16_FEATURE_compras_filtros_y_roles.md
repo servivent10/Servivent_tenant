@@ -91,7 +91,8 @@ RETURNS TABLE (
     estado_pago text,
     saldo_pendiente numeric,
     tipo_venta text,
-    metodo_pago text
+    metodo_pago text,
+    impuestos numeric
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -108,7 +109,7 @@ BEGIN
 
     IF caller_rol = 'Propietario' THEN
         RETURN QUERY
-        SELECT v.id, v.folio, v.cliente_id, c.nombre, v.usuario_id, u.nombre_completo, v.sucursal_id, s.nombre, v.fecha, v.total, v.estado_pago, v.saldo_pendiente, v.tipo_venta, v.metodo_pago
+        SELECT v.id, v.folio, v.cliente_id, c.nombre, v.usuario_id, u.nombre_completo, v.sucursal_id, s.nombre, v.fecha, v.total, v.estado_pago, v.saldo_pendiente, v.tipo_venta, v.metodo_pago, v.impuestos
         FROM public.ventas v
         LEFT JOIN public.clientes c ON v.cliente_id = c.id
         LEFT JOIN public.usuarios u ON v.usuario_id = u.id
@@ -117,7 +118,7 @@ BEGIN
         ORDER BY v.created_at DESC;
     ELSE -- Administrador o Empleado
         RETURN QUERY
-        SELECT v.id, v.folio, v.cliente_id, c.nombre, v.usuario_id, u.nombre_completo, v.sucursal_id, s.nombre, v.fecha, v.total, v.estado_pago, v.saldo_pendiente, v.tipo_venta, v.metodo_pago
+        SELECT v.id, v.folio, v.cliente_id, c.nombre, v.usuario_id, u.nombre_completo, v.sucursal_id, s.nombre, v.fecha, v.total, v.estado_pago, v.saldo_pendiente, v.tipo_venta, v.metodo_pago, v.impuestos
         FROM public.ventas v
         LEFT JOIN public.clientes c ON v.cliente_id = c.id
         LEFT JOIN public.usuarios u ON v.usuario_id = u.id

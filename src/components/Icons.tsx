@@ -39,6 +39,15 @@ export const ICONS = {
     credit_score: html`<${Icon} name="credit_score" />`,
     currency_exchange: html`<${Icon} name="currency_exchange" />`,
     calendar_month: html`<${Icon} name="calendar_month" />`,
+    refresh: html`<${Icon} name="refresh" />`,
+    package_2: html`<${Icon} name="package_2" />`,
+    person_add: html`<${Icon} name="person_add" />`,
+    emoji_events: html`<${Icon} name="emoji_events" />`,
+
+
+    // Connectivity
+    wifi: html`<${Icon} name="wifi" />`,
+    wifi_off: html`<${Icon} name="wifi_off" />`,
 
     // Notifications
     notifications: html`<${Icon} name="notifications" className="text-2xl" />`,
@@ -56,8 +65,8 @@ export const ICONS = {
     edit_note: html`<${Icon} name="edit_note" />`,
     products: html`<${Icon} name="style" />`,
     category: html`<${Icon} name="category" />`,
-    activity: html`<${Icon} name="history" className="text-primary" />`,
-    bolt: html`<${Icon} name="bolt" className="text-primary" />`,
+    activity: html`<${Icon} name="history" />`,
+    bolt: html`<${Icon} name="bolt" />`,
     newSale: html`<${Icon} name="point_of_sale" className="text-2xl text-primary" />`,
     newProduct: html`<${Icon} name="add_shopping_cart" className="text-2xl text-primary" />`,
     newExpense: html`<${Icon} name="receipt_long" className="text-2xl text-primary" />`,

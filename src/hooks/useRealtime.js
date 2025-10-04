@@ -8,7 +8,7 @@ import { html } from 'htm/preact';
 import { supabase } from '../lib/supabaseClient.js';
 import { useToast } from './useToast.js';
 
-const RealtimeContext = createContext({ status: 'CONNECTING', changeCounter: 0 });
+const RealtimeContext = createContext(null);
 
 // Debounce function to prevent excessive re-renders from rapid-fire events
 function debounce(func, wait) {
@@ -25,8 +25,49 @@ function debounce(func, wait) {
 
 export function RealtimeProvider({ children }) {
     const { addToast } = useToast();
-    const [status, setStatus] = useState('CONNECTING');
+    const [supabaseStatus, setSupabaseStatus] = useState('CONNECTING');
+    const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+    const [log, setLog] = useState([]);
     const [changeCounter, setChangeCounter] = useState(0);
+    const channelRef = useRef(null);
+    const disconnectTimeRef = useRef(null);
+    
+    const addLogEntry = useCallback((type, message) => {
+        const newEntry = { type, message, time: new Date() };
+        setLog(prev => [newEntry, ...prev.slice(0, 9)]); // Keep last 10 entries
+    }, []);
+
+    const forceReconnect = useCallback(() => {
+        if (channelRef.current) {
+            addLogEntry('info', 'Intentando reconectar...');
+            channelRef.current.subscribe();
+        }
+    }, []);
+
+    useEffect(() => {
+        const handleOffline = () => {
+            disconnectTimeRef.current = new Date();
+            setIsOnline(false);
+            addLogEntry('error', 'Sin conexión a internet.');
+            addToast({ message: 'Se perdió la conexión a internet. Algunas funciones están desactivadas.', type: 'warning', duration: 10000 });
+        };
+        const handleOnline = () => {
+            setIsOnline(true);
+            const duration = disconnectTimeRef.current ? Math.round((new Date() - disconnectTimeRef.current.getTime()) / 1000) : 0;
+            const message = `Conexión a internet restaurada (desconectado ${duration}s).`;
+            addLogEntry('success', message);
+            addToast({ message: 'Conexión a internet restaurada.', type: 'success' });
+            forceReconnect();
+        };
+
+        window.addEventListener('offline', handleOffline);
+        window.addEventListener('online', handleOnline);
+        
+        return () => {
+            window.removeEventListener('offline', handleOffline);
+            window.removeEventListener('online', handleOnline);
+        };
+    }, [addToast, addLogEntry, forceReconnect]);
 
     const incrementChangeCounter = useCallback(() => {
         setChangeCounter(c => c + 1);
@@ -35,23 +76,16 @@ export function RealtimeProvider({ children }) {
     const debouncedIncrement = useCallback(debounce(incrementChangeCounter, 150), [incrementChangeCounter]);
 
     useEffect(() => {
+        addLogEntry('info', 'Inicializando conexión en tiempo real...');
         const channel = supabase.channel('db-changes');
 
         channel.on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
-            // =================================================================
-            // INICIO DE LA MODIFICACIÓN PARA DEPURACIÓN
-            // =================================================================
-            // Este console.log es CRUCIAL. Imprimirá CUALQUIER evento que llegue
-            // al navegador a través de este canal, antes de cualquier filtro.
             console.log(
                 '%c[REALTIME EVENT RECEIVED]',
                 'color: lime; font-weight: bold; background-color: black; padding: 2px 5px; border-radius: 3px;',
                 payload
             );
-            // =================================================================
-            // FIN DE LA MODIFICACIÓN PARA DEPURACIÓN
-            // =================================================================
-
+            
             const tablesToWatch = {
                 productos: 'El catálogo de productos se ha actualizado.',
                 inventarios: 'El inventario se ha actualizado.',
@@ -69,21 +103,28 @@ export function RealtimeProvider({ children }) {
         });
 
         channel.subscribe((status, err) => {
-            console.log(`Realtime channel status: ${status}`);
-            setStatus(status);
+            setSupabaseStatus(status);
             if (err) {
-                console.error('Realtime channel subscription error:', err);
-                addToast({ message: `Error en tiempo real: ${err.message}`, type: 'error' });
+                addLogEntry('error', `Error de canal: ${err.message}`);
+            } else if (status === 'SUBSCRIBED') {
+                addLogEntry('success', 'Conectado al servidor en tiempo real.');
+            } else if (status === 'TIMED_OUT') {
+                addLogEntry('error', 'Tiempo de conexión con el servidor agotado.');
+            } else if (status === 'CHANNEL_ERROR') {
+                addLogEntry('error', 'Error en el canal del servidor.');
             }
         });
+        
+        channelRef.current = channel;
 
         return () => {
-            console.log('Removing realtime channel.');
-            supabase.removeChannel(channel);
+            if (channelRef.current) {
+                supabase.removeChannel(channelRef.current);
+            }
         };
-    }, [addToast, debouncedIncrement]);
-
-    const value = { status, changeCounter };
+    }, [addToast, addLogEntry, debouncedIncrement]);
+    
+    const value = { supabaseStatus, isOnline, log, forceReconnect, changeCounter };
 
     return html`
         <${RealtimeContext.Provider} value=${value}>
@@ -92,10 +133,7 @@ export function RealtimeProvider({ children }) {
     `;
 }
 
-export const useRealtimeStatus = () => {
-    const { status } = useContext(RealtimeContext);
-    return status;
-};
+export const useConnectivity = () => useContext(RealtimeContext);
 
 export const useRealtimeListener = (callback) => {
     const { changeCounter } = useContext(RealtimeContext);
