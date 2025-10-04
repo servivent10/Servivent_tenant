@@ -15,6 +15,7 @@ import { ProductFormModal } from '../../components/modals/ProductFormModal.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { Spinner } from '../../components/Spinner.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
+import { useRealtimeListener } from '../../hooks/useRealtime.js';
 
 const InventoryBreakdown = ({ inventory = [], allBranches = [], user, onAdjust }) => {
     // Determine which branches are visible based on the user's role
@@ -415,50 +416,9 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
 
     useEffect(() => {
         fetchData();
-
-        const channel = supabase.channel(`db-changes-producto-${productoId}`);
-        const subscription = channel.on(
-            'postgres_changes',
-            {
-                event: '*',
-                schema: 'public',
-                table: 'productos',
-                filter: `id=eq.${productoId}`
-            },
-            () => { 
-                addToast({ message: 'Los detalles del producto se han actualizado.', type: 'info', duration: 3000 });
-                fetchData();
-            }
-        ).on(
-            'postgres_changes',
-            {
-                event: '*',
-                schema: 'public',
-                table: 'inventarios',
-                filter: `producto_id=eq.${productoId}`
-            },
-            () => {
-                addToast({ message: 'El inventario de este producto se ha actualizado.', type: 'info', duration: 3000 });
-                fetchData();
-            }
-        ).on(
-            'postgres_changes',
-            {
-                event: '*',
-                schema: 'public',
-                table: 'precios_productos',
-                filter: `producto_id=eq.${productoId}`
-            },
-            () => {
-                addToast({ message: 'Los precios de este producto se han actualizado.', type: 'info', duration: 3000 });
-                fetchData();
-            }
-        ).subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [productoId, fetchData, addToast]);
+    }, [productoId]);
+    
+    useRealtimeListener(fetchData);
 
     const handleEdit = () => {
         setFormModalOpen(true);

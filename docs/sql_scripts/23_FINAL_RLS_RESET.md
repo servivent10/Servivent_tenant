@@ -1,0 +1,11 @@
+-- =============================================================================
+-- SCRIPT OBSOLETO - REEMPLAZADO POR 24_FINAL_RLS_RESET_FIXED.md
+-- =============================================================================
+-- Este script contiene un error de sintaxis ("syntax error at or near 'PROCEDURE'")
+-- y ha sido reemplazado por una versión corregida y más explícita.
+--
+-- Por favor, no ejecutes este archivo. En su lugar, ejecuta el script
+-- `24_FINAL_RLS_RESET_FIXED.md`.
+-- =============================================================================
+
+-- NO EJECUTAR.

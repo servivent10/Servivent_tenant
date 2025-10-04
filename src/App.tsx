@@ -36,6 +36,7 @@ import { AdminToolPage } from './pages/Admin/AdminToolPage.js';
 import { ToastProvider, useToast } from './hooks/useToast.js';
 import { LoadingProvider } from './hooks/useLoading.js';
 import { UPGRADE_PLANS, REGISTRATION_PLANS } from './lib/plansConfig.js';
+import { RealtimeProvider } from './hooks/useRealtime.js';
 
 
 function AppContent() {
@@ -422,7 +423,9 @@ export function App() {
     return html`
         <${ToastProvider}>
             <${LoadingProvider}>
-                <${AppContent} />
+                <${RealtimeProvider}>
+                    <${AppContent} />
+                <//>
             <//>
         <//>
     `;

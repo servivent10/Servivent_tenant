@@ -1,0 +1,12 @@
+-- =============================================================================
+-- SCRIPT OBSOLETO - REEMPLAZADO POR 25_FINAL_RLS_RESET_V2.md
+-- =============================================================================
+-- Este script ha sido reemplazado por una solución más robusta que utiliza
+-- funciones auxiliares de seguridad para evitar ciclos de recursión, garantizando
+-- un funcionamiento 100% consistente de las notificaciones en tiempo real.
+--
+-- Por favor, no ejecutes este archivo. En su lugar, ejecuta el script
+-- `25_FINAL_RLS_RESET_V2.md`.
+-- =============================================================================
+
+-- NO EJECUTAR.

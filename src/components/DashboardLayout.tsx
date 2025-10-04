@@ -14,6 +14,7 @@ import { ProgressBar } from './ProgressBar.js';
 import { Avatar } from './Avatar.js';
 import { ProfileModal } from './modals/ProfileModal.js';
 import { getTenantSidebarLinks, TENANT_FOOTER_LINKS } from '../pages/Tenant/tenantLinks.js';
+import { RealtimeStatusIndicator } from './RealtimeStatusIndicator.js';
 
 const NotificationPanel = ({ notifications, title, emptyText, position = 'down' }) => {
     const positionClasses = position === 'up' 
@@ -260,6 +261,7 @@ export function DashboardLayout({ user, onLogout, onProfileUpdate, sidebarLinks,
                         </nav>
                         
                         <div class="ml-4 flex items-center md:ml-6 space-x-4">
+                            <${RealtimeStatusIndicator} />
                             <div class="relative" ref=${systemRef}>
                                 <${NotificationBell} icon=${ICONS.notifications} notifications=${notifications.system} onClick=${toggleSystemPanel} />
                                 ${systemPanelOpen && html`<${NotificationPanel} title="Notificaciones del Sistema" notifications=${notifications.system} emptyText="No hay notificaciones nuevas." />`}

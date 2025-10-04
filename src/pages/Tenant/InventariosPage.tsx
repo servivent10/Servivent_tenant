@@ -12,6 +12,7 @@ import { useLoading } from '../../hooks/useLoading.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 import { FilterBar, AdvancedFilterPanel } from '../../components/shared/FilterComponents.js';
+import { useRealtimeListener } from '../../hooks/useRealtime.js';
 
 const StockStatusPill = ({ stock, minStock = 0 }) => {
     let pillClass, text;
@@ -77,35 +78,9 @@ export function InventariosPage({ user, onLogout, onProfileUpdate, companyInfo, 
 
     useEffect(() => {
         fetchData();
-
-        const channel = supabase.channel('db-changes-inventory');
-        const subscription = channel.on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'inventarios' },
-            () => {
-                addToast({ message: 'El inventario se ha actualizado.', type: 'info', duration: 3000 });
-                fetchData();
-            }
-        ).on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'productos' },
-            () => {
-                addToast({ message: 'Los datos de productos se han actualizado.', type: 'info', duration: 3000 });
-                fetchData();
-            }
-        ).on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'precios_productos' },
-            () => {
-                addToast({ message: 'Los costos o precios se han actualizado.', type: 'info', duration: 3000 });
-                fetchData();
-            }
-        ).subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [fetchData, addToast]);
+    }, []);
+    
+    useRealtimeListener(fetchData);
     
     const filteredProducts = useMemo(() => {
         return products.filter(p => {

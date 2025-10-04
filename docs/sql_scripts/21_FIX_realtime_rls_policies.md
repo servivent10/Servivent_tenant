@@ -1,0 +1,11 @@
+-- =============================================================================
+-- SCRIPT OBSOLETO - REEMPLAZADO POR 22_FULL_RLS_RESET.md
+-- =============================================================================
+-- Este script ha sido reemplazado por una solución más completa y robusta.
+-- Por favor, no ejecutes este archivo. En su lugar, ejecuta el script
+-- `22_FULL_RLS_RESET.md`, que realiza una limpieza profunda y reconstrucción
+-- de TODAS las políticas de seguridad del sistema para resolver definitivamente
+-- los problemas de recursión y notificaciones en tiempo real.
+-- =============================================================================
+
+-- NO EJECUTAR.

@@ -17,6 +17,7 @@ import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 import { FilterBar, AdvancedFilterPanel } from '../../components/shared/FilterComponents.js';
 import { CategoryFormModal } from '../../components/modals/CategoryFormModal.js';
 import { Spinner } from '../../components/Spinner.js';
+import { useRealtimeListener } from '../../hooks/useRealtime.js';
 
 const CategoryManagerModal = ({ isOpen, onClose, onRefreshRequired }) => {
     const { addToast } = useToast();
@@ -337,47 +338,9 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
 
     useEffect(() => {
         fetchData();
+    }, []);
 
-        const channel = supabase.channel('db-changes-productos');
-        const subscription = channel.on(
-            'postgres_changes',
-            {
-                event: '*',
-                schema: 'public',
-                table: 'productos'
-            },
-            () => {
-                addToast({ message: 'El catálogo de productos se ha actualizado.', type: 'info', duration: 3000 });
-                fetchData();
-            }
-        ).on(
-            'postgres_changes',
-            {
-                event: '*',
-                schema: 'public',
-                table: 'inventarios'
-            },
-            () => {
-                addToast({ message: 'El inventario se ha actualizado.', type: 'info', duration: 3000 });
-                fetchData();
-            }
-        ).on(
-            'postgres_changes',
-            {
-                event: '*',
-                schema: 'public',
-                table: 'precios_productos'
-            },
-            () => {
-                addToast({ message: 'Los precios se han actualizado.', type: 'info', duration: 3000 });
-                fetchData();
-            }
-        ).subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [fetchData, addToast]);
+    useRealtimeListener(fetchData);
 
     const handleAddProduct = () => {
         setIsFabOpen(false);

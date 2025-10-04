@@ -15,6 +15,7 @@ import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 import { ClienteFormModal } from '../../components/modals/ClienteFormModal.js';
 import { Avatar } from '../../components/Avatar.js';
 import { CheckoutModal } from '../../components/modals/CheckoutModal.js';
+import { useRealtimeListener } from '../../hooks/useRealtime.js';
 
 const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -632,35 +633,9 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
 
     useEffect(() => {
         fetchData();
+    }, []);
 
-        const channel = supabase.channel('db-changes-pos');
-        const subscription = channel.on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'productos' },
-            () => { 
-                addToast({ message: 'El catálogo de productos se ha actualizado.', type: 'info', duration: 3000 });
-                fetchData();
-            }
-        ).on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'inventarios' },
-            () => { 
-                addToast({ message: 'El stock de productos se ha actualizado.', type: 'info', duration: 3000 });
-                fetchData();
-            }
-        ).on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'precios_productos' },
-            () => { 
-                addToast({ message: 'Los precios de productos se han actualizado.', type: 'info', duration: 3000 });
-                fetchData();
-            }
-        ).subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [fetchData, addToast]);
+    useRealtimeListener(fetchData);
 
     useEffect(() => {
         if (isCartSidebarOpen) {
@@ -973,7 +948,8 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             
             addToast({ message: 'Venta registrada con éxito.', type: 'success' });
             handleClearCart();
-            fetchData(); // Immediately refetch data for the current user's screen
+            // Immediate local update for better UX, while realtime handles other clients.
+            await fetchData();
 
         } catch (err) {
             console.error('Error al registrar la venta:', err);
