@@ -4,7 +4,7 @@
 */
 import { html } from 'htm/preact';
 
-export function KPI_Card({ title, value, icon, subtext, color = 'primary' }) {
+export function KPI_Card({ title, value, icon, subtext, color = 'primary', count, countLabel }) {
     const colorClasses = {
         primary: 'bg-primary-light text-primary',
         green: 'bg-emerald-100 text-emerald-600',
@@ -20,7 +20,12 @@ export function KPI_Card({ title, value, icon, subtext, color = 'primary' }) {
     };
 
     return html`
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200/80">
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200/80 relative">
+            ${(count !== null && count !== undefined) && html`
+                <span title=${countLabel} class="absolute top-3 right-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                  ${count}
+                </span>
+            `}
             <div class="flex items-start justify-between">
                 <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-gray-500 truncate">${title}</p>

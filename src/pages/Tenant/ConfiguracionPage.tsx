@@ -15,6 +15,7 @@ import { Tabs } from '../../components/Tabs.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { FloatingActionButton } from '../../components/FloatingActionButton.js';
 
+
 function PriceListModal({ isOpen, onClose, onSave, listToEdit }) {
     const isEditMode = Boolean(listToEdit);
     const [formData, setFormData] = useState({ nombre: '', descripcion: '' });
@@ -293,7 +294,6 @@ function PriceListsTab() {
         </div>
     `;
 }
-
 
 export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo, notifications, onCompanyInfoUpdate, navigate }) {
     const { addToast } = useToast();

@@ -94,6 +94,7 @@ export function RealtimeProvider({ children }) {
                 compras: 'Se ha registrado una nueva compra.',
                 clientes: 'La lista de clientes se ha actualizado.',
                 proveedores: 'La lista de proveedores se ha actualizado.',
+                gastos: 'Se ha registrado un nuevo gasto.',
             };
 
             if (tablesToWatch[payload.table]) {

@@ -303,9 +303,24 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
 
     const kpis = useMemo(() => {
         const totalFiltrado = filteredCompras.reduce((sum, c) => sum + Number(c.total_bob || 0), 0);
-        const cuentasPorPagar = filteredCompras.reduce((sum, c) => c.estado_pago !== 'Pagada' ? sum + Number(c.saldo_pendiente || 0) : sum, 0);
-        const comprasCredito = filteredCompras.filter(c => c.tipo_pago === 'Crédito').length;
-        return { totalFiltrado, cuentasPorPagar, comprasCredito };
+        const totalComprasCount = filteredCompras.length;
+        
+        const comprasPorPagar = filteredCompras.filter(c => c.estado_pago !== 'Pagada');
+        const cuentasPorPagar = comprasPorPagar.reduce((sum, c) => sum + Number(c.saldo_pendiente || 0), 0);
+        const cuentasPorPagarCount = comprasPorPagar.length;
+
+        const comprasACredito = filteredCompras.filter(c => c.tipo_pago === 'Crédito');
+        const totalComprasCredito = comprasACredito.reduce((sum, c) => sum + Number(c.total_bob || 0), 0);
+        const comprasCreditoCount = comprasACredito.length;
+
+        return { 
+            totalFiltrado,
+            totalComprasCount,
+            cuentasPorPagar,
+            cuentasPorPagarCount,
+            totalComprasCredito,
+            comprasCreditoCount
+        };
     }, [filteredCompras]);
 
     const breadcrumbs = [ { name: 'Compras', href: '#/compras' } ];
@@ -408,9 +423,30 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mt-6">
-                 <${KPI_Card} title="Total Comprado (Filtro)" value=${`Bs ${kpis.totalFiltrado.toFixed(2)}`} icon=${ICONS.shopping_cart} color="primary" />
-                 <${KPI_Card} title="Cuentas por Pagar (Filtro)" value=${`Bs ${kpis.cuentasPorPagar.toFixed(2)}`} icon=${ICONS.credit_score} color="amber" />
-                 <${KPI_Card} title="Compras a Crédito (Filtro)" value=${kpis.comprasCredito} icon=${ICONS.newExpense} color="green" />
+                 <${KPI_Card}
+                    title="Total Comprado"
+                    value=${`Bs ${kpis.totalFiltrado.toFixed(2)}`}
+                    icon=${ICONS.shopping_cart}
+                    color="primary"
+                    count=${kpis.totalComprasCount}
+                    countLabel="Total de compras"
+                />
+                 <${KPI_Card}
+                    title="Cuentas por Pagar"
+                    value=${`Bs ${kpis.cuentasPorPagar.toFixed(2)}`}
+                    icon=${ICONS.credit_score}
+                    color="amber"
+                    count=${kpis.cuentasPorPagarCount}
+                    countLabel="Compras por pagar"
+                />
+                 <${KPI_Card}
+                    title="Compras a Crédito"
+                    value=${`Bs ${kpis.totalComprasCredito.toFixed(2)}`}
+                    icon=${ICONS.newExpense}
+                    color="green"
+                    count=${kpis.comprasCreditoCount}
+                    countLabel="Cantidad de compras a crédito"
+                 />
             </div>
 
             <div class="mt-8">

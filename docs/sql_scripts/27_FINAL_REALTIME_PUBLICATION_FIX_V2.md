@@ -164,6 +164,15 @@ EXCEPTION
 END;
 $$;
 
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.gastos;
+EXCEPTION
+    WHEN duplicate_object THEN
+        RAISE NOTICE 'La tabla "gastos" ya está en la publicación.';
+END;
+$$;
+
 
 -- =============================================================================
 -- Fin del script. La configuración de tiempo real ahora está completa y es robusta.

@@ -122,7 +122,8 @@ export function RegistrationFlow({ navigate }) {
     const [loading, setLoading] = useState(false);
     const [registrationSteps, setRegistrationSteps] = useState([]);
     const [error, setError] = useState('');
-    const [formErrors, setFormErrors] = useState({});
+    {/* FIX: Add explicit type to prevent TypeScript errors when accessing properties */}
+    const [formErrors, setFormErrors] = useState<{ empresa_nombre?: string; empresa_nit?: string; user_nombre?: string; user_email?: string; user_password?: string; sucursal_nombre?: string; }>({});
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [successData, setSuccessData] = useState(null);
@@ -163,7 +164,8 @@ export function RegistrationFlow({ navigate }) {
 
     const validateStep = (currentStep) => {
         setError('');
-        let newErrors = {};
+        {/* FIX: Add explicit type to prevent TypeScript errors when adding properties */}
+        let newErrors: { [key: string]: string } = {};
         let isValid = true;
         const fieldsToValidate = {
             1: ['empresa_nombre', 'empresa_nit'],

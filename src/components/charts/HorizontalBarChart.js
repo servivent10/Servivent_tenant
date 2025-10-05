@@ -5,17 +5,17 @@
 import { html } from 'htm/preact';
 import { useEffect, useRef } from 'preact/hooks';
 
-const COLORS = ['#3b82f6', '#10b981', '#f97316', '#ec4899'];
-const BORDER_COLORS = ['#2563eb', '#059669', '#ea580c', '#db2777'];
+const BG_COLOR = '#3b82f6';
+const BORDER_COLOR = '#2563eb';
 
-export function ComparativeBarChart({ data, keys }) {
+export function HorizontalBarChart({ data }) {
     const chartRef = useRef(null);
     const chartInstanceRef = useRef(null);
 
     if (!data || data.length === 0) {
-        return html`<div class="flex items-center justify-center h-72 text-gray-500">No hay datos para mostrar en este período.</div>`;
+        return html`<p class="text-sm text-gray-500 text-center py-4">No hay datos de ventas de productos en este período.</p>`;
     }
-    
+
     const formatCurrency = (value) => `Bs ${Number(value || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     useEffect(() => {
@@ -27,22 +27,23 @@ export function ComparativeBarChart({ data, keys }) {
         const ctx = chartRef.current.getContext('2d');
         
         const chartData = {
-            labels: data.map(d => d.label),
-            datasets: keys.map((keyInfo, index) => ({
-                label: keyInfo.label,
-                data: data.map(d => d[keyInfo.key]),
-                backgroundColor: COLORS[index % COLORS.length],
-                borderColor: BORDER_COLORS[index % BORDER_COLORS.length],
+            labels: data.map(d => d.nombre),
+            datasets: [{
+                label: 'Total Vendido',
+                data: data.map(d => d.total_vendido),
+                backgroundColor: BG_COLOR,
+                borderColor: BORDER_COLOR,
                 borderWidth: 1,
                 borderRadius: 4,
-            })),
+            }],
         };
 
         const chartOptions = {
+            indexAxis: 'y', // This makes it a horizontal bar chart
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                y: {
+                x: {
                     beginAtZero: true,
                     grid: {
                         color: '#e5e7eb',
@@ -51,7 +52,7 @@ export function ComparativeBarChart({ data, keys }) {
                         color: '#6b7280',
                     }
                 },
-                x: {
+                y: {
                     grid: {
                         display: false,
                     },
@@ -62,12 +63,7 @@ export function ComparativeBarChart({ data, keys }) {
             },
             plugins: {
                 legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: '#4b5563',
-                        usePointStyle: true,
-                        boxWidth: 8,
-                    }
+                    display: false // Hide legend for single-dataset charts
                 },
                 tooltip: {
                     callbacks: {
@@ -76,8 +72,8 @@ export function ComparativeBarChart({ data, keys }) {
                             if (label) {
                                 label += ': ';
                             }
-                            if (context.parsed.y !== null) {
-                                label += formatCurrency(context.parsed.y);
+                            if (context.parsed.x !== null) {
+                                label += formatCurrency(context.parsed.x);
                             }
                             return label;
                         }
@@ -92,16 +88,17 @@ export function ComparativeBarChart({ data, keys }) {
             options: chartOptions
         });
 
-        // Cleanup function to destroy the chart instance on component unmount
         return () => {
             if (chartInstanceRef.current) {
                 chartInstanceRef.current.destroy();
             }
         };
-    }, [data, keys]);
+    }, [data]);
+    
+    const chartHeight = data.length * 40 + 40; // Dynamic height
 
     return html`
-        <div class="relative h-80">
+        <div class="relative" style=${{ height: `${chartHeight}px` }}>
             <canvas ref=${chartRef}></canvas>
         </div>
     `;
