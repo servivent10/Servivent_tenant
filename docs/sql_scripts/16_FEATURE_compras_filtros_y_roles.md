@@ -28,7 +28,7 @@ RETURNS TABLE (
     usuario_nombre text,
     sucursal_id uuid,
     sucursal_nombre text,
-    fecha date,
+    fecha timestamptz, -- CAMBIO: de 'date' a 'timestamptz'
     total numeric,
     moneda text,
     total_bob numeric,

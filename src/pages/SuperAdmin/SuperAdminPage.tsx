@@ -48,7 +48,6 @@ const CompanyTable = ({ companies, onAction, onRowClick }) => {
     };
 
     return html`
-        {/* Mobile/Tablet Card View */}
         <div class="space-y-4 lg:hidden">
             ${companies.map(company => html`
                 <div key=${company.id} class="bg-white p-4 rounded-lg shadow border cursor-pointer" onClick=${() => onRowClick(company)}>
@@ -81,7 +80,6 @@ const CompanyTable = ({ companies, onAction, onRowClick }) => {
             `)}
         </div>
 
-        {/* Desktop Table View */}
         <div class="hidden lg:block overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
             <table class="min-w-full divide-y divide-gray-300">
                 <thead class="bg-gray-50">

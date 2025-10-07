@@ -1,9 +1,9 @@
 -- =============================================================================
--- DATABASE UPDATE SCRIPT (v5 - Sucursal ID Fix)
+-- DATABASE UPDATE SCRIPT (v6 - Timezone & Currency)
 -- =============================================================================
 -- Este script actualiza la función principal que carga los datos del perfil
--- de usuario para que devuelva también el ID de la sucursal, un dato crucial
--- que faltaba y causaba errores en módulos como el de Compras.
+-- de usuario para que devuelva la zona horaria y la moneda de la empresa,
+-- datos cruciales para el nuevo sistema de localización.
 --
 -- **INSTRUCCIONES:**
 -- Por favor, ejecuta este script completo en el Editor SQL de tu proyecto de
@@ -17,12 +17,11 @@ DROP FUNCTION IF EXISTS public.get_user_profile_data();
 
 
 -- -----------------------------------------------------------------------------
--- Paso 2: Crear la nueva función `get_user_profile_data` (v5)
+-- Paso 2: Crear la nueva función `get_user_profile_data` (v6)
 -- -----------------------------------------------------------------------------
 -- Descripción:
--- Se añade `sucursal_id` tanto a la definición de la tabla de retorno como a
--- la sentencia SELECT principal. Esto asegura que el ID de la sucursal del
--- usuario esté disponible en el frontend después de iniciar sesión.
+-- Se añaden `empresa_timezone` y `empresa_moneda` a la definición de la
+-- tabla de retorno y a la sentencia SELECT principal.
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_user_profile_data()
 RETURNS table (
@@ -30,15 +29,15 @@ RETURNS table (
     empresa_nombre text,
     empresa_logo text,
     empresa_nit text,
-    empresa_direccion text,
-    empresa_telefono text,
+    empresa_timezone text, -- **NUEVO CAMPO**
+    empresa_moneda text,   -- **NUEVO CAMPO**
     plan_actual text,
     estado_licencia text,
     fecha_fin_licencia date,
     nombre_completo text,
     rol text,
     avatar text,
-    sucursal_id uuid, -- **NUEVO CAMPO**
+    sucursal_id uuid,
     sucursal_principal_nombre text,
     historial_pagos json
 )
@@ -72,15 +71,15 @@ BEGIN
         e.nombre AS empresa_nombre,
         e.logo AS empresa_logo,
         e.nit AS empresa_nit,
-        e.direccion AS empresa_direccion,
-        e.telefono AS empresa_telefono,
+        e.timezone AS empresa_timezone, -- **SE AÑADE LA ZONA HORARIA**
+        e.moneda AS empresa_moneda,     -- **SE AÑADE LA MONEDA**
         l.tipo_licencia AS plan_actual,
         l.estado AS estado_licencia,
         l.fecha_fin AS fecha_fin_licencia,
         u.nombre_completo,
         u.rol,
         u.avatar,
-        u.sucursal_id, -- **SE AÑADE EL ID DE LA SUCURSAL**
+        u.sucursal_id,
         s.nombre AS sucursal_principal_nombre,
         up.historial AS historial_pagos
     FROM

@@ -1,4 +1,5 @@
-# Contexto y Especificación: Sistema de Componentes y UI
+# MÓDULO 00: CORE
+## Sistema de Componentes y UI
 
 Este documento describe la filosofía y los componentes reutilizables que conforman el sistema de diseño de ServiVENT, garantizando una experiencia de usuario coherente y profesional en toda la aplicación.
 

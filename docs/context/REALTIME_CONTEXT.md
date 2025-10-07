@@ -1,4 +1,5 @@
-# Contexto y Especificación: Arquitectura en Tiempo Real
+# MÓDULO 00: CORE
+## Arquitectura en Tiempo Real
 
 Este documento describe la lógica y el funcionamiento del sistema de notificaciones en tiempo real de ServiVENT, que permite que los cambios realizados en un dispositivo se reflejen instantáneamente en todos los demás clientes conectados.
 
@@ -36,6 +37,6 @@ El sistema se basa en la funcionalidad "Realtime" de Supabase, que escucha los c
 ## 3. Archivos Clave
 
 -   **`src/hooks/useRealtime.js`:** El corazón del sistema en el frontend. Gestiona la conexión, recibe los mensajes y orquesta la actualización de la UI.
--   **`src/components/RealtimeStatusIndicator.tsx`:** Un pequeño componente visual que muestra el estado de la conexión WebSocket.
+-   **`src/components/ConnectivityCenter.tsx`:** Un componente visual que muestra el estado de la conexión WebSocket.
 -   **`docs/sql_scripts/29_FINAL_RLS_RESET_V4_JWT.md`:** La configuración de RLS que permite que el paso 4 (Comprobación de Seguridad) funcione sin errores.
 -   **`docs/sql_scripts/27_FINAL_REALTIME_PUBLICATION_FIX_V2.md`:** El script que configura el paso 2 (Publicación de PostgreSQL).

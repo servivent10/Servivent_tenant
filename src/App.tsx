@@ -165,6 +165,16 @@ function AppContent() {
                 updateStepStatus('branch', 'success');
                 await delay(2000);
 
+                const getCurrencySymbol = (monedaCode) => {
+                    const symbolMap = {
+                        'BOB': 'Bs', 'ARS': '$', 'BRL': 'R$', 'CLP': '$',
+                        'COP': '$', 'USD': '$', 'GTQ': 'Q', 'HNL': 'L',
+                        'MXN': '$', 'PAB': 'B/.', 'PYG': '₲', 'PEN': 'S/',
+                        'DOP': 'RD$', 'UYU': '$U', 'EUR': '€'
+                    };
+                    return symbolMap[monedaCode] || monedaCode;
+                };
+
                 let companyData = null;
                 if (profile.empresa_id) {
                     const planName = profile.plan_actual || 'Sin Plan';
@@ -181,6 +191,9 @@ function AppContent() {
                         licenseStatus: profile.estado_licencia || 'Activa',
                         licenseEndDate: profile.fecha_fin_licencia,
                         paymentHistory: profile.historial_pagos || [],
+                        timezone: profile.empresa_timezone,
+                        moneda: profile.empresa_moneda,
+                        monedaSimbolo: getCurrencySymbol(profile.empresa_moneda),
                     };
                 }
                 setCompanyInfo(companyData);
@@ -279,8 +292,8 @@ function AppContent() {
 
         if (error) {
             console.error('Error during signOut call:', error);
-            addToast({ message: 'Error al cerrar sesión. Intenta recargar la página.', type: 'error' });
-            setIsLoggingOut(false);
+            addToast({ message: 'Error al cerrar sesión. Forzando cierre local.', type: 'error' });
+            handleForceLogout(); // Force a local logout if Supabase fails
             return;
         }
         

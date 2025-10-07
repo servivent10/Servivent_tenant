@@ -1,4 +1,5 @@
-# Contexto y Especificación: Herramienta de Administrador
+# MÓDULO 01: AUTENTICACIÓN
+## Herramienta de Administrador
 
 Este documento describe la funcionalidad de la "Herramienta de Eliminación de Usuario" (`AdminToolPage.tsx`), una utilidad de mantenimiento crítica pero separada de la aplicación principal.
 

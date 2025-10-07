@@ -91,10 +91,14 @@ export function RealtimeProvider({ children }) {
                 inventarios: 'El inventario se ha actualizado.',
                 precios_productos: 'Los precios se han actualizado.',
                 ventas: 'Se ha registrado una nueva venta.',
+                venta_items: 'Los detalles de una venta se han actualizado.',
                 compras: 'Se ha registrado una nueva compra.',
+                compra_items: 'Los detalles de una compra se han actualizado.',
                 clientes: 'La lista de clientes se ha actualizado.',
                 proveedores: 'La lista de proveedores se ha actualizado.',
                 gastos: 'Se ha registrado un nuevo gasto.',
+                pagos_ventas: 'Se ha registrado un pago de venta.',
+                pagos_compras: 'Se ha registrado un pago de compra.',
             };
 
             if (tablesToWatch[payload.table]) {

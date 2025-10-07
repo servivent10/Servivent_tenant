@@ -371,6 +371,7 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
                 <button onClick=${() => navigate('/superadmin')} class="p-2 rounded-full hover:bg-gray-200" aria-label="Volver a la lista de empresas">
                     ${ICONS.arrow_back}
                 </button>
+                 ${details.logo && html`<img src=${details.logo} alt="Logo" class="h-12 w-12 rounded-md object-contain bg-slate-100 p-1 border" />`}
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900">${details.nombre}</h1>
                     <p class="text-sm text-gray-500">NIT: ${details.nit}</p>
@@ -378,7 +379,8 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
             </div>
 
             <!-- Company Info Card -->
-            <div class="bg-white p-4 rounded-lg shadow-sm border mb-6">
+            <div class="bg-white p-6 rounded-lg shadow-sm border mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">Información de la Empresa y Sucursal Principal</h3>
                 <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-3">
                     <div class="sm:col-span-1">
                         <dt class="text-sm font-medium text-gray-500">Dirección</dt>
@@ -387,6 +389,19 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
                     <div class="sm:col-span-1">
                         <dt class="text-sm font-medium text-gray-500">Teléfono</dt>
                         <dd class="mt-1 text-sm text-gray-900">${details.telefono || 'No especificado'}</dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                        <dt class="text-sm font-medium text-gray-500">Propietario</dt>
+                        <dd class="mt-1 text-sm text-gray-900">${details.propietario_nombre || 'No asignado'}</dd>
+                        <dd class="text-xs text-gray-500">${details.propietario_email || ''}</dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                        <dt class="text-sm font-medium text-gray-500">Moneda Principal</dt>
+                        <dd class="mt-1 text-sm text-gray-900">${details.moneda || 'No especificada'}</dd>
+                    </div>
+                    <div class="sm:col-span-1">
+                        <dt class="text-sm font-medium text-gray-500">País / Zona Horaria</dt>
+                        <dd class="mt-1 text-sm text-gray-900">${details.timezone?.split('/')[1]?.replace('_', ' ') || 'No especificado'}</dd>
                     </div>
                     <div class="sm:col-span-1">
                         <dt class="text-sm font-medium text-gray-500">Fecha de Registro</dt>

@@ -77,7 +77,7 @@ export function ImportClientesModal({ isOpen, onClose, onImportSuccess }) {
         reader.onload = (e) => {
             try {
                 const text = e.target.result;
-                // FIX: Add type guard to ensure `text` is a string before using string methods.
+                // FIX: Add type guard to ensure `text` is a string before calling string methods on it.
                 if (typeof text !== 'string') {
                     throw new Error('El contenido del archivo no se pudo leer como texto.');
                 }

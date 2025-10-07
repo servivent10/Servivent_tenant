@@ -1,4 +1,5 @@
-# Contexto y Especificación: Panel de SuperAdmin
+# MÓDULO 02: SUPERADMIN
+## Panel de SuperAdmin
 
 Este documento define la funcionalidad del panel de SuperAdmin, diseñado para la gestión global de todas las empresas (tenants) en ServiVENT.
 
@@ -30,7 +31,7 @@ Este módulo depende exclusivamente de funciones RPC de PostgreSQL con `SECURITY
 
 -   **`get_all_companies()`:** Obtiene la lista de empresas para `SuperAdminPage`.
 -   **`update_company_status_as_superadmin()`:** Cambia el estado de una licencia (Activa/Suspendida).
--   **`delete_company_as_superadmin()`:** Elimina una empresa y todos sus datos asociados de forma segura (usuarios en `auth` y `public`, sucursales, licencia, etc.).
+-   **`delete_company_forcefully` (Edge Function):** Orquesta la eliminación segura de una empresa y todos sus datos asociados (usuarios en `auth` y `public`, sucursales, licencia, etc.), evitando errores de recursión.
 -   **`get_company_details()`:** Obtiene el JSON completo con toda la información para `CompanyDetailsPage` (KPIs, listas de usuarios, sucursales y pagos).
 -   **`add_license_payment()`:** Registra un pago y actualiza la licencia de una empresa.
 -   **`reset_owner_password_as_superadmin()`:** Establece una nueva contraseña para un usuario, encriptándola correctamente.

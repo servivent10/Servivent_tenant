@@ -1,17 +1,17 @@
 -- =============================================================================
--- COMPANY DETAILS & PAYMENTS FUNCTIONS
+-- COMPANY DETAILS & PAYMENTS FUNCTIONS (v2 - Enriched Details)
 -- =============================================================================
--- Este script crea las funciones PostgreSQL y la tabla necesarias para el nuevo
--- panel de Detalles de Empresa del SuperAdmin.
--- Por favor, ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
+-- Este script actualiza la función de detalles para que incluya información
+-- de la sucursal principal (dirección, teléfono) y del propietario, y la
+-- moneda de la empresa, centralizando toda la información clave en un solo
+-- objeto para una visualización más completa en el panel de SuperAdmin.
+--
+-- INSTRUCCIONES:
+-- Ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- Tabla 1: pagos_licencia
--- -----------------------------------------------------------------------------
--- Descripción:
--- Almacena un registro de todos los pagos realizados por las empresas para
--- sus licencias.
+-- Tabla 1: pagos_licencia (sin cambios, idempotente)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.pagos_licencia (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
@@ -25,18 +25,13 @@ CREATE TABLE IF NOT EXISTS public.pagos_licencia (
 );
 
 -- -----------------------------------------------------------------------------
--- Función 1: Obtener detalles completos de una empresa
--- -----------------------------------------------------------------------------
--- Descripción:
--- Esta función es el motor de la nueva página de detalles. Recupera un JSON
--- completo con toda la información de una empresa, incluyendo KPIs, listas de
--- usuarios, sucursales y pagos. Es SECURITY DEFINER para que el SuperAdmin
--- pueda leer todos los datos necesarios sin interferencia de RLS.
+-- Función 1: Obtener detalles completos de una empresa (ACTUALIZADA)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_company_details(p_empresa_id uuid)
 RETURNS json
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
     company_details json;
@@ -52,10 +47,34 @@ BEGIN
         RAISE EXCEPTION 'Acceso denegado: Se requiere rol de SuperAdmin.';
     END IF;
 
-    -- 1. Obtener detalles base de la empresa
-    SELECT to_json(e.*) INTO company_details
-    FROM public.empresas e
-    WHERE e.id = p_empresa_id;
+    -- 1. Obtener detalles enriquecidos de la empresa
+    SELECT to_json(details) INTO company_details FROM (
+        SELECT
+            e.id,
+            e.nombre,
+            e.nit,
+            e.logo,
+            e.moneda,
+            e.timezone,
+            e.created_at,
+            s.direccion,
+            s.telefono,
+            u.nombre_completo as propietario_nombre,
+            u.correo as propietario_email
+        FROM public.empresas e
+        LEFT JOIN (
+            SELECT * FROM public.sucursales 
+            WHERE empresa_id = p_empresa_id 
+            ORDER BY created_at ASC 
+            LIMIT 1
+        ) s ON e.id = s.empresa_id
+        LEFT JOIN (
+            SELECT * FROM public.usuarios
+            WHERE empresa_id = p_empresa_id AND rol = 'Propietario'
+            LIMIT 1
+        ) u ON e.id = u.empresa_id
+        WHERE e.id = p_empresa_id
+    ) details;
 
     -- 2. Obtener lista de usuarios
     SELECT json_agg(u) INTO users_list
@@ -116,11 +135,7 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Función 2: Añadir un pago y actualizar la licencia
--- -----------------------------------------------------------------------------
--- Descripción:
--- Permite al SuperAdmin registrar un pago para una empresa y actualizar
--- su licencia con un nuevo tipo de plan y una nueva fecha de vencimiento.
+-- Función 2: Añadir un pago y actualizar la licencia (sin cambios)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION add_license_payment(
     p_empresa_id uuid, 
@@ -169,18 +184,7 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Función 3: Resetear la contraseña del propietario
--- -----------------------------------------------------------------------------
--- Descripción:
--- Permite al SuperAdmin establecer una nueva contraseña para un usuario
--- específico. Esta función es SECURITY DEFINER para poder modificar la tabla
--- auth.users, que es una operación privilegiada.
---
--- Corrección Crítica (v3):
--- La contraseña AHORA se encripta usando `crypt()` con el algoritmo bcrypt ('bf'),
--- que es el formato que Supabase espera. Las versiones anteriores guardaban
--- la contraseña en texto plano, lo que "corrompía" la cuenta del usuario y
--- causaba un error 500 al intentar iniciar sesión. Esta versión es la correcta.
+-- Función 3: Resetear la contraseña del propietario (sin cambios)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION reset_owner_password_as_superadmin(
     p_user_id uuid,
@@ -204,8 +208,6 @@ BEGIN
     END IF;
 
     -- Actualiza la contraseña del usuario en la tabla de autenticación de Supabase.
-    -- Es crucial usar crypt() para hashear la contraseña. No se puede insertar
-    -- texto plano directamente en la columna 'encrypted_password'.
     UPDATE auth.users
     SET encrypted_password = crypt(p_new_password, gen_salt('bf'))
     WHERE id = p_user_id;

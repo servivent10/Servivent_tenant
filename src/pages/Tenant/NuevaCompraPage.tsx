@@ -18,6 +18,81 @@ import { Tabs } from '../../components/Tabs.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 
 
+const SearchableSelect = ({ label, name, placeholder, options, value, onChange, onAddNew, showAddNew = true, required = true }) => {
+    const selectedOption = useMemo(() => options.find(o => o.id === value), [options, value]);
+    const [searchTerm, setSearchTerm] = useState(selectedOption ? selectedOption.nombre : '');
+    const [isOpen, setIsOpen] = useState(false);
+    const wrapperRef = useRef(null);
+
+    useEffect(() => {
+        setSearchTerm(selectedOption ? selectedOption.nombre : '');
+    }, [selectedOption]);
+
+    const filteredOptions = useMemo(() => {
+        const baseOptions = options.filter(o => o.nombre.toLowerCase().includes(searchTerm.toLowerCase()));
+        return showAddNew ? [{ id: 'add_new', nombre: 'Añadir nuevo...' }, ...baseOptions] : baseOptions;
+    }, [searchTerm, options, showAddNew]);
+
+    const handleSelect = (option) => {
+        if (option.id === 'add_new') {
+            onAddNew();
+        } else {
+            onChange(option.id, option.nombre);
+            setSearchTerm(option.nombre);
+        }
+        setIsOpen(false);
+    };
+
+    const handleClear = () => {
+        onChange(null, '');
+        setSearchTerm('');
+        setIsOpen(true);
+    };
+    
+     useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+                setIsOpen(false);
+                setSearchTerm(selectedOption ? selectedOption.nombre : '');
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [selectedOption]);
+
+    return html`
+        <div ref=${wrapperRef}>
+            <label for=${name} class="block text-sm font-medium text-gray-900">${label}</label>
+            <div class="mt-1 relative">
+                <input
+                    id=${name}
+                    type="text"
+                    required=${required}
+                    value=${searchTerm}
+                    onInput=${e => { setSearchTerm(e.target.value); setIsOpen(true); }}
+                    onFocus=${(e) => { e.target.select(); setIsOpen(true); }}
+                    placeholder=${placeholder}
+                    class="block w-full rounded-md border border-gray-300 p-2 pr-10 bg-white text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm transition-colors duration-200"
+                />
+                 <div class="absolute inset-y-0 right-0 flex items-center pr-2">
+                    ${searchTerm && html`<button type="button" onClick=${handleClear} class="text-gray-400 hover:text-gray-600">${ICONS.close}</button>`}
+                    <button type="button" onClick=${() => setIsOpen(p => !p)} class="text-gray-400 hover:text-gray-600">${ICONS.chevron_down}</button>
+                </div>
+                ${isOpen && html`
+                    <ul class="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                        ${filteredOptions.map(option => html`
+                            <li key=${option.id} onClick=${() => handleSelect(option)} class="relative cursor-pointer select-none py-2 px-4 hover:bg-slate-100 ${option.id === 'add_new' ? 'text-primary font-semibold' : 'text-gray-900'}">
+                                <span class="block truncate">${option.nombre}</span>
+                            </li>
+                        `)}
+                    </ul>
+                `}
+            </div>
+        </div>
+    `;
+};
+
+
 // --- NEW PURCHASE WIZARD PAGE COMPONENTS ---
 
 function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exchangeRate, user, addToast }) {
@@ -26,28 +101,34 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
     const [activeTab, setActiveTab] = useState('inventory');
     const [isLoading, setIsLoading] = useState(true);
     const [productDetails, setProductDetails] = useState(null);
-    const [localItem, setLocalItem] = useState < any > (item);
+    const [localItem, setLocalItem] = useState(item);
+    
+    // FIX: Explicitly type the distribuciones state to ensure TypeScript infers its values as numbers.
+    const [distribuciones, setDistribuciones] = useState<{ [key: string]: number }>({});
     
     const [priceRules, setPriceRules] = useState([]);
     const [calculatedPrices, setCalculatedPrices] = useState({});
     
-    const [errors, setErrors] = useState < { cantidad?: string; costo_unitario?: string; } > ({});
-    // FIX: Add explicit type for validationErrors state to prevent TypeScript errors.
+    const [errors, setErrors] = useState<{ costo_unitario?: string; }>({});
     const [validationErrors, setValidationErrors] = useState<{ [key: string]: { ganancia_maxima?: string; ganancia_minima?: string } }>({});
     const [collapsedLists, setCollapsedLists] = useState({});
 
+    // FIX: With a typed `distribuciones` state, `qty` will be a number, resolving type errors.
+    const cantidadTotalComprada = useMemo(() => 
+        Object.values(distribuciones).reduce((sum: number, qty: number) => sum + (qty || 0), 0)
+    , [distribuciones]);
+
     const capp_actual = Number(productDetails?.details.precio_compra || 0);
-    const cantidad_comprada = Number(localItem.cantidad || 0);
     const costo_unitario_ingresado = Number(localItem.costo_unitario || 0);
     const tasa_cambio = Number(exchangeRate || 1);
     const costo_compra_bob = currency === 'USD' ? costo_unitario_ingresado * tasa_cambio : costo_unitario_ingresado;
     
     const stock_total_actual = useMemo(() =>
-        productDetails?.inventory.reduce((sum, inv) => sum + Number(inv.cantidad), 0) || 0,
+        productDetails?.inventory.reduce((sum: number, inv: { cantidad: number }) => sum + Number(inv.cantidad || 0), 0) || 0,
         [productDetails]);
 
-    const nuevo_capp = (stock_total_actual + cantidad_comprada) > 0
-        ? ((stock_total_actual * capp_actual) + (cantidad_comprada * costo_compra_bob)) / (stock_total_actual + cantidad_comprada)
+    const nuevo_capp = (stock_total_actual + cantidadTotalComprada) > 0
+        ? ((stock_total_actual * capp_actual) + (cantidadTotalComprada * costo_compra_bob)) / (stock_total_actual + cantidadTotalComprada)
         : costo_compra_bob;
 
     const toggleCollapse = (listId) => {
@@ -72,6 +153,16 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
                 if (error) throw error;
                 setProductDetails(data);
                 
+                // Initialize distributions from saved item data if it exists
+                // FIX: Add explicit type to prevent type errors.
+                const initialDistribuciones: { [key: string]: number } = {};
+                if (item.distribucion && Array.isArray(item.distribucion)) {
+                    item.distribucion.forEach(d => {
+                        initialDistribuciones[d.sucursal_id] = d.cantidad;
+                    });
+                }
+                setDistribuciones(initialDistribuciones);
+
                 const initialRules = data.prices.map(p => ({
                     ...p,
                     ganancia_maxima: p.ganancia_maxima ?? '',
@@ -113,8 +204,16 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
         { id: 'prices', label: 'Precios de Venta' },
     ];
     
-    const handleItemChange = (field, value) => {
+    const handleLocalItemChange = (field, value) => {
         setLocalItem(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleDistribucionChange = (sucursalId, value) => {
+        const cantidad = parseInt(value, 10);
+        setDistribuciones(prev => ({
+            ...prev,
+            [sucursalId]: isNaN(cantidad) || cantidad < 0 ? 0 : cantidad
+        }));
     };
     
     const handleRuleChange = (listId, field, value) => {
@@ -129,7 +228,6 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
 
     const handleSave = () => {
         let isValid = true;
-        // FIX: Add explicit type for newErrors to prevent TypeScript errors.
         const newErrors: { [key: string]: { ganancia_maxima?: string; ganancia_minima?: string } } = {};
 
         priceRules.forEach(rule => {
@@ -137,53 +235,35 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
             const minGainStr = String(rule.ganancia_minima);
             const maxGain = parseFloat(maxGainStr);
             const minGain = parseFloat(minGainStr);
-            // FIX: Add explicit type for errorsForList to prevent TypeScript errors.
             const errorsForList: { ganancia_maxima?: string; ganancia_minima?: string } = {};
 
-            // Regla 1: Ganancias de la lista "General" son obligatorias
             if (rule.es_predeterminada) {
-                if (maxGainStr.trim() === '' || isNaN(maxGain)) {
-                    errorsForList.ganancia_maxima = 'Obligatorio';
-                    isValid = false;
-                }
-                if (minGainStr.trim() === '' || isNaN(minGain)) {
-                    errorsForList.ganancia_minima = 'Obligatorio';
-                    isValid = false;
-                }
+                if (maxGainStr.trim() === '' || isNaN(maxGain)) { errorsForList.ganancia_maxima = 'Obligatorio'; isValid = false; }
+                if (minGainStr.trim() === '' || isNaN(minGain)) { errorsForList.ganancia_minima = 'Obligatorio'; isValid = false; }
             }
-
-            // Regla 2: Si hay ganancia máxima, la mínima es obligatoria
-            if (maxGainStr.trim() !== '' && !isNaN(maxGain) && (minGainStr.trim() === '' || isNaN(minGain))) {
-                errorsForList.ganancia_minima = 'Obligatorio';
-                isValid = false;
-            }
-            
-            // Regla 3: Mínima no puede ser mayor que máxima
-            if (!isNaN(maxGain) && !isNaN(minGain) && minGain > maxGain) {
-                errorsForList.ganancia_minima = 'No puede ser mayor';
-                isValid = false;
-            }
-
-            if (Object.keys(errorsForList).length > 0) {
-                newErrors[rule.lista_precio_id] = errorsForList;
-            }
+            if (maxGainStr.trim() !== '' && !isNaN(maxGain) && (minGainStr.trim() === '' || isNaN(minGain))) { errorsForList.ganancia_minima = 'Obligatorio'; isValid = false; }
+            if (!isNaN(maxGain) && !isNaN(minGain) && minGain > maxGain) { errorsForList.ganancia_minima = 'No puede ser mayor'; isValid = false; }
+            if (Object.keys(errorsForList).length > 0) newErrors[rule.lista_precio_id] = errorsForList;
         });
 
         setValidationErrors(newErrors);
 
         if (!isValid) {
             addToast({ message: 'Por favor, corrige los errores en los precios de venta.', type: 'error' });
-            // Expande la primera pestaña con error
             const firstErrorListId = Object.keys(newErrors)[0];
-            if (firstErrorListId) {
-                setCollapsedLists(prev => ({ ...prev, [firstErrorListId]: false }));
-            }
+            if (firstErrorListId) setCollapsedLists(prev => ({ ...prev, [firstErrorListId]: false }));
             setActiveTab('prices');
             return;
         }
 
+        const distribucionArray = Object.entries(distribuciones)
+            .map(([sucursal_id, cantidad]) => ({ sucursal_id, cantidad: Number(cantidad) }))
+            .filter(d => d.cantidad > 0);
+
         onSave({
             ...localItem,
+            cantidad: cantidadTotalComprada,
+            distribucion: distribucionArray,
             prices: priceRules.map(p => ({
                 lista_id: p.lista_precio_id,
                 ganancia_maxima: Number(p.ganancia_maxima || 0),
@@ -193,14 +273,20 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
     };
 
     const handleNextTab = () => {
-        const newErrors: { cantidad?: string; costo_unitario?: string } = {};
-        if (Number(localItem.cantidad || 0) <= 0) newErrors.cantidad = 'Debe ser > 0.';
+        const newErrors: { costo_unitario?: string } = {};
         if (Number(localItem.costo_unitario || 0) <= 0) newErrors.costo_unitario = 'Debe ser > 0.';
         setErrors(newErrors);
 
+        if (cantidadTotalComprada <= 0) {
+            addToast({ message: 'La cantidad total comprada debe ser mayor a cero.', type: 'error' });
+            return;
+        }
         if (Object.keys(newErrors).length > 0) return;
+        
         setActiveTab('prices');
     };
+
+    const inventoryMap = new Map(productDetails?.inventory.map(item => [item.sucursal_id, item.cantidad]));
 
     return html`
         <${ConfirmationModal}
@@ -224,21 +310,41 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
                     ${isLoading ? html`<div class="flex justify-center items-center h-full min-h-[24rem]"><${Spinner}/></div>` : html`
                         ${activeTab === 'inventory' && html`
                             <div class="space-y-3 animate-fade-in-down">
-                                <div class="p-3 bg-white rounded-lg border space-y-3">
-                                    <h4 class="text-sm font-semibold text-gray-800">Datos de la Compra</h4>
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <${FormInput} label="Cantidad a Comprar" name="cantidad" type="number" value=${localItem.cantidad} onInput=${e => handleItemChange('cantidad', e.target.value)} error=${errors.cantidad} />
-                                        <${FormInput} label="Costo Unitario (${currency})" name="costo_unitario" type="number" value=${localItem.costo_unitario} onInput=${e => handleItemChange('costo_unitario', e.target.value)} error=${errors.costo_unitario} />
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div class="p-4 bg-white rounded-lg border">
+                                        <h4 class="text-sm font-semibold text-gray-800 mb-2">Datos de la Compra</h4>
+                                        <div class="space-y-3">
+                                            <${FormInput} label="Costo Unitario (${currency})" name="costo_unitario" type="number" value=${localItem.costo_unitario} onInput=${e => handleLocalItemChange('costo_unitario', e.target.value)} error=${errors.costo_unitario} />
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700">Total Comprado</label>
+                                                <div class="mt-1 p-2 h-10 flex items-center justify-end rounded-md bg-gray-100 font-bold text-gray-800">${cantidadTotalComprada}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                     <div class="p-4 bg-slate-50 rounded-lg border">
+                                        <h4 class="text-sm font-semibold text-gray-800 mb-2">Impacto en Costos</h4>
+                                        <div class="p-2 bg-white rounded border">
+                                            <h5 class="text-xs font-semibold text-gray-600 mb-1 text-center">Costo Promedio Ponderado (Global)</h5>
+                                            <div class="flex justify-around text-center">
+                                                <div><label class="block text-xs font-medium text-gray-500">Actual (CAPP)</label><p class="text-sm font-bold text-gray-700 mt-1">Bs ${capp_actual.toFixed(2)}</p></div>
+                                                <div><label class="block text-xs font-medium text-gray-500">Nuevo</label><p class="text-sm font-bold text-primary mt-1">Bs ${nuevo_capp.toFixed(2)}</p></div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="p-3 bg-slate-50 rounded-lg border space-y-3">
-                                    <h4 class="text-sm font-semibold text-gray-800">Impacto en Costos</h4>
-                                     <div class="p-2 bg-white rounded border">
-                                        <h5 class="text-xs font-semibold text-gray-600 mb-1 text-center">Costo Promedio Ponderado (Global)</h5>
-                                        <div class="flex justify-around text-center">
-                                            <div><label class="block text-xs font-medium text-gray-500">Actual (CAPP)</label><p class="text-sm font-bold text-gray-700 mt-1">Bs ${capp_actual.toFixed(2)}</p></div>
-                                            <div><label class="block text-xs font-medium text-gray-500">Nuevo</label><p class="text-sm font-bold text-primary mt-1">Bs ${nuevo_capp.toFixed(2)}</p></div>
-                                        </div>
+                                <div class="p-4 bg-white rounded-lg border">
+                                    <h4 class="text-sm font-semibold text-gray-800 mb-2">Distribución de Cantidades por Sucursal</h4>
+                                    <div class="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                        ${productDetails?.all_branches.map(branch => {
+                                            const currentStock = Number(inventoryMap.get(branch.id) || 0);
+                                            return html`
+                                                <div key=${branch.id} class="grid grid-cols-3 items-center gap-2 p-2 rounded-md hover:bg-slate-50">
+                                                    <label for=${`dist-${branch.id}`} class="text-sm font-medium text-gray-800 truncate">${branch.nombre}</label>
+                                                    <div class="text-sm text-center text-gray-500">Stock: ${currentStock}</div>
+                                                    <input id=${`dist-${branch.id}`} type="number" value=${distribuciones[branch.id] || ''} onInput=${e => handleDistribucionChange(branch.id, e.target.value)} placeholder="0" class="w-full text-center rounded-md bg-white text-gray-900 p-2 border border-gray-300 shadow-sm focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm sm:leading-6" />
+                                                </div>
+                                            `;
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -249,59 +355,27 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
                                     <span class="text-gray-600">Nuevo Costo Aplicado (CAPP): </span>
                                     <span class="font-bold text-lg text-gray-800">Bs ${nuevo_capp.toFixed(2)}</span>
                                 </div>
-                                <div class="space-y-3">
+                                <div class="space-y-3 max-h-80 overflow-y-auto p-1">
                                     ${priceRules.map(p => {
                                         const isCollapsed = collapsedLists[p.lista_precio_id];
                                         const errorsForList = validationErrors[p.lista_precio_id] || {};
-                                        const maxGain = Number(p.ganancia_maxima);
-                                        const minGain = Number(p.ganancia_minima);
-                                        const isPriceActive = p.es_predeterminada
-                                            ? !isNaN(maxGain) && maxGain > 0 && !isNaN(minGain) && minGain >= 0
-                                            : !isNaN(maxGain) && maxGain > 0;
-                                        
                                         return html`
                                         <div key=${p.lista_precio_id} class="rounded-lg border ${p.es_predeterminada ? 'bg-blue-50/50' : 'bg-white'}">
                                             <button onClick=${() => toggleCollapse(p.lista_precio_id)} class="w-full flex justify-between items-center text-left p-3">
-                                                <div class="flex items-center gap-3">
-                                                    <p class="font-semibold text-gray-800 text-sm">${p.lista_nombre} ${p.es_predeterminada ? '(General)' : ''}</p>
-                                                    ${isCollapsed && !isPriceActive && html`
-                                                        <span class="flex items-center gap-1.5 text-xs text-amber-600 font-medium">
-                                                            <span class="text-base">⚠️</span>
-                                                            Establece las ganancias para activar el precio.
-                                                        </span>
-                                                    `}
-                                                    ${isCollapsed && isPriceActive && html`
-                                                        <span class="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
-                                                            <span class="material-symbols-outlined text-base">check_circle</span>
-                                                            Precio de venta activado.
-                                                        </span>
-                                                    `}
-                                                </div>
-                                                <div class="text-gray-500 transform transition-transform ${!isCollapsed ? 'rotate-180' : ''}">
-                                                    ${ICONS.chevron_down}
-                                                </div>
+                                                <p class="font-semibold text-gray-800 text-sm">${p.lista_nombre} ${p.es_predeterminada ? '(General)' : ''}</p>
+                                                <div class="text-gray-500 transform transition-transform ${!isCollapsed ? 'rotate-180' : ''}">${ICONS.chevron_down}</div>
                                             </button>
                                             ${!isCollapsed && html`
                                                 <div class="p-3 pt-0 animate-fade-in-down">
                                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
                                                         <div>
                                                             <label class="block text-xs font-medium text-gray-700">Ganancia Máxima (Bs)</label>
-                                                            <input 
-                                                                type="number"
-                                                                value=${p.ganancia_maxima} 
-                                                                onInput=${e => handleRuleChange(p.lista_precio_id, 'ganancia_maxima', e.target.value)}
-                                                                class=${`mt-1 w-full block rounded-md border-0 p-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white ${errorsForList.ganancia_maxima ? 'ring-red-500' : 'ring-gray-300'}`}
-                                                            />
+                                                            <input type="number" value=${p.ganancia_maxima} onInput=${e => handleRuleChange(p.lista_precio_id, 'ganancia_maxima', e.target.value)} class=${`mt-1 w-full block rounded-md border-0 p-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white ${errorsForList.ganancia_maxima ? 'ring-red-500' : 'ring-gray-300'}`} />
                                                             ${errorsForList.ganancia_maxima && html`<p class="mt-1 text-xs text-red-600">${errorsForList.ganancia_maxima}</p>`}
                                                         </div>
                                                         <div>
                                                             <label class="block text-xs font-medium text-gray-700">Ganancia Mínima (Bs)</label>
-                                                            <input 
-                                                                type="number" 
-                                                                value=${p.ganancia_minima} 
-                                                                onInput=${e => handleRuleChange(p.lista_precio_id, 'ganancia_minima', e.target.value)} 
-                                                                class=${`mt-1 w-full block rounded-md border-0 p-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white ${errorsForList.ganancia_minima ? 'ring-red-500' : 'ring-gray-300'}`}
-                                                            />
+                                                            <input type="number" value=${p.ganancia_minima} onInput=${e => handleRuleChange(p.lista_precio_id, 'ganancia_minima', e.target.value)} class=${`mt-1 w-full block rounded-md border-0 p-1.5 text-gray-900 shadow-sm ring-1 ring-inset placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white ${errorsForList.ganancia_minima ? 'ring-red-500' : 'ring-gray-300'}`} />
                                                             ${errorsForList.ganancia_minima && html`<p class="mt-1 text-xs text-red-600">${errorsForList.ganancia_minima}</p>`}
                                                         </div>
                                                     </div>
@@ -323,269 +397,45 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
     `;
 }
 
-const ProveedorSelector = ({ formData, setFormData, proveedores, setIsProveedorFormOpen }) => {
-    const [searchTerm, setSearchTerm] = useState(formData.proveedor_nombre);
-    const [isDropdownOpen, setDropdownOpen] = useState(false);
-    const [highlightedIndex, setHighlightedIndex] = useState(-1);
-    const wrapperRef = useRef(null);
-    const itemRefs = useRef([]);
-
-    const filteredProveedores = useMemo(() => {
-        const allOptions = [
-            { id: 'add_new', nombre: 'Añadir Nuevo Proveedor' },
-            ...proveedores
-        ];
-        if (!searchTerm) return allOptions;
-        const lowerCaseTerm = searchTerm.toLowerCase();
-        return [
-            { id: 'add_new', nombre: 'Añadir Nuevo Proveedor' },
-            ...proveedores.filter(p => p.nombre.toLowerCase().includes(lowerCaseTerm) || p.nombre_contacto?.toLowerCase().includes(lowerCaseTerm))
-        ];
-    }, [searchTerm, proveedores]);
-    
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
-                setDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-    
-    useEffect(() => {
-        setSearchTerm(formData.proveedor_nombre);
-    }, [formData.proveedor_nombre]);
-
-    useEffect(() => {
-        if (isDropdownOpen && highlightedIndex >= 0 && itemRefs.current[highlightedIndex]) {
-            itemRefs.current[highlightedIndex].scrollIntoView({ block: 'nearest' });
-        }
-    }, [highlightedIndex, isDropdownOpen]);
-
-    const handleSelect = (proveedor) => {
-        if (proveedor.id === 'add_new') {
-            setIsProveedorFormOpen(true);
-        } else {
-            setFormData(prev => ({...prev, proveedor_id: proveedor.id, proveedor_nombre: proveedor.nombre }));
-        }
-        setDropdownOpen(false);
-        setHighlightedIndex(-1);
-    };
-
-    const handleKeyDown = (e) => {
-        if (!isDropdownOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-            e.preventDefault();
-            setDropdownOpen(true);
-            setHighlightedIndex(0);
-            return;
-        }
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setHighlightedIndex(prev => (prev + 1) % filteredProveedores.length);
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setHighlightedIndex(prev => (prev - 1 + filteredProveedores.length) % filteredProveedores.length);
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            if (highlightedIndex >= 0) {
-                handleSelect(filteredProveedores[highlightedIndex]);
-            }
-        } else if (e.key === 'Escape') {
-            setDropdownOpen(false);
-            setHighlightedIndex(-1);
-        }
-    };
-
-    return html`
-        <div ref=${wrapperRef} class="relative">
-            <label class="block text-sm font-medium text-gray-700">Proveedor</label>
-             <input 
-                type="text" 
-                value=${searchTerm} 
-                onInput=${e => { setSearchTerm(e.target.value); setDropdownOpen(true); }}
-                onClick=${() => setDropdownOpen(true)}
-                onFocus=${() => setDropdownOpen(true)}
-                onKeyDown=${handleKeyDown}
-                placeholder="Buscar o seleccionar proveedor..."
-                class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm"
-            />
-            ${isDropdownOpen && html`
-                <ul class="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-                    ${filteredProveedores.map((p, index) => html`
-                        <li 
-                            key=${p.id}
-                            ref=${el => itemRefs.current[index] = el}
-                            onClick=${() => handleSelect(p)} 
-                            onMouseEnter=${() => setHighlightedIndex(index)}
-                            class="relative cursor-pointer select-none py-2 pl-3 pr-9
-                            ${p.id === 'add_new' ? 'text-primary font-semibold' : 'text-gray-900'}
-                            ${highlightedIndex === index ? 'bg-primary-light' : ''} hover:bg-primary-light"
-                        >
-                            ${p.id === 'add_new' ? html`<span class="flex items-center gap-2">${ICONS.add} ${p.nombre}</span>` : html`
-                                <span class="block truncate font-medium">${p.nombre}</span>
-                                <span class="block truncate text-xs text-gray-500">${p.nombre_contacto || 'Sin contacto'}</span>
-                            `}
-                        </li>
-                    `)}
-                </ul>
-            `}
-        </div>
-    `;
-};
-
-const ProductoSearch = ({ productos, onProductSelected, onAddedProductClick, setIsProductFormOpen, addedProductIds }) => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [isDropdownOpen, setDropdownOpen] = useState(false);
-    const [highlightedIndex, setHighlightedIndex] = useState(-1);
-    const wrapperRef = useRef(null);
-    const itemRefs = useRef([]);
-
-    const filteredProductos = useMemo(() => {
-        const allOptions = [{ id: 'add_new', nombre: 'Crear Nuevo Producto' }, ...productos];
-        if (!searchTerm) return allOptions;
-        const lower = searchTerm.toLowerCase();
-        return [
-            { id: 'add_new', nombre: 'Crear Nuevo Producto' },
-            ...productos.filter(p => 
-                p.nombre.toLowerCase().includes(lower) || 
-                p.sku?.toLowerCase().includes(lower) || 
-                p.modelo?.toLowerCase().includes(lower)
-            )
-        ];
-    }, [searchTerm, productos]);
-    
-    const handleSelect = (producto) => {
-        if (producto.id === 'add_new') {
-            setIsProductFormOpen(true);
-        } else if (addedProductIds.has(producto.id)) {
-            onAddedProductClick(producto.id);
-        } else {
-            onProductSelected(producto);
-        }
-        setSearchTerm('');
-        setDropdownOpen(false);
-        setHighlightedIndex(-1);
-    };
-
-    useEffect(() => {
-        const handleClickOutside = (e) => wrapperRef.current && !wrapperRef.current.contains(e.target) && setDropdownOpen(false);
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    useEffect(() => {
-        if (isDropdownOpen && highlightedIndex >= 0 && itemRefs.current[highlightedIndex]) {
-            itemRefs.current[highlightedIndex].scrollIntoView({ block: 'nearest' });
-        }
-    }, [highlightedIndex, isDropdownOpen]);
-
-    const handleKeyDown = (e) => {
-        if (!isDropdownOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-            e.preventDefault();
-            setDropdownOpen(true);
-            setHighlightedIndex(0);
-            return;
-        }
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setHighlightedIndex(prev => (prev + 1) % filteredProductos.length);
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setHighlightedIndex(prev => (prev - 1 + filteredProductos.length) % filteredProductos.length);
-        } else if (e.key === 'Enter') {
-            e.preventDefault();
-            if (highlightedIndex >= 0) {
-                handleSelect(filteredProductos[highlightedIndex]);
-            }
-        } else if (e.key === 'Escape') {
-            setDropdownOpen(false);
-            setHighlightedIndex(-1);
-        }
-    };
-
-    return html`
-        <div ref=${wrapperRef} class="relative">
-            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">${ICONS.search}</div>
-            <input
-                type="text"
-                placeholder="Buscar producto por SKU, nombre o modelo para añadirlo..."
-                value=${searchTerm}
-                onInput=${e => { setSearchTerm(e.target.value); setDropdownOpen(true); }}
-                onClick=${() => setDropdownOpen(true)}
-                onFocus=${() => setDropdownOpen(true)}
-                onKeyDown=${handleKeyDown}
-                class="block w-full rounded-md border-0 p-2 pl-10 bg-white text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
-            />
-             ${isDropdownOpen && html`
-                <ul class="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-                    ${filteredProductos.map((p, index) => {
-                        const isAdded = addedProductIds.has(p.id);
-                        return html`
-                        <li 
-                            key=${p.id}
-                            ref=${el => itemRefs.current[index] = el}
-                            onClick=${() => handleSelect(p)} 
-                            onMouseEnter=${() => setHighlightedIndex(index)}
-                            class="cursor-pointer select-none relative p-2 text-gray-900
-                            ${p.id === 'add_new' ? 'text-primary font-semibold' : ''}
-                            ${highlightedIndex === index ? 'bg-primary-light' : ''} hover:bg-primary-light"
-                        >
-                            ${p.id === 'add_new' ? html`<span class="flex items-center gap-2">${ICONS.add} ${p.nombre}</span>` : html`
-                                <div class="flex items-center gap-3">
-                                     <div class="relative h-10 w-10 flex-shrink-0">
-                                        <img src=${p.imagen_principal || NO_IMAGE_ICON_URL} class="h-10 w-10 rounded object-cover" />
-                                        ${isAdded && html`
-                                            <div class="absolute inset-0 bg-green-600/70 flex items-center justify-center rounded">
-                                                <span class="material-symbols-outlined text-white" style="font-size: 2rem;">check_circle</span>
-                                            </div>
-                                        `}
-                                    </div>
-                                    <div class="flex-grow min-w-0">
-                                        <p class="font-medium truncate">${p.nombre}</p>
-                                        <p class="text-xs text-gray-500 truncate">${p.modelo || `SKU: ${p.sku || 'N/A'}`}</p>
-                                    </div>
-                                    <div class="flex-shrink-0 text-xs text-right">
-                                        <p class="font-semibold text-gray-700">Stock</p>
-                                        <p>${p.stock_sucursal}</p>
-                                    </div>
-                                </div>
-                            `}
-                        </li>
-                    `})}
-                     ${filteredProductos.length === 0 && searchTerm && html`
-                        <li class="relative select-none py-2 px-4 text-gray-700">No se encontraron productos.</li>
-                    `}
-                </ul>
-            `}
-        </div>
-    `;
-};
-
 function Step1({ formData, handleInput, setFormData, proveedores, setIsProveedorFormOpen }) {
+    const handleProveedorChange = (id, nombre) => {
+        setFormData(prev => ({ ...prev, proveedor_id: id, proveedor_nombre: nombre }));
+    };
+    
     return html`
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Información General</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="md:col-span-1">
-                <${ProveedorSelector} formData=${formData} setFormData=${setFormData} proveedores=${proveedores} setIsProveedorFormOpen=${setIsProveedorFormOpen} />
+        <div class="max-w-xl mx-auto space-y-6 animate-fade-in-down">
+            <h3 class="text-lg font-semibold text-gray-900">1. Información General de la Compra</h3>
+            
+            <${SearchableSelect}
+                label="Proveedor"
+                name="proveedor_id"
+                placeholder="-- Selecciona o busca un proveedor --"
+                options=${proveedores.map(p => ({ id: p.id, nombre: p.nombre }))}
+                value=${formData.proveedor_id}
+                onChange=${handleProveedorChange}
+                onAddNew=${() => setIsProveedorFormOpen(true)}
+            />
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <${FormInput} label="Fecha y Hora de Compra" name="fecha" type="datetime-local" value=${formData.fecha} onInput=${handleInput} />
+                <${FormInput} label="N° Factura o Nota (Opcional)" name="n_factura" type="text" value=${formData.n_factura} onInput=${handleInput} required=${false} />
             </div>
-            <div class="md:col-span-1">
-                 <${FormInput} label="N° de Factura o Nota" name="n_factura" type="text" value=${formData.n_factura} onInput=${handleInput} required=${false} />
-            </div>
-            <div class="md:col-span-1">
-                <${FormInput} label="Fecha de Compra" name="fecha" type="date" value=${formData.fecha} onInput=${handleInput} />
-            </div>
-            <div class="md:col-span-1 grid grid-cols-2 gap-4">
-                <div>
-                    <label for="moneda" class="block text-sm font-medium text-gray-700">Moneda</label>
-                    <select id="moneda" name="moneda" value=${formData.moneda} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:border-primary focus:outline-none focus:ring-primary sm:text-sm">
-                        <option value="BOB">BOB</option>
-                        <option value="USD">USD</option>
-                    </select>
-                </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                 <${SearchableSelect}
+                    label="Moneda"
+                    name="moneda"
+                    placeholder="Selecciona una moneda"
+                    options=${[
+                        { id: 'BOB', nombre: 'Bolivianos (BOB)' },
+                        { id: 'USD', nombre: 'Dólares (USD)' }
+                    ]}
+                    value=${formData.moneda}
+                    onChange=${(id) => handleInput({ target: { name: 'moneda', value: id } })}
+                    showAddNew=${false}
+                />
                 ${formData.moneda === 'USD' && html`
-                    <div>
-                        <${FormInput} label="Tasa de Cambio" name="tasa_cambio" type="number" value=${formData.tasa_cambio} onInput=${handleInput} />
+                    <div class="animate-fade-in-down">
+                        <${FormInput} label="Tasa de Cambio a BOB" name="tasa_cambio" type="number" value=${formData.tasa_cambio} onInput=${handleInput} />
                     </div>
                 `}
             </div>
@@ -593,179 +443,115 @@ function Step1({ formData, handleInput, setFormData, proveedores, setIsProveedor
     `;
 }
 
-const Step2 = ({ formData, handleEditItem, handleRemoveItem, total, productos, handleProductSelected, handleAddedProductClick, setIsProductFormOpen, addedProductIds }) => (
-    html`
-    <h3 class="text-lg font-semibold text-gray-900 mb-4">Detalle de Productos</h3>
-    <div class="mb-4">
-        <${ProductoSearch} productos=${productos} onProductSelected=${handleProductSelected} onAddedProductClick=${handleAddedProductClick} setIsProductFormOpen=${setIsProductFormOpen} addedProductIds=${addedProductIds} />
-    </div>
-
-    ${formData.items.length === 0 ? html`
-        <div class="text-center py-10 rounded-lg border-2 border-dashed border-gray-200">
-            <p class="text-gray-500">Añade productos usando el buscador.</p>
-        </div>
-    ` : html`
-        <div class="space-y-3 max-h-96 overflow-y-auto pr-2 -mr-2">
-            <!-- Mobile/Tablet Card View -->
-            <div class="md:hidden space-y-3">
-                ${formData.items.map((item, index) => html`
-                    <div key=${item.producto_id} class="p-3 bg-slate-50 rounded-lg border">
-                        <div class="flex items-center gap-3">
-                            <div class="flex-shrink-0">
-                                <img src=${item.imagen_principal || NO_IMAGE_ICON_URL} class="h-14 w-14 rounded-md object-cover bg-white" />
-                            </div>
-                            <div class="flex-grow min-w-0">
-                                <p class="font-medium text-sm text-gray-800 truncate">${item.producto_nombre}</p>
-                                <p class="text-xs text-gray-500">Subtotal: <span class="font-bold text-primary">${(item.cantidad * item.costo_unitario).toFixed(2)}</span></p>
-                            </div>
-                            <div class="flex-shrink-0 flex items-center gap-1">
-                                <button onClick=${() => handleEditItem(item)} class="p-2 bg-white rounded-md shadow-sm text-gray-500 hover:bg-blue-100 hover:text-blue-600">${ICONS.edit}</button>
-                                <button onClick=${() => handleRemoveItem(index)} class="p-2 bg-white rounded-md shadow-sm text-gray-500 hover:bg-red-100 hover:text-red-600">${ICONS.delete}</button>
-                            </div>
-                        </div>
-                        <div class="mt-2 pt-2 border-t grid grid-cols-2 gap-2 text-center">
-                            <div>
-                                <p class="text-xs text-gray-500">Cantidad</p>
-                                <p class="font-semibold text-gray-900">${item.cantidad}</p>
-                            </div>
-                             <div>
-                                <p class="text-xs text-gray-500">Costo Unitario</p>
-                                <p class="font-semibold text-gray-900">${Number(item.costo_unitario).toFixed(2)}</p>
-                            </div>
-                        </div>
-                    </div>
-                `)}
-            </div>
-
-            <!-- Desktop Table View -->
-            <div class="hidden md:block overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-                <table class="min-w-full divide-y divide-gray-300">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Producto</th>
-                            <th scope="col" class="px-3 py-3.5 text-center text-sm font-semibold text-gray-900">Cantidad</th>
-                            <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Costo U. (${formData.moneda})</th>
-                            <th scope="col" class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Subtotal (${formData.moneda})</th>
-                            <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6"><span class="sr-only">Acciones</span></th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 bg-white">
-                        ${formData.items.map((item, index) => html`
-                            <tr key=${item.producto_id}>
-                                <td class="py-2 pl-4 pr-3 text-sm sm:pl-6">
-                                    <div class="flex items-center">
-                                        <div class="h-11 w-11 flex-shrink-0">
-                                            <img class="h-11 w-11 rounded-md object-cover bg-white" src=${item.imagen_principal || NO_IMAGE_ICON_URL} />
-                                        </div>
-                                        <div class="ml-4 min-w-0">
-                                            <div class="font-medium text-gray-900 truncate">${item.producto_nombre}</div>
-                                            <div class="text-gray-500 text-xs truncate">${item.modelo || `SKU: ${item.sku || 'N/A'}`}</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="px-3 py-4 text-sm text-center font-medium text-gray-800">${item.cantidad}</td>
-                                <td class="px-3 py-4 text-sm text-right font-medium text-gray-800">${Number(item.costo_unitario).toFixed(2)}</td>
-                                <td class="px-3 py-4 text-sm text-right font-bold text-primary">${(item.cantidad * item.costo_unitario).toFixed(2)}</td>
-                                <td class="relative py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                                    <div class="flex items-center justify-end gap-2">
-                                        <button onClick=${() => handleEditItem(item)} class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-100 rounded-md">${ICONS.edit}</button>
-                                        <button onClick=${() => handleRemoveItem(index)} class="p-2 text-gray-500 hover:text-red-600 hover:bg-red-100 rounded-md">${ICONS.delete}</button>
-                                    </div>
-                                </td>
-                            </tr>
-                        `)}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    `}
-    
-    <div class="mt-4 pt-4 border-t text-right">
-         <p class="text-sm text-gray-500">Total Compra</p>
-         <p class="text-2xl font-bold text-gray-900">${total.toFixed(2)} <span class="text-base font-normal">${formData.moneda}</span></p>
-    </div>
-    `
-);
-
-const Step3 = ({ formData, handleInput, setFormData, total }) => {
-    const calculateDaysRemaining = () => {
-        if (!formData.fecha_vencimiento) return null;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const dueDate = new Date(formData.fecha_vencimiento.replace(/-/g, '/'));
-        
-        if (isNaN(dueDate.getTime())) return null;
-
-        const diffTime = dueDate.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        if (diffDays < 0) return html`<span class="text-sm font-semibold text-red-600">Vencido hace ${Math.abs(diffDays)} días</span>`;
-        if (diffDays === 0) return html`<span class="text-sm font-semibold text-amber-600">Vence hoy</span>`;
-        return html`<span class="text-sm font-semibold text-green-700">Vence en ${diffDays} días</span>`;
-    };
-    const daysRemaining = calculateDaysRemaining();
+function Step2({ formData, handleEditItem, handleRemoveItem, total, productos, handleProductSelected, handleAddedProductClick, setIsProductFormOpen, addedProductIds }) {
+    const [searchTerm, setSearchTerm] = useState('');
+    const availableProducts = useMemo(() => {
+        const lowerCaseSearchTerm = searchTerm.toLowerCase();
+        return productos
+            .filter(p => 
+                !addedProductIds.has(p.id) && (
+                    p.nombre.toLowerCase().includes(lowerCaseSearchTerm) ||
+                    (p.modelo && p.modelo.toLowerCase().includes(lowerCaseSearchTerm)) ||
+                    (p.sku && p.sku.toLowerCase().includes(lowerCaseSearchTerm))
+                )
+            )
+            .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    }, [productos, addedProductIds, searchTerm]);
 
     return html`
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Condiciones de Pago</h3>
-        <div>
-            <label class="block text-sm font-medium text-gray-700">Tipo de Compra</label>
-            <div class="mt-2 grid grid-cols-2 gap-3">
-                <button type="button" onClick=${() => setFormData({...formData, tipo_pago: 'Contado'})} class="inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-semibold transition-colors ${formData.tipo_pago === 'Contado' ? 'bg-primary text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}">${ICONS.paid} Al Contado</button>
-                <button type="button" onClick=${() => setFormData({...formData, tipo_pago: 'Crédito'})} class="inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-semibold transition-colors ${formData.tipo_pago === 'Crédito' ? 'bg-primary text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}">${ICONS.credit_score} A Crédito</button>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in-down">
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900">2. Productos en la Compra</h3>
+                <div class="mt-4 p-4 bg-gray-50 rounded-lg border max-h-[25rem] overflow-y-auto">
+                    ${formData.items.length === 0 ? html`
+                        <p class="text-center text-gray-500 py-10">Añade productos desde el catálogo de la derecha.</p>
+                    ` : html`
+                        <ul class="divide-y divide-gray-200">
+                            ${formData.items.map((item, index) => html`
+                                <li key=${item.producto_id} class="py-3 flex items-center justify-between gap-2">
+                                    <div class="flex-1 min-w-0 cursor-pointer group" onClick=${() => handleAddedProductClick(item.producto_id)}>
+                                        <p class="font-medium text-gray-800 group-hover:text-primary truncate">${item.producto_nombre}</p>
+                                        <p class="text-sm text-gray-500">${item.cantidad} x ${Number(item.costo_unitario).toFixed(2)} ${formData.moneda} = ${(item.cantidad * item.costo_unitario).toFixed(2)} ${formData.moneda}</p>
+                                    </div>
+                                    <div class="flex-shrink-0">
+                                        <button onClick=${(e) => { e.stopPropagation(); handleRemoveItem(index); }} class="p-2 text-gray-400 hover:text-red-600 rounded-full">${ICONS.delete}</button>
+                                    </div>
+                                </li>
+                            `)}
+                        </ul>
+                    `}
+                </div>
+                <div class="mt-4 text-right">
+                    <p class="text-sm text-gray-500">Total Parcial</p>
+                    <p class="text-2xl font-bold text-primary">${total.toFixed(2)} ${formData.moneda}</p>
+                </div>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900">Catálogo de Productos</h3>
+                <div class="mt-4">
+                    <input 
+                        type="text" 
+                        value=${searchTerm} 
+                        onInput=${e => setSearchTerm(e.target.value)} 
+                        placeholder="Buscar por nombre, modelo o SKU..." 
+                        class="block w-full rounded-md border border-gray-300 p-2 bg-white text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm"
+                    />
+                </div>
+                <div class="mt-2 p-2 bg-gray-50 border rounded-lg max-h-[25rem] overflow-y-auto">
+                    <ul class="divide-y divide-gray-200">
+                        <li onClick=${() => setIsProductFormOpen(true)} class="p-3 flex items-center gap-3 cursor-pointer hover:bg-slate-100 rounded-md text-primary font-semibold">
+                            ${ICONS.add}
+                            <span>Crear nuevo producto</span>
+                        </li>
+                        ${availableProducts.map(p => html`
+                            <li key=${p.id} onClick=${() => handleProductSelected(p)} class="p-3 flex items-center gap-3 cursor-pointer hover:bg-slate-100 rounded-md">
+                                <img src=${p.imagen_principal || NO_IMAGE_ICON_URL} class="h-10 w-10 rounded-md object-cover flex-shrink-0 bg-white" />
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-medium text-gray-800 truncate">${p.nombre}</p>
+                                    <p class="text-xs text-gray-500">Stock total actual: ${p.stock_total}</p>
+                                </div>
+                            </li>
+                        `)}
+                    </ul>
+                </div>
             </div>
         </div>
-        ${formData.tipo_pago === 'Crédito' && html`
-            <div class="mt-4 space-y-4 animate-fade-in-down">
-                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <${FormInput} label="Fecha de Vencimiento" name="fecha_vencimiento" type="date" value=${formData.fecha_vencimiento} onInput=${handleInput} />
-                         ${daysRemaining && html`<div class="mt-2 text-right">${daysRemaining}</div>`}
-                    </div>
-                    <${FormInput} label="Abono Inicial (Opcional)" name="abono_inicial" type="number" value=${formData.abono_inicial} onInput=${handleInput} required=${false} />
-                </div>
-                <div>
-                     <label class="block text-sm font-medium text-gray-700">Método de Pago del Abono</label>
-                     <div class="mt-2 grid grid-cols-3 gap-3">
-                        <button type="button" onClick=${() => setFormData({...formData, metodo_abono_inicial: 'Efectivo'})} class="flex flex-col items-center justify-center p-2 rounded-md text-sm font-semibold transition-colors ${formData.metodo_abono_inicial === 'Efectivo' ? 'bg-primary text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}">${ICONS.payments} Efectivo</button>
-                        <button type="button" onClick=${() => setFormData({...formData, metodo_abono_inicial: 'QR'})} class="flex flex-col items-center justify-center p-2 rounded-md text-sm font-semibold transition-colors ${formData.metodo_abono_inicial === 'QR' ? 'bg-primary text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}">${ICONS.qr_code_2} QR</button>
-                        <button type="button" onClick=${() => setFormData({...formData, metodo_abono_inicial: 'Tarjeta'})} class="flex flex-col items-center justify-center p-2 rounded-md text-sm font-semibold transition-colors ${formData.metodo_abono_inicial === 'Tarjeta' ? 'bg-primary text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}">${ICONS.credit_card} Tarjeta</button>
-                     </div>
-                </div>
-            </div>
-        `}
-        <div class="mt-6 p-4 rounded-lg bg-slate-50 border">
-            <h4 class="font-semibold text-gray-800">Resumen</h4>
-            <dl class="mt-2 text-sm space-y-1">
-                <div class="flex justify-between">
-                    <dt class="text-gray-600">Total:</dt>
-                    <dd class="font-medium text-gray-900">${total.toFixed(2)} ${formData.moneda}</dd>
-                </div>
-                <div class="flex justify-between">
-                    <dt class="text-gray-600">Tipo Pago:</dt>
-                    <dd class="font-medium text-gray-900">${formData.tipo_pago}</dd>
-                </div>
-                ${formData.tipo_pago === 'Crédito' && html`
-                    <div class="flex justify-between">
-                        <dt class="text-gray-600">Abono Inicial:</dt>
-                        <dd class="font-medium text-gray-900">${Number(formData.abono_inicial).toFixed(2)} ${formData.moneda}</dd>
-                    </div>
-                    <div class="flex justify-between font-bold">
-                        <dt class="text-gray-900">Saldo Pendiente:</dt>
-                        <dd class="text-red-600">${(total - Number(formData.abono_inicial)).toFixed(2)} ${formData.moneda}</dd>
-                    </div>
-                `}
-            </dl>
-        </div>
-    `
-};
+    `;
+}
 
-function getLocalDateString() {
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
+function Step3({ formData, handleInput, total }) {
+    return html`
+        <div class="max-w-xl mx-auto space-y-6 animate-fade-in-down">
+            <h3 class="text-lg font-semibold text-gray-900">3. Detalles del Pago</h3>
+            <div class="text-center bg-slate-50 p-4 rounded-lg border">
+                <p class="text-sm text-gray-600">Total a Pagar</p>
+                <p class="text-4xl font-bold text-primary">${total.toFixed(2)} <span class="text-lg">${formData.moneda}</span></p>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Tipo de Pago</label>
+                <div class="mt-1 flex rounded-md shadow-sm">
+                    <button type="button" onClick=${() => handleInput({ target: { name: 'tipo_pago', value: 'Contado' } })} class=${`relative inline-flex items-center justify-center w-1/2 rounded-l-md px-3 py-2 text-sm font-semibold ${formData.tipo_pago === 'Contado' ? 'bg-primary text-white' : 'bg-white text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'}`}>Contado</button>
+                    <button type="button" onClick=${() => handleInput({ target: { name: 'tipo_pago', value: 'Crédito' } })} class=${`-ml-px relative inline-flex items-center justify-center w-1/2 rounded-r-md px-3 py-2 text-sm font-semibold ${formData.tipo_pago === 'Crédito' ? 'bg-primary text-white' : 'bg-white text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'}`}>Crédito</button>
+                </div>
+            </div>
+            ${formData.tipo_pago === 'Crédito' && html`
+                <div class="p-4 border rounded-lg space-y-4 animate-fade-in-down">
+                    <${FormInput} label="Fecha de Vencimiento" name="fecha_vencimiento" type="date" value=${formData.fecha_vencimiento || ''} onInput=${handleInput} />
+                    <${FormInput} label="Abono Inicial (${formData.moneda})" name="abono_inicial" type="number" value=${formData.abono_inicial} onInput=${handleInput} required=${false} />
+                    ${Number(formData.abono_inicial) > 0 && html`
+                        <div class="animate-fade-in-down">
+                            <label for="metodo_abono_inicial" class="block text-sm font-medium text-gray-700">Método del Abono</label>
+                            <select id="metodo_abono_inicial" name="metodo_abono_inicial" value=${formData.metodo_abono_inicial} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm">
+                                <option>Efectivo</option>
+                                <option>QR</option>
+                                <option>Transferencia Bancaria</option>
+                            </select>
+                        </div>
+                    `}
+                </div>
+            `}
+        </div>
+    `;
 }
 
 export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
@@ -782,7 +568,7 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
         proveedor_id: '',
         proveedor_nombre: '',
         sucursal_id: user.sucursal_id,
-        fecha: getLocalDateString(),
+        fecha: new Date().toISOString(),
         n_factura: '',
         moneda: 'BOB',
         tasa_cambio: '6.96',
@@ -797,7 +583,7 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
         try {
             const [provRes, prodRes] = await Promise.all([
                 supabase.rpc('get_company_providers'),
-                supabase.rpc('get_company_products_for_dropdown')
+                supabase.rpc('get_company_products_with_stock_and_cost')
             ]);
             if (provRes.error) throw provRes.error;
             if (prodRes.error) throw prodRes.error;
@@ -813,7 +599,7 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
     }, []);
 
     const total = useMemo(() => 
-        formData.items.reduce((sum, item) => sum + (Number(item.cantidad || 0) * Number(item.costo_unitario || 0)), 0)
+        formData.items.reduce((sum: number, item: any) => sum + (Number(item.cantidad || 0) * Number(item.costo_unitario || 0)), 0)
     , [formData.items]);
 
     const addedProductIds = useMemo(() => new Set(formData.items.map(item => item.producto_id)), [formData.items]);
@@ -842,10 +628,11 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
             producto_id: product.id,
             producto_nombre: product.nombre,
             imagen_principal: product.imagen_principal,
-            cantidad: 1,
+            cantidad: 0,
             costo_unitario: '',
             stock_sucursal: product.stock_sucursal,
             precio_compra: product.precio_compra,
+            distribucion: [],
         });
     };
     
@@ -937,9 +724,9 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
                 },
                 p_items: formData.items.map(item => ({
                     producto_id: item.producto_id,
-                    cantidad: Number(item.cantidad),
                     costo_unitario: Number(item.costo_unitario),
-                    precios: item.prices
+                    precios: item.prices,
+                    distribucion: item.distribucion
                 }))
             };
 

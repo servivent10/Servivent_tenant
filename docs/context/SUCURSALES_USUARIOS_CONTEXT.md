@@ -1,4 +1,5 @@
-# Contexto y Especificación: Módulos de Sucursales y Usuarios
+# MÓDULO 04: GESTIÓN DE PERSONAL
+## Sucursales y Usuarios
 
 Este documento define la arquitectura y funcionalidad de la gestión de sucursales y usuarios, que ahora están integrados en un único flujo coherente. Este nuevo diseño reemplaza la antigua página `/usuarios`.
 
@@ -44,5 +45,6 @@ Es el centro de operaciones para una sucursal específica.
 
 ## 4. Lógica de Backend
 
--   **Funciones RPC:** `get_company_sucursales`, `get_sucursal_details`, `create_sucursal`, `update_sucursal`, `delete_sucursal`, `update_company_user`, `delete_company_user`.
+-   **Funciones RPC:** `get_company_sucursales`, `get_sucursal_details`, `create_sucursal`, `update_sucursal`, `delete_sucursal`, `update_company_user`.
 -   **Edge Function `create-company-user`:** Se utiliza para crear nuevos usuarios. Esta función es vital porque primero valida los permisos del usuario que realiza la acción y los límites del plan de la empresa **antes** de crear la cuenta en `auth.users` y el perfil en `public.usuarios`. Esto evita usuarios "huérfanos" y violaciones de los límites del plan.
+-   **Edge Function `delete-company-user`:** Se utiliza para eliminar usuarios, asegurando los permisos correctos para interactuar con el esquema `auth` de Supabase.

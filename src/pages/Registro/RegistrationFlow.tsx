@@ -12,12 +12,29 @@ import { ICONS } from '../../components/Icons.js';
 import { LoadingPage } from '../../components/LoadingPage.js';
 import { REGISTRATION_PLANS } from '../../lib/plansConfig.js';
 
+const countries = [
+    { name: 'Argentina', timezone: 'America/Argentina/Buenos_Aires', moneda: 'ARS' },
+    { name: 'Bolivia', timezone: 'America/La_Paz', moneda: 'BOB' },
+    { name: 'Brasil', timezone: 'America/Sao_Paulo', moneda: 'BRL' },
+    { name: 'Chile', timezone: 'America/Santiago', moneda: 'CLP' },
+    { name: 'Colombia', timezone: 'America/Bogota', moneda: 'COP' },
+    { name: 'Ecuador', timezone: 'America/Guayaquil', moneda: 'USD' },
+    { name: 'El Salvador', timezone: 'America/El_Salvador', moneda: 'USD' },
+    { name: 'España', timezone: 'Europe/Madrid', moneda: 'EUR' },
+    { name: 'Guatemala', timezone: 'America/Guatemala', moneda: 'GTQ' },
+    { name: 'Honduras', timezone: 'America/Tegucigalpa', moneda: 'HNL' },
+    { name: 'México', timezone: 'America/Mexico_City', moneda: 'MXN' },
+    { name: 'Panamá', timezone: 'America/Panama', moneda: 'USD' },
+    { name: 'Paraguay', timezone: 'America/Asuncion', moneda: 'PYG' },
+    { name: 'Perú', timezone: 'America/Lima', moneda: 'PEN' },
+    { name: 'República Dominicana', timezone: 'America/Santo_Domingo', moneda: 'DOP' },
+    { name: 'Uruguay', timezone: 'America/Montevideo', moneda: 'UYU' },
+];
+
 function StepEmpresa({ onNext, navigate, formData, handleInput, formErrors }) {
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (onNext()) {
-            // The onNext function now returns a boolean indicating success
-        }
+        onNext();
     };
     return html`
         <form onSubmit=${handleSubmit}>
@@ -31,6 +48,27 @@ function StepEmpresa({ onNext, navigate, formData, handleInput, formErrors }) {
     `;
 }
 
+function StepLocalizacion({ onNext, onBack, formData, handleCountryChange }) {
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        onNext();
+    };
+    return html`
+        <form onSubmit=${handleSubmit}>
+            <h3 class="text-lg font-semibold text-gray-900">2. Localización</h3>
+            <p class="mt-1 text-sm text-gray-600">Selecciona el país donde opera tu empresa. Esto configurará la zona horaria y la moneda por defecto.</p>
+            <div class="mt-6">
+                 <label for="pais" class="block text-sm font-medium leading-6 text-gray-900">País</label>
+                <select id="pais" name="pais" value=${formData.pais} onChange=${handleCountryChange} class="mt-2 block w-full rounded-md border border-gray-300 bg-white py-2 pl-3 pr-10 text-gray-900 shadow-sm focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/25 sm:text-sm sm:leading-6">
+                    ${countries.map(c => html`<option key=${c.name} value=${c.name}>${c.name}</option>`)}
+                </select>
+            </div>
+            <${FormButtons} onBack=${onBack} />
+        </form>
+    `;
+}
+
+
 function StepPropietario({ onNext, onBack, formData, handleInput, formErrors }) {
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -38,7 +76,7 @@ function StepPropietario({ onNext, onBack, formData, handleInput, formErrors }) 
     };
      return html`
         <form onSubmit=${handleSubmit}>
-            <h3 class="text-lg font-semibold text-gray-900">2. Crea tu cuenta de Propietario</h3>
+            <h3 class="text-lg font-semibold text-gray-900">3. Crea tu cuenta de Propietario</h3>
             <div class="mt-6 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2">
                 <div class="sm:col-span-2"><${FormInput} label="Nombre Completo" name="user_nombre" type="text" value=${formData.user_nombre} onInput=${handleInput} error=${formErrors.user_nombre} /></div>
                 <${FormInput} label="Correo electrónico" name="user_email" type="email" value=${formData.user_email} onInput=${handleInput} error=${formErrors.user_email} />
@@ -56,7 +94,7 @@ function StepSucursal({ onNext, onBack, formData, handleInput, formErrors }) {
     };
      return html`
         <form onSubmit=${handleSubmit}>
-            <h3 class="text-lg font-semibold text-gray-900">3. Registra tu Sucursal Principal</h3>
+            <h3 class="text-lg font-semibold text-gray-900">4. Registra tu Sucursal Principal</h3>
             <div class="mt-6 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2">
                 <${FormInput} label="Nombre de la Sucursal (Ej: Casa Matriz)" name="sucursal_nombre" type="text" value=${formData.sucursal_nombre} onInput=${handleInput} error=${formErrors.sucursal_nombre} />
                 <${FormInput} label="Dirección" name="sucursal_direccion" type="text" value=${formData.sucursal_direccion} onInput=${handleInput} required=${false} />
@@ -70,7 +108,7 @@ function StepSucursal({ onNext, onBack, formData, handleInput, formErrors }) {
 function StepPlan({ onBack, onSelectPlan, error }) {
     return html`
         <div>
-            <h3 class="text-lg font-semibold text-gray-900">4. Elige tu Plan</h3>
+            <h3 class="text-lg font-semibold text-gray-900">5. Elige tu Plan</h3>
             ${error && html`<div class="mt-4 p-4 rounded-md bg-red-50 text-red-700 text-sm" aria-live="assertive"><p>${error}</p></div>`}
             
             <div class="isolate mx-auto mt-6 grid grid-cols-1 gap-8 md:grid-cols-2">
@@ -118,16 +156,18 @@ export function RegistrationFlow({ navigate }) {
         sucursal_nombre: 'Sucursal Principal',
         sucursal_direccion: '',
         sucursal_telefono: '',
+        pais: 'Bolivia',
+        timezone: 'America/La_Paz',
+        moneda: 'BOB',
     });
     const [loading, setLoading] = useState(false);
     const [registrationSteps, setRegistrationSteps] = useState([]);
     const [error, setError] = useState('');
-    {/* FIX: Add explicit type to prevent TypeScript errors when accessing properties */}
-    const [formErrors, setFormErrors] = useState<{ empresa_nombre?: string; empresa_nit?: string; user_nombre?: string; user_email?: string; user_password?: string; sucursal_nombre?: string; }>({});
+    const [formErrors, setFormErrors] = useState({});
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [successData, setSuccessData] = useState(null);
-    const totalSteps = 4;
+    const totalSteps = 5;
 
     const validateField = (name, value) => {
         switch (name) {
@@ -157,20 +197,32 @@ export function RegistrationFlow({ navigate }) {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
         
-        // Real-time validation
         const errorMessage = validateField(name, value);
         setFormErrors(prev => ({ ...prev, [name]: errorMessage }));
     };
 
+    const handleCountryChange = (e) => {
+        const selectedCountryName = e.target.value;
+        const countryData = countries.find(c => c.name === selectedCountryName);
+        if (countryData) {
+            setFormData(prev => ({
+                ...prev,
+                pais: countryData.name,
+                timezone: countryData.timezone,
+                moneda: countryData.moneda,
+            }));
+        }
+    };
+
+
     const validateStep = (currentStep) => {
         setError('');
-        {/* FIX: Add explicit type to prevent TypeScript errors when adding properties */}
-        let newErrors: { [key: string]: string } = {};
+        let newErrors = {};
         let isValid = true;
         const fieldsToValidate = {
             1: ['empresa_nombre', 'empresa_nit'],
-            2: ['user_nombre', 'user_email', 'user_password'],
-            3: ['sucursal_nombre']
+            3: ['user_nombre', 'user_email', 'user_password'],
+            4: ['sucursal_nombre']
         };
 
         const fieldsForStep = fieldsToValidate[currentStep] || [];
@@ -187,16 +239,17 @@ export function RegistrationFlow({ navigate }) {
     };
     
     const nextStep = () => {
-        if (validateStep(step)) {
+        if (step === 2 || validateStep(step)) { // Skip validation for country step
             setStep(s => Math.min(s + 1, totalSteps));
             return true;
         }
         return false;
     };
+
     const prevStep = () => setStep(s => Math.max(s - 1, 1));
 
     const handleInitiateRegistration = (planDetails) => {
-        if (!validateStep(1) || !validateStep(2) || !validateStep(3)) {
+        if (!validateStep(1) || !validateStep(3) || !validateStep(4)) {
             setError("Por favor, corrige los errores en los pasos anteriores antes de continuar.");
             setStep(1); // Go back to the first step with errors
             return;
@@ -255,6 +308,8 @@ export function RegistrationFlow({ navigate }) {
                 sucursal_direccion: formData.sucursal_direccion.trim(),
                 sucursal_telefono: formData.sucursal_telefono.trim(),
                 plan_tipo: getPlanTypeString(),
+                timezone: formData.timezone,
+                moneda: formData.moneda,
             };
 
             const { error: functionError } = await supabase.functions.invoke('create-company-user', {
@@ -269,7 +324,6 @@ export function RegistrationFlow({ navigate }) {
                         if (errorData.error) { friendlyError = errorData.error; }
                     } catch (e) { /* ignore json parsing error */ }
                 }
-                // Custom handling for critical errors that require user action
                 if (friendlyError.includes('Este correo electrónico ya está en uso.')) {
                     friendlyError += ` Si este es tu correo, intenta iniciar sesión. Si el problema persiste, usa la "Herramienta de Administrador" en la página de inicio para eliminar el usuario con este correo y vuelve a intentarlo.`
                 }
@@ -311,9 +365,10 @@ export function RegistrationFlow({ navigate }) {
 
     const steps = [
         { name: 'Empresa', href: '#', status: step > 1 ? 'complete' : (step === 1 ? 'current' : 'upcoming') },
-        { name: 'Propietario', href: '#', status: step > 2 ? 'complete' : (step === 2 ? 'current' : 'upcoming') },
-        { name: 'Sucursal', href: '#', status: step > 3 ? 'complete' : (step === 3 ? 'current' : 'upcoming') },
-        { name: 'Plan', href: '#', status: step === 4 ? 'current' : 'upcoming' },
+        { name: 'País', href: '#', status: step > 2 ? 'complete' : (step === 2 ? 'current' : 'upcoming') },
+        { name: 'Propietario', href: '#', status: step > 3 ? 'complete' : (step === 3 ? 'current' : 'upcoming') },
+        { name: 'Sucursal', href: '#', status: step > 4 ? 'complete' : (step === 4 ? 'current' : 'upcoming') },
+        { name: 'Plan', href: '#', status: step === 5 ? 'current' : 'upcoming' },
     ];
 
     const stepProps = { formData, handleInput, formErrors, validateStep };
@@ -367,9 +422,10 @@ export function RegistrationFlow({ navigate }) {
 
                 <div class="mt-8 bg-white p-8 rounded-lg shadow-md min-h-[30rem]">
                   ${step === 1 && html`<${StepEmpresa} onNext=${nextStep} navigate=${navigate} ...${stepProps} />`}
-                  ${step === 2 && html`<${StepPropietario} onNext=${nextStep} onBack=${prevStep} ...${stepProps} />`}
-                  ${step === 3 && html`<${StepSucursal} onNext=${nextStep} onBack=${prevStep} ...${stepProps} />`}
-                  ${step === 4 && html`<${StepPlan} onBack=${prevStep} onSelectPlan=${handleInitiateRegistration} error=${error} />`}
+                  ${step === 2 && html`<${StepLocalizacion} onNext=${nextStep} onBack=${prevStep} formData=${formData} handleCountryChange=${handleCountryChange} />`}
+                  ${step === 3 && html`<${StepPropietario} onNext=${nextStep} onBack=${prevStep} ...${stepProps} />`}
+                  ${step === 4 && html`<${StepSucursal} onNext=${nextStep} onBack=${prevStep} ...${stepProps} />`}
+                  ${step === 5 && html`<${StepPlan} onBack=${prevStep} onSelectPlan=${handleInitiateRegistration} error=${error} />`}
                 </div>
             </div>
 

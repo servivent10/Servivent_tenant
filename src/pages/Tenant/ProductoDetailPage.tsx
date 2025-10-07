@@ -347,8 +347,8 @@ const InventoryAdjustModal = ({ isOpen, onClose, onSave, product, inventory, all
                     <tbody class="bg-white divide-y divide-gray-200">
                         ${branchesToShow.map(branch => {
                             // FIX: Ensure currentStock is a number to prevent type errors in the addition operation.
-                            // The value from the map could be `unknown`, so it must be cast.
-                            const currentStock = Number(inventoryMap.get(branch.id)) || 0;
+                            // The value from the map could be `undefined`, so it must be cast.
+                            const currentStock = Number(inventoryMap.get(branch.id) || 0);
                             const adjustmentValue = Number(adjustments[branch.id]) || 0;
                             const newStock = currentStock + adjustmentValue;
                             return html`
@@ -653,4 +653,5 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
                 />
             `}
         <//>
-    `;}
+    `;
+}

@@ -363,7 +363,7 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
                         </div>
                         <div class="flex justify-between items-end mt-2 pt-2 border-t">
                             <div class="text-sm">
-                                <p class="text-gray-500">${new Date(c.fecha).toLocaleDateString()}</p>
+                                <p class="text-gray-500">${new Date(c.fecha).toLocaleString()}</p>
                                 <p class="text-lg font-bold text-gray-900">${Number(c.total).toFixed(2)} <span class="text-xs font-normal">${c.moneda}</span></p>
                             </div>
                             <span class="text-xs text-primary font-semibold">Ver Detalles ${ICONS.chevron_right}</span>
@@ -388,7 +388,7 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
                             <tr key=${c.id} onClick=${() => handleRowClick(c)} class="hover:bg-gray-50 cursor-pointer">
                                 <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">${c.folio}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${c.proveedor_nombre}</td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${new Date(c.fecha).toLocaleDateString()}</td>
+                                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${new Date(c.fecha).toLocaleString()}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm font-semibold text-gray-800">Bs ${Number(c.total_bob).toFixed(2)}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm"><span class=${getStatusPill(c.estado_pago)}>${c.estado_pago}</span></td>
                             </tr>

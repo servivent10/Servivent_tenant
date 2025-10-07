@@ -1,4 +1,5 @@
-# Contexto y Especificación: Pantalla de Carga (LoadingPage)
+# MÓDULO 00: CORE
+## Pantalla de Carga (LoadingPage)
 
 Este documento describe la arquitectura, diseño y funcionalidad del componente `LoadingPage.tsx`, una pieza fundamental para la experiencia de usuario en ServiVENT.
 

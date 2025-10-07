@@ -112,7 +112,6 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
         const now = new Date();
         let start, end;
 
-        // Helper to format date to YYYY-MM-DD, respecting local timezone
         const toISODateString = (date) => {
             if (!date) return null;
             const year = date.getFullYear();
@@ -128,8 +127,8 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
                 break;
             case 'this_week': {
                 start = new Date(now);
-                const day = start.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-                const diffToMonday = day === 0 ? -6 : 1 - day; // adjust when day is sunday
+                const day = start.getDay();
+                const diffToMonday = day === 0 ? -6 : 1 - day;
                 start.setDate(start.getDate() + diffToMonday);
                 
                 end = new Date(start);
@@ -176,13 +175,14 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
     };
 
     const fetchData = useCallback(async () => {
-        if (!filters.startDate || !filters.endDate) return;
+        if (!filters.startDate || !filters.endDate || !companyInfo.timezone) return;
         startLoading();
         try {
             const { data, error } = await supabase.rpc('get_dashboard_data', {
                 p_start_date: filters.startDate,
                 p_end_date: filters.endDate,
-                p_sucursal_id: filters.sucursalId
+                p_sucursal_id: filters.sucursalId,
+                p_timezone: companyInfo.timezone
             });
 
             if (error) throw error;
@@ -193,7 +193,7 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
         } finally {
             stopLoading();
         }
-    }, [filters.startDate, filters.endDate, filters.sucursalId]);
+    }, [filters.startDate, filters.endDate, filters.sucursalId, companyInfo.timezone]);
 
     useEffect(() => {
         fetchData();
@@ -201,7 +201,7 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
 
     useRealtimeListener(fetchData);
 
-    const formatCurrency = (value) => `Bs ${Number(value || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const formatCurrency = (value) => `${companyInfo.monedaSimbolo} ${Number(value || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     const breadcrumbs = [{ name: 'Dashboard', href: '#/dashboard' }];
     

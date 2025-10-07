@@ -194,7 +194,7 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
         `;
     }
     
-    // Fix: Provide a default object for kpis to prevent errors if it's null from the RPC call.
+    // FIX: Provide a default object for kpis to prevent errors if it's null from the RPC call.
     const kpis = data.kpis || { total_sucursales: 0, total_empleados: 0, propietarios_count: 0, administradores_count: 0, empleados_count: 0 };
 
     return html`

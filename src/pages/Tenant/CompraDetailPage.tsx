@@ -153,7 +153,7 @@ export function CompraDetailPage({ compraId, user, onLogout, onProfileUpdate, co
                     <div class="bg-white p-6 rounded-lg shadow-md border">
                             <h3 class="text-lg font-semibold text-gray-800 mb-2">Detalles Generales</h3>
                         <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                            <div><dt class="text-gray-500">Fecha de Compra</dt><dd class="font-medium text-gray-800">${new Date(compra.fecha).toLocaleDateString()}</dd></div>
+                            <div><dt class="text-gray-500">Fecha de Compra</dt><dd class="font-medium text-gray-800">${new Date(compra.fecha).toLocaleString()}</dd></div>
                              <div><dt class="text-gray-500">N° Factura/Nota</dt><dd class="font-medium text-gray-800">${compra.n_factura || 'N/A'}</dd></div>
                             <div><dt class="text-gray-500">Tipo de Pago</dt><dd class="font-medium text-gray-800">${compra.tipo_pago}</dd></div>
                             <div><dt class="text-gray-500">Moneda</dt><dd class="font-medium text-gray-800">${compra.moneda}</dd></div>

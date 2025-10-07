@@ -5,12 +5,12 @@
 import { html } from 'htm/preact';
 import { DashboardLayout } from '../../components/DashboardLayout.js';
 import { ICONS } from '../../components/Icons.js';
-// Fix: Import the function `getTenantSidebarLinks` instead of the non-existent constant.
+// FIX: Import the function `getTenantSidebarLinks` instead of a non-existent constant.
 import { getTenantSidebarLinks, TENANT_FOOTER_LINKS } from './tenantLinks.js';
 
 export function SuspendedLicensePage({ user, onLogout, onProfileUpdate, companyInfo }) {
     
-    // Fix: Call the imported function to get the sidebar links based on user role.
+    // FIX: Call the imported function to get the sidebar links based on user role.
     const sidebarLinks = getTenantSidebarLinks(user.role);
 
     const breadcrumbs = [

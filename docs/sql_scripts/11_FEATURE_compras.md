@@ -1,9 +1,9 @@
 -- =============================================================================
--- PURCHASES (COMPRAS) MODULE - DATABASE SETUP
+-- PURCHASES (COMPRAS) MODULE - DATABASE SETUP (v3 - Datetime Fix)
 -- =============================================================================
 -- Este script crea toda la estructura de base de datos y la lógica de negocio
--- para el módulo de Compras, incluyendo proveedores, cuentas por pagar y la
--- actualización automática de inventario y costos.
+-- para el módulo de Compras. Esta versión corrige el manejo de la fecha para
+-- permitir que el usuario la especifique, usando timestamptz para consistencia.
 --
 -- **INSTRUCCIONES:**
 -- Ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.proveedores (
     empresa_id uuid NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
     nombre text NOT NULL,
     nombre_contacto text,
-    nit text NOT NULL,
+    nit text,
     telefono text,
     email text,
     direccion text,
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS public.compras (
     sucursal_id uuid NOT NULL REFERENCES public.sucursales(id) ON DELETE CASCADE,
     proveedor_id uuid NOT NULL REFERENCES public.proveedores(id) ON DELETE RESTRICT,
     folio text NOT NULL,
-    fecha date NOT NULL,
+    fecha timestamptz DEFAULT now() NOT NULL,
     moneda text NOT NULL, -- 'BOB' o 'USD'
     tasa_cambio numeric(10, 4),
     total numeric(10, 2) NOT NULL,
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS public.compras (
 );
 ALTER TABLE public.compras ENABLE ROW LEVEL SECURITY;
 
--- **MODIFICADO:** Se elimina la secuencia global para el folio.
+-- Se elimina la secuencia global para el folio.
 DROP SEQUENCE IF EXISTS compra_folio_seq;
 
 -- Tabla de Items de Compra (Detalle)
@@ -94,10 +94,8 @@ CREATE POLICY "Enable all for own company" ON public.pagos_compras FOR ALL USING
 -- Paso 3: Funciones RPC (Lógica de Negocio)
 -- -----------------------------------------------------------------------------
 
--- **FIX**: Eliminar la función antigua antes de recrearla con un nuevo tipo de retorno.
-DROP FUNCTION IF EXISTS public.get_company_providers();
-
 -- Función para obtener proveedores con su saldo pendiente
+DROP FUNCTION IF EXISTS public.get_company_providers();
 CREATE OR REPLACE FUNCTION get_company_providers()
 RETURNS TABLE (
     id uuid,
@@ -135,11 +133,9 @@ BEGIN
 END;
 $$;
 
--- **FIX**: Eliminar la función antigua antes de recrearla con un nuevo tipo de retorno.
+-- Función para crear/actualizar un proveedor
 DROP FUNCTION IF EXISTS public.upsert_proveedor(uuid, text, text, text, text, text);
 DROP FUNCTION IF EXISTS public.upsert_proveedor(uuid, text, text, text, text, text, text);
-
--- Función para crear/actualizar un proveedor (MODIFICADA: AHORA DEVUELVE EL ID y acepta nombre_contacto)
 CREATE OR REPLACE FUNCTION upsert_proveedor(p_id uuid, p_nombre text, p_nit text, p_telefono text, p_email text, p_direccion text, p_nombre_contacto text)
 RETURNS uuid
 LANGUAGE plpgsql
@@ -149,13 +145,14 @@ AS $$
 DECLARE
     caller_empresa_id uuid := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid());
     v_proveedor_id uuid;
+    v_nit_to_save text := NULLIF(TRIM(p_nit), '');
 BEGIN
     IF p_id IS NULL THEN
         INSERT INTO public.proveedores(empresa_id, nombre, nit, telefono, email, direccion, nombre_contacto)
-        VALUES (caller_empresa_id, p_nombre, p_nit, p_telefono, p_email, p_direccion, p_nombre_contacto)
+        VALUES (caller_empresa_id, p_nombre, v_nit_to_save, p_telefono, p_email, p_direccion, p_nombre_contacto)
         RETURNING id INTO v_proveedor_id;
     ELSE
-        UPDATE public.proveedores SET nombre = p_nombre, nit = p_nit, telefono = p_telefono, email = p_email, direccion = p_direccion, nombre_contacto = p_nombre_contacto
+        UPDATE public.proveedores SET nombre = p_nombre, nit = v_nit_to_save, telefono = p_telefono, email = p_email, direccion = p_direccion, nombre_contacto = p_nombre_contacto
         WHERE id = p_id AND empresa_id = caller_empresa_id;
         v_proveedor_id := p_id;
     END IF;
@@ -164,12 +161,13 @@ END;
 $$;
 
 -- Función para obtener la lista de compras
+DROP FUNCTION IF EXISTS public.get_company_purchases();
 CREATE OR REPLACE FUNCTION get_company_purchases()
 RETURNS TABLE (
     id uuid,
     folio text,
     proveedor_nombre text,
-    fecha date,
+    fecha timestamptz,
     total numeric,
     moneda text,
     total_bob numeric,
@@ -191,10 +189,8 @@ BEGIN
 END;
 $$;
 
--- **FIX**: Drop the old function before recreating it with a new return type.
+-- Función para obtener el detalle de una compra
 DROP FUNCTION IF EXISTS public.get_purchase_details(uuid);
-
--- Función para obtener el detalle de una compra (CORREGIDA)
 CREATE OR REPLACE FUNCTION get_purchase_details(p_compra_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -206,7 +202,6 @@ DECLARE
     items_list json;
     payments_list json;
 BEGIN
-    -- Obtener detalles de la compra y unirlos con el nombre del proveedor y folio.
     SELECT to_jsonb(c) || jsonb_build_object('proveedor_nombre', p.nombre) INTO purchase_details
     FROM public.compras c JOIN public.proveedores p ON c.proveedor_id = p.id WHERE c.id = p_compra_id
     AND c.empresa_id = (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid());
@@ -215,15 +210,12 @@ BEGIN
         RAISE EXCEPTION 'Compra no encontrada o no pertenece a tu empresa.';
     END IF;
     
-    -- Obtener la lista de productos de la compra
     SELECT json_agg(i) INTO items_list
     FROM (SELECT ci.*, p.nombre as producto_nombre FROM public.compra_items ci JOIN public.productos p ON ci.producto_id = p.id WHERE ci.compra_id = p_compra_id) i;
 
-    -- Obtener la lista de pagos de la compra
     SELECT json_agg(p) INTO payments_list
     FROM (SELECT * FROM public.pagos_compras WHERE compra_id = p_compra_id ORDER BY fecha_pago) p;
 
-    -- Devolver un único objeto JSON plano combinando todos los datos
     RETURN purchase_details || jsonb_build_object(
         'items', COALESCE(items_list, '[]'::json),
         'pagos', COALESCE(payments_list, '[]'::json)
@@ -231,12 +223,12 @@ BEGIN
 END;
 $$;
 
--- **FIX**: Tipos corregidos para la función de registrar compra
+-- Tipos para la función de registrar compra
 DROP TYPE IF EXISTS public.price_rule_input CASCADE;
 CREATE TYPE public.price_rule_input AS (
     lista_id uuid,
-    tipo_ganancia text,
-    valor_ganancia numeric
+    ganancia_maxima numeric,
+    ganancia_minima numeric
 );
 
 DROP TYPE IF EXISTS public.compra_item_input CASCADE;
@@ -250,7 +242,7 @@ DROP TYPE IF EXISTS public.compra_input CASCADE;
 CREATE TYPE public.compra_input AS (
     proveedor_id uuid,
     sucursal_id uuid,
-    fecha date,
+    fecha timestamptz, -- **FIX: Cambiado a timestamptz**
     moneda text,
     tasa_cambio numeric,
     tipo_pago text,
@@ -260,7 +252,7 @@ CREATE TYPE public.compra_input AS (
     metodo_abono text
 );
 
--- **FIX**: FUNCIÓN PRINCIPAL CORREGIDA: Registrar compra con folio por empresa y actualización de precios
+-- **FIX**: FUNCIÓN PRINCIPAL CORREGIDA: Usa `p_compra.fecha` del payload
 CREATE OR REPLACE FUNCTION registrar_compra(p_compra compra_input, p_items compra_item_input[])
 RETURNS uuid
 LANGUAGE plpgsql
@@ -284,40 +276,16 @@ DECLARE
     new_price numeric;
     next_folio_number integer;
 BEGIN
-    -- 1. Calcular el total de la compra
-    FOREACH item IN ARRAY p_items LOOP
-        total_compra := total_compra + (item.cantidad * item.costo_unitario);
-    END LOOP;
-
-    -- 2. Calcular total en BOB y saldo pendiente
-    IF p_compra.moneda = 'USD' THEN
-        total_compra_bob := total_compra * p_compra.tasa_cambio;
-    ELSE
-        total_compra_bob := total_compra;
+    FOREACH item IN ARRAY p_items LOOP total_compra := total_compra + (item.cantidad * item.costo_unitario); END LOOP;
+    total_compra_bob := CASE WHEN p_compra.moneda = 'USD' THEN total_compra * p_compra.tasa_cambio ELSE total_compra END;
+    IF p_compra.tipo_pago = 'Contado' THEN saldo_final := 0; estado_final := 'Pagada';
+    ELSE saldo_final := total_compra - COALESCE(p_compra.abono_inicial, 0);
+        IF saldo_final <= 0.005 THEN estado_final := 'Pagada'; saldo_final := 0;
+        ELSIF COALESCE(p_compra.abono_inicial, 0) > 0 THEN estado_final := 'Abono Parcial';
+        ELSE estado_final := 'Pendiente'; END IF;
     END IF;
+    SELECT COALESCE(MAX(substring(folio from 6)::integer), 0) + 1 INTO next_folio_number FROM public.compras WHERE empresa_id = caller_empresa_id;
 
-    IF p_compra.tipo_pago = 'Contado' THEN
-        saldo_final := 0;
-        estado_final := 'Pagada';
-    ELSE -- Crédito
-        saldo_final := total_compra - COALESCE(p_compra.abono_inicial, 0);
-        IF saldo_final <= 0.005 THEN
-            estado_final := 'Pagada';
-            saldo_final := 0;
-        ELSIF COALESCE(p_compra.abono_inicial, 0) > 0 THEN
-            estado_final := 'Abono Parcial';
-        ELSE
-            estado_final := 'Pendiente';
-        END IF;
-    END IF;
-    
-    -- 3. Calcular el siguiente número de folio para la empresa
-    SELECT COALESCE(MAX(substring(folio from 6)::integer), 0) + 1 
-    INTO next_folio_number 
-    FROM public.compras 
-    WHERE empresa_id = caller_empresa_id;
-
-    -- 4. Insertar la cabecera de la compra con el nuevo folio
     INSERT INTO public.compras (
         empresa_id, sucursal_id, proveedor_id, folio, fecha, moneda, tasa_cambio, total, total_bob,
         tipo_pago, estado_pago, saldo_pendiente, n_factura, fecha_vencimiento
@@ -327,7 +295,6 @@ BEGIN
         p_compra.tipo_pago, estado_final, saldo_final, p_compra.n_factura, p_compra.fecha_vencimiento
     ) RETURNING id INTO new_compra_id;
 
-    -- 5. Procesar cada item
     FOREACH item IN ARRAY p_items LOOP
         INSERT INTO public.compra_items (compra_id, producto_id, cantidad, costo_unitario)
         VALUES (new_compra_id, item.producto_id, item.cantidad, item.costo_unitario);
@@ -351,16 +318,12 @@ BEGIN
 
         IF item.precios IS NOT NULL AND array_length(item.precios, 1) > 0 THEN
             FOREACH price_rule IN ARRAY item.precios LOOP
-                IF price_rule.tipo_ganancia = 'porcentaje' THEN
-                    new_price := nuevo_capp * (1 + price_rule.valor_ganancia / 100.0);
-                ELSE
-                    new_price := nuevo_capp + price_rule.valor_ganancia;
-                END IF;
-                INSERT INTO public.precios_productos(producto_id, lista_precio_id, tipo_ganancia, valor_ganancia, precio)
-                VALUES(item.producto_id, price_rule.lista_id, price_rule.tipo_ganancia, price_rule.valor_ganancia, new_price)
+                new_price := nuevo_capp + price_rule.ganancia_maxima;
+                INSERT INTO public.precios_productos(producto_id, lista_precio_id, ganancia_maxima, ganancia_minima, precio)
+                VALUES(item.producto_id, price_rule.lista_id, price_rule.ganancia_maxima, price_rule.ganancia_minima, new_price)
                 ON CONFLICT (producto_id, lista_precio_id) DO UPDATE SET
-                    tipo_ganancia = EXCLUDED.tipo_ganancia,
-                    valor_ganancia = EXCLUDED.valor_ganancia,
+                    ganancia_maxima = EXCLUDED.ganancia_maxima,
+                    ganancia_minima = EXCLUDED.ganancia_minima,
                     precio = EXCLUDED.precio,
                     updated_at = now();
             END LOOP;
@@ -388,7 +351,6 @@ BEGIN
         END;
     END LOOP;
 
-    -- 6. Registrar pago
     IF p_compra.tipo_pago = 'Contado' THEN
         INSERT INTO public.pagos_compras (compra_id, monto, metodo_pago)
         VALUES (new_compra_id, total_compra, 'Contado');
@@ -424,11 +386,9 @@ BEGIN
         RAISE EXCEPTION 'El monto del pago no puede ser mayor al saldo pendiente.';
     END IF;
 
-    -- 1. Insertar el registro del pago
     INSERT INTO public.pagos_compras (compra_id, monto, metodo_pago)
     VALUES (p_compra_id, p_monto, p_metodo_pago);
 
-    -- 2. Actualizar el saldo y estado de la compra
     v_nuevo_saldo := v_saldo_actual - p_monto;
     UPDATE public.compras
     SET
@@ -442,7 +402,7 @@ END;
 $$;
 
 
--- Función auxiliar para obtener productos para dropdowns (MODIFICADA para incluir imagen y stock)
+-- Función auxiliar para obtener productos para dropdowns
 DROP FUNCTION IF EXISTS public.get_company_products_for_dropdown();
 CREATE OR REPLACE FUNCTION get_company_products_for_dropdown()
 RETURNS TABLE (
@@ -463,7 +423,6 @@ DECLARE
     caller_empresa_id uuid;
     caller_sucursal_id uuid;
 BEGIN
-    -- Obtener la empresa y sucursal del usuario que llama a la función
     SELECT u.empresa_id, u.sucursal_id INTO caller_empresa_id, caller_sucursal_id FROM public.usuarios u WHERE u.id = auth.uid();
     
     RETURN QUERY

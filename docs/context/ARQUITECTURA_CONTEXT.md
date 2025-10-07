@@ -1,4 +1,5 @@
-# Contexto de Arquitectura General: ServiVENT
+# MÓDULO 00: CORE
+## Arquitectura General
 
 Este documento es la guía maestra que describe la arquitectura, los flujos de datos y los componentes clave de la aplicación ServiVENT.
 
@@ -17,7 +18,7 @@ La aplicación está estructurada como una **Single Page Application (SPA)**. El
 Este componente es el corazón de la aplicación y gestiona:
 
 1.  **Estado de Autenticación:** Mantiene el estado del `session`, `displayUser` y `companyInfo`. Utiliza `onAuthStateChange` para reaccionar a inicios y cierres de sesión.
-2.  **Carga de Datos Inicial:** Al detectar una sesión válida, invoca la función RPC `get_user_profile_data` para obtener de forma segura y eficiente toda la información necesaria para arrancar la sesión del usuario.
+2.  **Carga de Datos Inicial:** Al detectar una sesión válida, invoca la función RPC `get_user_profile_data` para obtener de forma segura y eficiente toda la información necesaria para arrancar la sesión del usuario, incluyendo su perfil, datos de la empresa, licencia, **zona horaria y moneda**.
 3.  **Enrutamiento:** Implementa un sistema de enrutamiento basado en el hash de la URL (`window.location.hash`), renderizando la página correspondiente al rol del usuario y la ruta actual.
 4.  **Actualización de Estado en Vivo:** Pasa funciones de callback (`onProfileUpdate`, `onCompanyInfoUpdate`) a los componentes hijos para permitirles actualizar el estado global y que se refleje en toda la UI sin recargar.
 
@@ -35,13 +36,3 @@ Se utilizan funciones con `SECURITY DEFINER` para consolidar lógica de negocio 
 
 Para operaciones que requieren lógica más compleja o que combinan pasos de autenticación y base de datos, se utilizan Edge Functions.
 -   **`create-company-user`:** Esta función es crucial para crear nuevos usuarios, ya que valida los permisos del llamador y los límites del plan de la empresa antes de interactuar con `auth.users` y `public.usuarios`, reemplazando la antigua lógica de triggers de base de datos que era propensa a errores.
-
-## 3. Componentes y Sistemas Clave Reutilizables
-
--   **`DashboardLayout.tsx`:** El esqueleto principal para todas las vistas, generando menús dinámicos según el rol.
--   **`ConfirmationModal.tsx`:** Modal genérico para acciones de confirmación (ej. eliminar, cerrar sesión).
--   **`KPI_Card.tsx`:** Tarjeta de UI para mostrar indicadores clave de rendimiento.
--   **`Tabs.tsx`:** Componente de navegación por pestañas.
--   **`Avatar.tsx`:** Muestra la imagen de un usuario o un avatar con iniciales.
--   **`FloatingActionButton.tsx`:** Botón flotante para acciones principales en vistas móviles.
--   **Sistema de Carga y Notificaciones:** Los ganchos `useLoading` y `useToast` proporcionan retroalimentación visual consistente en toda la aplicación.

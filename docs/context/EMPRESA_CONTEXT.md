@@ -1,4 +1,5 @@
-# Contexto y Especificación: Módulo de Gestión de Empresa
+# MÓDULO 03: GESTIÓN DE EMPRESA
+## Configuración y Licencia
 
 Este documento define la funcionalidad de las secciones donde los usuarios administradores de una empresa (tenants) gestionan la configuración y la suscripción de su propia cuenta.
 
@@ -18,7 +19,7 @@ Proporcionar a los Propietarios y Administradores un lugar centralizado para:
 -   **Funcionalidad:**
     -   Presenta un formulario dividido en dos secciones:
         1.  **Logo de la Empresa:** Permite al Propietario subir o cambiar el logo. La imagen se almacena en el bucket `logos` de Supabase Storage, dentro de una carpeta con el `empresa_id` para garantizar la seguridad de los datos.
-        2.  **Información General:** Campos para editar el Nombre de la Empresa, NIT, Dirección y Teléfono.
+        2.  **Información General:** Campos para editar el Nombre de la Empresa y el NIT.
 -   **Lógica de Backend:** La acción de guardar invoca la función RPC `update_company_info`, que actualiza la fila correspondiente en la tabla `empresas`.
 
 ### `LicenciaPage.tsx`

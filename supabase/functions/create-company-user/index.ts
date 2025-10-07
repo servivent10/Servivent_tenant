@@ -1,40 +1,30 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// FIX: Add a declaration for the Deno global to resolve TypeScript errors
-// in environments that don't have the Deno types loaded by default.
 declare const Deno: any;
 
-// SOLUCIÓN: Definir los headers de CORS directamente aquí para eliminar la dependencia de un archivo no existente.
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 
-// Interfaz para tipar el cuerpo de la solicitud
-// **MODIFIED:** Unify payload for both new company registration and adding a user
 interface UserPayload {
-  // Common user fields
   nombre_completo: string;
   correo: string;
   password?: string;
   rol: 'Propietario' | 'Administrador' | 'Empleado';
-
-  // Fields for adding a user to an existing company
   sucursal_id?: string;
-
-  // Fields for new company registration
   empresa_nombre?: string;
   empresa_nit?: string;
   sucursal_nombre?: string;
   sucursal_direccion?: string;
   sucursal_telefono?: string;
   plan_tipo?: string;
+  timezone?: string;
+  moneda?: string;
 }
 
-// Escucha el evento 'fetch' que se dispara cuando se invoca la función
 Deno.serve(async (req) => {
-  // Maneja la solicitud pre-vuelo (preflight) de CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -44,7 +34,8 @@ Deno.serve(async (req) => {
     const {
         nombre_completo, correo, password, rol, sucursal_id,
         empresa_nombre, empresa_nit,
-        sucursal_nombre, sucursal_direccion, sucursal_telefono, plan_tipo
+        sucursal_nombre, sucursal_direccion, sucursal_telefono, plan_tipo,
+        timezone, moneda
     } = payload;
     
     if (!nombre_completo || !correo || !password || !rol) {
@@ -54,7 +45,6 @@ Deno.serve(async (req) => {
         });
     }
 
-    // Crear un cliente de Supabase ADMIN con la service_role_key para realizar operaciones privilegiadas
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -63,10 +53,8 @@ Deno.serve(async (req) => {
     let final_empresa_id: string;
     let final_sucursal_id: string;
 
-    // --- LOGIC BRANCH: New Registration vs. Add User ---
     if (rol === 'Propietario') {
-      // --- This is a new Company Registration ---
-      if (!empresa_nombre || !empresa_nit || !sucursal_nombre || !plan_tipo) {
+      if (!empresa_nombre || !empresa_nit || !sucursal_nombre || !plan_tipo || !timezone || !moneda) {
         throw new Error('Faltan campos obligatorios para el registro de una nueva empresa.');
       }
       
@@ -78,7 +66,12 @@ Deno.serve(async (req) => {
       }
 
       const { data: empresaData, error: empresaError } = await supabaseAdmin
-        .from('empresas').insert({ nombre: empresa_nombre, nit: empresa_nit }).select('id').single();
+        .from('empresas').insert({ 
+            nombre: empresa_nombre, 
+            nit: empresa_nit,
+            timezone: timezone,
+            moneda: moneda
+        }).select('id').single();
       if (empresaError) throw new Error(`Error al crear la empresa: ${empresaError.message}`);
       final_empresa_id = empresaData.id;
 
@@ -88,7 +81,6 @@ Deno.serve(async (req) => {
       final_sucursal_id = sucursalData.id;
       
       const fecha_fin = new Date();
-      // Todos los planes ahora tienen 30 días de prueba inicial
       fecha_fin.setDate(fecha_fin.getDate() + 30);
 
       const { error: licenciaError } = await supabaseAdmin.from('licencias').insert({
@@ -96,12 +88,11 @@ Deno.serve(async (req) => {
           tipo_licencia: plan_tipo,
           fecha_inicio: new Date().toISOString(),
           fecha_fin: fecha_fin.toISOString(),
-          estado: 'Pendiente de Aprobación' // CAMBIO: Ahora el estado inicial es pendiente
+          estado: 'Pendiente de Aprobación'
         });
        if (licenciaError) throw new Error(`Error al crear la licencia: ${licenciaError.message}`);
 
     } else {
-      // --- This is for adding a user to an existing company (original logic) ---
       const authHeader = req.headers.get('Authorization');
       if (!authHeader) throw new Error('Missing authorization header');
       const jwt = authHeader.replace('Bearer ', '');
@@ -133,7 +124,6 @@ Deno.serve(async (req) => {
       final_sucursal_id = sucursal_id;
     }
 
-    // --- UNIFIED LOGIC: Create auth user and profile ---
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: correo,
       password: password,
