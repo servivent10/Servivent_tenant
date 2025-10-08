@@ -299,12 +299,12 @@ const ProductDetailModal = ({ isOpen, onClose, product, currentUserSucursal }) =
                         ${product.all_branch_stock.map(stockInfo => {
                             const isCurrentUserSucursal = stockInfo.sucursal_nombre === currentUserSucursal;
                             return html`
-                                <li class="grid grid-cols-[1fr_auto] items-center gap-2 py-3 px-4 ${isCurrentUserSucursal ? 'bg-blue-50 rounded-md' : ''}">
+                                <li class="grid grid-cols-[1fr_auto] items-center gap-2 py-3 px-4 ${isCurrentUserSucursal ? 'bg-blue-50' : ''}">
                                     <div class="flex items-baseline gap-2 min-w-0">
                                         <p class="font-medium text-gray-800 truncate" title=${stockInfo.sucursal_nombre}>
                                             ${stockInfo.sucursal_nombre}
                                         </p>
-                                        ${isCurrentUserSucursal ? html`<p class="text-xs font-bold text-primary whitespace-nowrap">(Tu Sucursal)</p>` : ''}
+                                        ${isCurrentUserSucursal && html`<p class="text-xs font-bold text-primary whitespace-nowrap">(Tu Sucursal)</p>`}
                                     </div>
                                     <p class="text-lg font-bold ${stockInfo.cantidad > 0 ? 'text-green-600' : 'text-red-600'}">${stockInfo.cantidad}</p>
                                 </li>

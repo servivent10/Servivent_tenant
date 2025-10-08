@@ -48,6 +48,7 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
             required=${required} 
             value=${value}
             onInput=${onInput}
+            onFocus=${handleFocus}
             disabled=${disabled}
             style=${{ colorScheme: 'light' }}
             class="block w-full rounded-md p-2 shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses}" 
@@ -90,6 +91,7 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
             required=${required} 
             value=${formatISOToLocalInput(value)}
             onInput=${handleDateTimeInput}
+            onFocus=${handleFocus}
             disabled=${disabled}
             style=${{ colorScheme: 'light' }}
             class="block w-full rounded-md p-2 shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses}" 

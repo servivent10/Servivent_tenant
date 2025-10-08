@@ -69,8 +69,27 @@ const ActivityIcon = ({ type }) => {
         producto: ICONS.package_2,
         cliente: ICONS.person_add,
         gasto: ICONS.expenses,
+        traspaso: ICONS.transfers,
     };
     return html`<div class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500">${icons[type] || ICONS.bolt}</div>`;
+};
+
+const TraspasoStatusPill = ({ status }) => {
+    if (!status) return null;
+    const baseClasses = 'ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium';
+    let pillClass;
+    switch (status) {
+        case 'En Camino':
+            pillClass = 'bg-amber-100 text-amber-800';
+            break;
+        case 'Recibido':
+            pillClass = 'bg-green-100 text-green-800';
+            break;
+        default:
+            pillClass = 'bg-gray-100 text-gray-800';
+            break;
+    }
+    return html`<span class="${baseClasses} ${pillClass}">${status}</span>`;
 };
 
 const DashboardSkeleton = () => {
@@ -342,11 +361,14 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
                              ${recent_activity && recent_activity.length > 0 ? recent_activity.map(act => html`
                                 <li class="flex items-start gap-3">
                                     <${ActivityIcon} type=${act.type} />
-                                    <div class="flex-1">
-                                        <p class="text-sm text-gray-800" dangerouslySetInnerHTML=${{__html: act.description}}></p>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center">
+                                            <p class="text-sm text-gray-800 truncate" dangerouslySetInnerHTML=${{__html: act.description}}></p>
+                                            ${act.type === 'traspaso' && html`<${TraspasoStatusPill} status=${act.estado} />`}
+                                        </div>
                                         <p class="text-xs text-gray-500">${new Date(act.timestamp).toLocaleString()}</p>
                                     </div>
-                                    ${act.amount && html`<p class="text-sm font-semibold text-gray-800">${formatCurrency(act.amount)}</p>`}
+                                    ${act.amount != null && html`<p class="text-sm font-semibold text-gray-800">${formatCurrency(act.amount)}</p>`}
                                 </li>
                              `) : html`<p class="text-sm text-gray-500 text-center py-4">No hay actividad reciente.</p>`}
                         </ul>

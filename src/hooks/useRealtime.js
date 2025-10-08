@@ -99,6 +99,7 @@ export function RealtimeProvider({ children }) {
                 gastos: 'Se ha registrado un nuevo gasto.',
                 pagos_ventas: 'Se ha registrado un pago de venta.',
                 pagos_compras: 'Se ha registrado un pago de compra.',
+                traspasos: 'El estado de un traspaso ha cambiado.',
             };
 
             if (tablesToWatch[payload.table]) {

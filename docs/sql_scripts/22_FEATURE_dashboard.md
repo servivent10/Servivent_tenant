@@ -1,12 +1,12 @@
 -- =============================================================================
--- DATE & TIMEZONE CONSISTENCY FIX (V10 - Dynamic Timezone)
+-- DATE & TIMEZONE CONSISTENCY FIX (V12 - Realtime Traspasos Status)
 -- =============================================================================
--- Este script es la solución definitiva al problema de inconsistencia de datos
--- del dashboard. Se modifica la estructura de la base de datos y se refactoriza
--- la función principal para que sea consciente de la zona horaria.
+-- Este script actualiza la función del dashboard para incluir el ESTADO de los
+-- traspasos en el feed de "Actividad Reciente", permitiendo que se muestre
+-- si está "En Camino" o "Recibido" y se actualice en tiempo real.
 --
 -- **INSTRUCCIONES:**
--- Ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
+-- Ejecuta este script completo en tu Editor SQL de Supabase.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -20,12 +20,12 @@ UPDATE public.empresas SET timezone = 'America/La_Paz', moneda = 'BOB' WHERE tim
 
 
 -- -----------------------------------------------------------------------------
--- Paso 2: Actualizar la función del Dashboard con la nueva lógica de zona horaria
+-- Paso 2: Actualizar la función del Dashboard con la nueva lógica de zona horaria y estado
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_dashboard_data(
     p_start_date date,
     p_end_date date,
-    p_timezone text, -- NUEVO: Parámetro de zona horaria (ej: 'America/La_Paz')
+    p_timezone text, -- Parámetro de zona horaria (ej: 'America/La_Paz')
     p_sucursal_id uuid DEFAULT NULL
 )
 RETURNS jsonb
@@ -189,19 +189,45 @@ BEGIN
         GROUP BY p.id, p.nombre HAVING SUM(i.cantidad) <= SUM(COALESCE(i.stock_minimo, 0)) AND SUM(COALESCE(i.stock_minimo, 0)) > 0
         ORDER BY SUM(i.cantidad) ASC LIMIT 5 ) AS low_stock;
 
-    -- 5. Get recent activity
+    -- 5. Get recent activity (with traspaso status)
     SELECT json_agg(activity) INTO recent_activity FROM (
-        (SELECT 'venta' as type, 'Venta ' || v.folio || ' a ' || COALESCE(c.nombre, 'Consumidor Final') || CASE WHEN p_sucursal_id IS NULL AND s.nombre IS NOT NULL THEN ' en <b>' || s.nombre || '</b>' ELSE '' END as description, v.total as amount, v.created_at as timestamp
+        (SELECT 
+            'venta' as type, 
+            'Venta ' || v.folio || ' a ' || COALESCE(c.nombre, 'Consumidor Final') || CASE WHEN p_sucursal_id IS NULL AND s.nombre IS NOT NULL THEN ' en <b>' || s.nombre || '</b>' ELSE '' END as description, 
+            v.total as amount, 
+            v.created_at as timestamp,
+            NULL as estado
         FROM ventas v LEFT JOIN clientes c ON v.cliente_id = c.id LEFT JOIN sucursales s ON v.sucursal_id = s.id
         WHERE v.empresa_id = caller_empresa_id AND (effective_sucursal_id IS NULL OR v.sucursal_id = effective_sucursal_id) )
         UNION ALL
-        (SELECT 'compra' as type, 'Compra ' || com.folio || ' de ' || p.nombre || CASE WHEN p_sucursal_id IS NULL AND s.nombre IS NOT NULL THEN ' para <b>' || s.nombre || '</b>' ELSE '' END as description, com.total_bob as amount, com.created_at as timestamp
+        (SELECT 
+            'compra' as type, 
+            'Compra ' || com.folio || ' de ' || p.nombre || CASE WHEN p_sucursal_id IS NULL AND s.nombre IS NOT NULL THEN ' para <b>' || s.nombre || '</b>' ELSE '' END as description, 
+            com.total_bob as amount, 
+            com.created_at as timestamp,
+            NULL as estado
         FROM compras com JOIN proveedores p ON com.proveedor_id = p.id LEFT JOIN sucursales s ON com.sucursal_id = s.id
         WHERE com.empresa_id = caller_empresa_id AND (effective_sucursal_id IS NULL OR com.sucursal_id = effective_sucursal_id) )
         UNION ALL
-        (SELECT 'gasto' as type, 'Gasto: ' || g.concepto || CASE WHEN p_sucursal_id IS NULL AND s.nombre IS NOT NULL THEN ' en <b>' || s.nombre || '</b>' ELSE '' END as description, g.monto as amount, g.created_at as timestamp
+        (SELECT 
+            'gasto' as type, 
+            'Gasto: ' || g.concepto || CASE WHEN p_sucursal_id IS NULL AND s.nombre IS NOT NULL THEN ' en <b>' || s.nombre || '</b>' ELSE '' END as description, 
+            g.monto as amount, 
+            g.created_at as timestamp,
+            NULL as estado
         FROM gastos g LEFT JOIN sucursales s ON g.sucursal_id = s.id
         WHERE g.empresa_id = caller_empresa_id AND (effective_sucursal_id IS NULL OR g.sucursal_id = effective_sucursal_id) )
+        UNION ALL
+        (SELECT 
+            'traspaso' as type, 
+            'Traspaso ' || t.folio || ' de <b>' || s_origen.nombre || '</b> a <b>' || s_destino.nombre || '</b>' as description, 
+            NULL as amount, 
+            t.created_at as timestamp,
+            t.estado
+        FROM traspasos t
+        JOIN sucursales s_origen ON t.sucursal_origen_id = s_origen.id
+        JOIN sucursales s_destino ON t.sucursal_destino_id = s_destino.id
+        WHERE t.empresa_id = caller_empresa_id AND (effective_sucursal_id IS NULL OR t.sucursal_origen_id = effective_sucursal_id OR t.sucursal_destino_id = effective_sucursal_id))
         ORDER BY timestamp DESC LIMIT 5
     ) as activity;
 

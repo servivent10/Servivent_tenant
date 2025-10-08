@@ -27,6 +27,8 @@ import { SucursalDetailPage } from './pages/Tenant/SucursalDetailPage.js';
 import { ProveedoresPage } from './pages/Tenant/ProveedoresPage.js';
 import { ClientesPage } from './pages/Tenant/ClientesPage.js';
 import { TraspasosPage } from './pages/Tenant/TraspasosPage.js';
+import { NuevoTraspasoPage } from './pages/Tenant/NuevoTraspasoPage.js';
+import { TraspasoDetailPage } from './pages/Tenant/TraspasoDetailPage.js';
 import { GastosPage } from './pages/Tenant/GastosPage.js';
 import { LicenciaPage } from './pages/Tenant/LicenciaPage.js';
 import { ConfiguracionPage } from './pages/Tenant/ConfiguracionPage.js';
@@ -378,6 +380,7 @@ function AppContent() {
             const productoDetailsMatch = currentPath.match(/^\/productos\/(.+)$/);
             const compraDetailsMatch = currentPath.match(/^\/compras\/(.+)$/);
             const ventaDetailsMatch = currentPath.match(/^\/ventas\/(.+)$/);
+            const traspasoDetailsMatch = currentPath.match(/^\/traspasos\/(.+)$/);
             
             let tenantContent;
 
@@ -390,15 +393,14 @@ function AppContent() {
             else if (currentPath === '/compras/nueva') tenantContent = html`<${NuevaCompraPage} ...${commonProps} />`;
             else if (compraDetailsMatch) { const id = compraDetailsMatch[1]; tenantContent = html`<${CompraDetailPage} compraId=${id} ...${commonProps} />`; }
             else if (currentPath === '/ventas') tenantContent = html`<${VentasPage} ...${commonProps} />`;
-            else if (ventaDetailsMatch) {
-                const id = ventaDetailsMatch[1];
-                tenantContent = html`<${VentaDetailPage} ventaId=${id} ...${commonProps} />`;
-            }
+            else if (ventaDetailsMatch) { const id = ventaDetailsMatch[1]; tenantContent = html`<${VentaDetailPage} ventaId=${id} ...${commonProps} />`; }
             else if (currentPath === '/sucursales') tenantContent = html`<${SucursalesListPage} ...${commonProps} />`;
             else if (sucursalDetailsMatch) { const id = sucursalDetailsMatch[1]; tenantContent = html`<${SucursalDetailPage} sucursalId=${id} ...${commonProps} />`; }
             else if (currentPath === '/proveedores') tenantContent = html`<${ProveedoresPage} ...${commonProps} />`;
             else if (currentPath === '/clientes') tenantContent = html`<${ClientesPage} ...${commonProps} />`;
             else if (currentPath === '/traspasos') tenantContent = html`<${TraspasosPage} ...${commonProps} />`;
+            else if (currentPath === '/traspasos/nuevo') tenantContent = html`<${NuevoTraspasoPage} ...${commonProps} />`;
+            else if (traspasoDetailsMatch) { const id = traspasoDetailsMatch[1]; tenantContent = html`<${TraspasoDetailPage} traspasoId=${id} ...${commonProps} />`; }
             else if (currentPath === '/gastos') tenantContent = html`<${GastosPage} ...${commonProps} />`;
             else if (currentPath === '/licencia') tenantContent = html`<${LicenciaPage} ...${commonProps} />`;
             else if (currentPath === '/configuracion') tenantContent = html`<${ConfiguracionPage} ...${commonProps} />`;

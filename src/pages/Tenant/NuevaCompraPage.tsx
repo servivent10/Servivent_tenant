@@ -103,7 +103,6 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
     const [productDetails, setProductDetails] = useState(null);
     const [localItem, setLocalItem] = useState(item);
     
-    // FIX: Explicitly type the distribuciones state to ensure TypeScript infers its values as numbers.
     const [distribuciones, setDistribuciones] = useState<{ [key: string]: number }>({});
     
     const [priceRules, setPriceRules] = useState([]);
@@ -113,18 +112,17 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
     const [validationErrors, setValidationErrors] = useState<{ [key: string]: { ganancia_maxima?: string; ganancia_minima?: string } }>({});
     const [collapsedLists, setCollapsedLists] = useState({});
 
-    // FIX: With a typed `distribuciones` state, `qty` will be a number, resolving type errors.
     const cantidadTotalComprada = useMemo(() => 
         Object.values(distribuciones).reduce((sum: number, qty: number) => sum + (qty || 0), 0)
     , [distribuciones]);
 
-    const capp_actual = Number(productDetails?.details.precio_compra || 0);
+    const capp_actual = Number(productDetails?.details?.precio_compra || 0);
     const costo_unitario_ingresado = Number(localItem.costo_unitario || 0);
     const tasa_cambio = Number(exchangeRate || 1);
     const costo_compra_bob = currency === 'USD' ? costo_unitario_ingresado * tasa_cambio : costo_unitario_ingresado;
     
     const stock_total_actual = useMemo(() =>
-        productDetails?.inventory.reduce((sum: number, inv: { cantidad: number }) => sum + Number(inv.cantidad || 0), 0) || 0,
+        productDetails?.inventory?.reduce((sum: number, inv: { cantidad: number }) => sum + Number(inv.cantidad || 0), 0) || 0,
         [productDetails]);
 
     const nuevo_capp = (stock_total_actual + cantidadTotalComprada) > 0
@@ -153,8 +151,6 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
                 if (error) throw error;
                 setProductDetails(data);
                 
-                // Initialize distributions from saved item data if it exists
-                // FIX: Add explicit type to prevent type errors.
                 const initialDistribuciones: { [key: string]: number } = {};
                 if (item.distribucion && Array.isArray(item.distribucion)) {
                     item.distribucion.forEach(d => {
@@ -337,9 +333,12 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
                                     <div class="space-y-2 max-h-48 overflow-y-auto pr-2">
                                         ${productDetails?.all_branches.map(branch => {
                                             const currentStock = Number(inventoryMap.get(branch.id) || 0);
+                                            const isCurrentUserSucursal = branch.id === user.sucursal_id;
                                             return html`
-                                                <div key=${branch.id} class="grid grid-cols-3 items-center gap-2 p-2 rounded-md hover:bg-slate-50">
-                                                    <label for=${`dist-${branch.id}`} class="text-sm font-medium text-gray-800 truncate">${branch.nombre}</label>
+                                                <div key=${branch.id} class="grid grid-cols-3 items-center gap-2 p-2 rounded-md hover:bg-slate-50 ${isCurrentUserSucursal ? 'bg-blue-50' : ''}">
+                                                    <label for=${`dist-${branch.id}`} class="text-sm font-medium text-gray-800 truncate">
+                                                        ${branch.nombre} ${isCurrentUserSucursal ? html`<span class="text-xs font-bold text-primary">(Tu Sucursal)</span>` : ''}
+                                                    </label>
                                                     <div class="text-sm text-center text-gray-500">Stock: ${currentStock}</div>
                                                     <input id=${`dist-${branch.id}`} type="number" value=${distribuciones[branch.id] || ''} onInput=${e => handleDistribucionChange(branch.id, e.target.value)} placeholder="0" class="w-full text-center rounded-md bg-white text-gray-900 p-2 border border-gray-300 shadow-sm focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm sm:leading-6" />
                                                 </div>
@@ -775,22 +774,11 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
                     <ol role="list" class="space-y-4 md:flex md:space-x-8 md:space-y-0">
                         ${stepperSteps.map((s, index) => html`
                         <li class="md:flex-1">
-                            ${s.status === 'complete' ? html`
-                            <a href="#" onClick=${(e) => { e.preventDefault(); if (index < step - 1) setStep(index + 1); }} class="group flex flex-col border-l-4 border-primary py-2 pl-4 transition-colors hover:border-primary-dark md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4">
-                                <span class="text-sm font-medium text-primary transition-colors">${`Paso ${index + 1}`}</span>
-                                <span class="text-sm font-medium text-gray-900">${s.name}</span>
-                            </a>
-                            ` : s.status === 'current' ? html`
-                            <div class="flex flex-col border-l-4 border-primary py-2 pl-4 md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4" aria-current="step">
-                                <span class="text-sm font-medium text-primary">${`Paso ${index + 1}`}</span>
+                            <div class="flex flex-col border-l-4 py-2 pl-4 md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4
+                                ${s.status === 'complete' ? 'border-primary' : (s.status === 'current' ? 'border-primary' : 'border-gray-200')}">
+                                <span class="text-sm font-medium ${s.status === 'current' || s.status === 'complete' ? 'text-primary' : 'text-gray-500'}">${`Paso ${index + 1}`}</span>
                                 <span class="text-sm font-medium text-gray-900">${s.name}</span>
                             </div>
-                            ` : html`
-                            <div class="group flex flex-col border-l-4 border-gray-200 py-2 pl-4 transition-colors md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4">
-                                <span class="text-sm font-medium text-gray-500 transition-colors">${`Paso ${index + 1}`}</span>
-                                <span class="text-sm font-medium text-gray-500">${s.name}</span>
-                            </div>
-                            `}
                         </li>
                         `)}
                     </ol>

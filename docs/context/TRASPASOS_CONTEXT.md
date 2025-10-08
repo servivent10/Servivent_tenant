@@ -1,23 +1,42 @@
 # MÓDULO 06: OPERACIONES
 ## Traspasos
 
-Este documento describe el estado actual y la visión futura del módulo de **Traspasos**.
+Este documento define la arquitectura y funcionalidad del módulo de **Traspasos**, diseñado para permitir la transferencia de stock de productos entre las diferentes sucursales de la empresa.
 
-## 1. Objetivo del Módulo (Visión a Futuro)
+## 1. Objetivo del Módulo
 
-El objetivo de este módulo será permitir la transferencia de stock de productos entre las diferentes sucursales de la empresa. Esto es crucial para negocios con múltiples ubicaciones que necesitan reequilibrar su inventario sin registrar una compra o una venta.
+-   Proporcionar a los Propietarios y Administradores una herramienta para mover inventario de una sucursal de origen a una de destino.
+-   Asegurar que cada traspaso sea una operación transaccional que actualice el stock en ambas sucursales de forma atómica.
+-   Mantener un historial completo y auditable de todos los movimientos de inventario entre sucursales.
+-   Integrarse con el sistema de tiempo real para que los cambios de stock se reflejen instantáneamente en toda la aplicación.
 
-## 2. Estado Actual
+## 2. Flujo de Usuario y Páginas
 
--   **Página:** `TraspasosPage.tsx`
--   **Funcionalidad:** Actualmente, el módulo consiste en una página de marcador de posición (`placeholder`). El enlace de navegación existe en la barra lateral, pero la página en sí no contiene ninguna funcionalidad implementada.
+-   **`TraspasosPage.tsx` (Página de Listado):**
+    -   Es la página principal del módulo, accesible solo para Propietarios y Administradores.
+    -   Muestra KPIs relevantes como el total de traspasos del mes y el producto más movido.
+    -   Presenta un historial de todos los traspasos en una vista responsiva (tabla en escritorio, tarjetas en móvil).
+    -   Un botón "Nuevo Traspaso" dirige al usuario al asistente de creación.
 
-## 3. Flujo de Usuario Futuro
+-   **`NuevoTraspasoPage.tsx` (Asistente de Creación):**
+    -   Un asistente de 3 pasos guía al usuario:
+        1.  **Origen y Destino:** Se selecciona la sucursal que envía y la que recibe, junto con la fecha y notas opcionales.
+        2.  **Selección de Productos:** Un buscador de productos inteligente muestra únicamente los artículos con stock en la **sucursal de origen**. El usuario añade productos y define la cantidad a traspasar, con validación en tiempo real para no exceder el stock disponible.
+        3.  **Confirmación:** Se muestra un resumen completo del traspaso antes de procesarlo.
 
-1.  **Creación de Traspaso:** El usuario (Propietario o Administrador) iniciará un nuevo traspaso.
-2.  **Definición de Origen y Destino:** Se seleccionará la sucursal de origen (de donde sale el stock) y la sucursal de destino (a donde llega).
-3.  **Selección de Productos:** El usuario buscará y añadirá los productos y las cantidades a transferir. El sistema validará que la sucursal de origen tenga stock suficiente.
-4.  **Confirmación:** Al confirmar, el sistema registrará el traspaso y generará dos movimientos de inventario:
-    -   Un movimiento de **salida** en la sucursal de origen.
-    -   Un movimiento de **entrada** en la sucursal de destino.
-5.  **Historial:** La página principal del módulo mostrará un historial de todos los traspasos realizados, con la capacidad de ver los detalles de cada uno.
+-   **`TraspasoDetailPage.tsx` (Página de Detalle):**
+    -   Una vista de solo lectura que muestra toda la información de un traspaso ya realizado: folio, sucursales, fecha, usuario que lo realizó y un listado detallado de los productos y cantidades transferidas.
+
+## 3. Lógica de Backend (Funciones RPC)
+
+-   **`registrar_traspaso()`:** Es la función transaccional principal. Al ejecutarse, realiza las siguientes acciones de forma atómica:
+    1.  Valida que el usuario tenga permisos (Propietario o Administrador).
+    2.  Valida por última vez que la sucursal de origen tenga stock suficiente para cada producto.
+    3.  Crea un nuevo registro en la tabla `traspasos` y los registros correspondientes en `traspaso_items`.
+    4.  **Actualiza el inventario:** Resta la cantidad de la tabla `inventarios` para la sucursal de origen y la suma para la sucursal de destino.
+    5.  **Crea un registro de auditoría:** Inserta dos movimientos en la tabla `movimientos_inventario`: uno de "Salida por Traspaso" en el origen y otro de "Entrada por Traspaso" en el destino.
+
+-   **`get_traspasos_data()`:** Obtiene el historial de traspasos y los datos para los KPIs de la página principal.
+-   **`get_data_for_new_traspaso()`:** Obtiene la lista de sucursales para el formulario de nuevo traspaso.
+-   **`get_products_for_traspaso(p_sucursal_id)`:** Obtiene la lista de productos con su stock disponible *únicamente* en la sucursal de origen especificada.
+-   **`get_traspaso_details(p_traspaso_id)`:** Recupera toda la información para la página de detalle.
