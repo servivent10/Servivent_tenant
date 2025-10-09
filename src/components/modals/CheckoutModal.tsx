@@ -36,6 +36,19 @@ const SaleTypeButton = ({ label, type, activeType, onClick, disabled = false }) 
     `;
 };
 
+const QuickPayButton = ({ amount, label, icon, onClick, disabled }) => {
+    const baseClasses = "flex-1 flex items-center justify-center gap-2 p-2 rounded-md text-sm font-semibold transition-colors border";
+    const disabledClasses = "disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed";
+    const activeClasses = "bg-white hover:bg-slate-50 text-gray-800 border-gray-300";
+
+    return html`
+        <button onClick=${() => onClick(amount)} disabled=${disabled} class="${baseClasses} ${activeClasses} ${disabledClasses}">
+            ${icon}
+            <span>${label}</span>
+        </button>
+    `;
+};
+
 
 export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId, companyInfo }) {
     const [montoRecibido, setMontoRecibido] = useState('');
@@ -61,7 +74,6 @@ export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId
     }, [isOpen, total]);
     
     useEffect(() => {
-        // If client is deselected, sale cannot be credit
         if (!clienteId) {
             setTipoVenta('Contado');
         }
@@ -96,9 +108,11 @@ export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId
     const canConfirm = () => {
         if (isProcessing) return false;
         if (total <= 0) return false;
-        if (tipoVenta === 'Crédito') return true; // Can register a debt
-        if (metodoPago === 'Tarjeta' || metodoPago === 'QR') return true;
-        // Efectivo y Contado
+        if (tipoVenta === 'Crédito') return true;
+        if (metodoPago === 'Tarjeta' || metodoPago === 'QR' || metodoPago === 'Transferencia Bancaria') {
+            setMontoRecibido(total.toFixed(2));
+            return true;
+        };
         return Number(montoRecibido) >= total;
     };
     const isConfirmDisabled = !canConfirm();
@@ -156,6 +170,16 @@ export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId
                             </div>
                         </div>
                     </div>
+                    
+                     <div>
+                        <label class="block text-sm font-medium ${metodoPago === 'Efectivo' ? 'text-gray-700' : 'text-gray-400'} mb-2">Pagos Rápidos (Efectivo)</label>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <${QuickPayButton} amount=${total.toFixed(2)} label="Exacto" icon=${ICONS.paid} onClick=${setMontoRecibido} disabled=${metodoPago !== 'Efectivo'} />
+                            <${QuickPayButton} amount="50.00" label="Bs 50" onClick=${setMontoRecibido} disabled=${metodoPago !== 'Efectivo'} />
+                            <${QuickPayButton} amount="100.00" label="Bs 100" onClick=${setMontoRecibido} disabled=${metodoPago !== 'Efectivo'} />
+                            <${QuickPayButton} amount="200.00" label="Bs 200" onClick=${setMontoRecibido} disabled=${metodoPago !== 'Efectivo'} />
+                        </div>
+                    </div>
 
                     <div>
                         <label class="block text-sm font-medium leading-6 text-gray-900 mb-2">Método de Pago</label>
@@ -163,6 +187,7 @@ export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId
                              <${PaymentButton} icon=${ICONS.payments} label="Efectivo" method="Efectivo" activeMethod=${metodoPago} onClick=${setMetodoPago} />
                              <${PaymentButton} icon=${ICONS.credit_card} label="Tarjeta" method="Tarjeta" activeMethod=${metodoPago} onClick=${setMetodoPago} />
                              <${PaymentButton} icon=${ICONS.qr_code_2} label="QR" method="QR" activeMethod=${metodoPago} onClick=${setMetodoPago} />
+                             <${PaymentButton} icon=${ICONS.currency_exchange} label="Transf." method="Transferencia Bancaria" activeMethod=${metodoPago} onClick=${setMetodoPago} />
                         </div>
                     </div>
                     

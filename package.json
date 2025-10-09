@@ -11,7 +11,9 @@
   "dependencies": {
     "preact": "^10.27.2",
     "htm": "^3.1.1",
-    "deno.ns": "^0.8.0"
+    "deno.ns": "^0.8.0",
+    "@zxing/browser": "0.1.5",
+    "@zxing/library": "0.20.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

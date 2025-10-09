@@ -6,7 +6,7 @@ import { html } from 'htm/preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { ICONS } from './Icons.js';
 
-export const FormInput = ({ label, name, type, required = true, value, onInput, error, disabled = false, theme = 'light' }) => {
+export const FormInput = ({ label, name, type, required = true, value, onInput, error, disabled = false, theme = 'light', ...props }) => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   const finalType = type === 'password' && isPasswordVisible ? 'text' : type;
@@ -53,6 +53,7 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
             style=${{ colorScheme: 'light' }}
             class="block w-full rounded-md p-2 shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses}" 
             aria-invalid=${hasError}
+            ...${props}
           />
         </div>
         ${hasError && html`<p id="${name}-error" class="mt-2 text-sm text-red-600" aria-live="polite">${error}</p>`}
@@ -96,6 +97,7 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
             style=${{ colorScheme: 'light' }}
             class="block w-full rounded-md p-2 shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses}" 
             aria-invalid=${hasError}
+            ...${props}
           />
         </div>
         ${hasError && html`<p id="${name}-error" class="mt-2 text-sm text-red-600" aria-live="polite">${error}</p>`}
@@ -103,35 +105,39 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
     `;
   }
   
-  const paddingClasses = type === 'password' ? 'p-2 pr-10' : 'p-2';
+  const paddingClasses = type === 'password' ? 'p-2 pr-10' : (props.className && (props.className.includes('pl-') || props.className.includes('pr-')) ? '' : 'p-2');
+
 
   return html`
     <div>
-      <label for=${name} class="block text-sm font-medium leading-6 ${labelClasses}">${label}</label>
-      <div class="mt-2 relative">
-        <input 
-          id=${name} 
-          name=${name} 
-          type=${finalType} 
-          required=${required} 
-          value=${value}
-          onInput=${onInput}
-          onFocus=${handleFocus}
-          disabled=${disabled}
-          class="block w-full rounded-md shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses} ${paddingClasses}" 
-          aria-invalid=${hasError}
-          aria-describedby=${hasError ? `${name}-error` : undefined}
-        />
-        ${type === 'password' && html`
-          <button 
-            type="button" 
-            onClick=${togglePasswordVisibility}
-            class="absolute inset-y-0 right-0 flex items-center pr-3 ${buttonClasses}"
-            aria-label=${isPasswordVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-          >
-            ${isPasswordVisible ? ICONS.eyeSlash : ICONS.eye}
-          </button>
-        `}
+      ${label && html`<label for=${name} class="block text-sm font-medium leading-6 ${labelClasses}">${label}</label>`}
+      <div class=${label ? 'mt-2' : ''}>
+        <div class="relative">
+            <input 
+              id=${name} 
+              name=${name} 
+              type=${finalType} 
+              required=${required} 
+              value=${value}
+              onInput=${onInput}
+              onFocus=${handleFocus}
+              disabled=${disabled}
+              class="block w-full rounded-md shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses} ${paddingClasses}" 
+              aria-invalid=${hasError}
+              aria-describedby=${hasError ? `${name}-error` : undefined}
+              ...${props}
+            />
+            ${type === 'password' && html`
+              <button 
+                type="button" 
+                onClick=${togglePasswordVisibility}
+                class="absolute inset-y-0 right-0 flex items-center pr-3 ${buttonClasses}"
+                aria-label=${isPasswordVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                ${isPasswordVisible ? ICONS.eyeSlash : ICONS.eye}
+              </button>
+            `}
+        </div>
       </div>
       ${hasError && html`<p id="${name}-error" class="mt-2 text-sm text-red-600" aria-live="polite">${error}</p>`}
     </div>

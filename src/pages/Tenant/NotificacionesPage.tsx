@@ -86,7 +86,9 @@ export function NotificacionesPage({ user, companyInfo, onLogout, onProfileUpdat
     useRealtimeListener(fetchData);
 
     const groupedNotifications = useMemo(() => {
-        const groups = {};
+        // FIX: Explicitly type 'groups' to help TypeScript infer the correct type for Object.entries,
+        // which prevents 'groupNotifs' from being typed as 'unknown'.
+        const groups: { [key: string]: any[] } = {};
         const today = new Date();
         const yesterday = new Date(today);
         yesterday.setDate(yesterday.getDate() - 1);

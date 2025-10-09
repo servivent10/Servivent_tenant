@@ -16,6 +16,8 @@ import { ClienteFormModal } from '../../components/modals/ClienteFormModal.js';
 import { Avatar } from '../../components/Avatar.js';
 import { CheckoutModal } from '../../components/modals/CheckoutModal.js';
 import { useRealtimeListener } from '../../hooks/useRealtime.js';
+import { FormInput } from '../../components/FormComponents.js';
+import { CameraScanner } from '../../components/CameraScanner.js';
 
 const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -28,14 +30,12 @@ const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
         return clients.find(c => c.id === selectedClientId);
     }, [selectedClientId, clients]);
     
-    // When a client is selected from the cart, update the search term to show their name
     useEffect(() => {
         setSearchTerm(selectedClient ? selectedClient.nombre : '');
     }, [selectedClient]);
 
     const filteredClients = useMemo(() => {
         const allOptions = [{ id: 'add_new', nombre: 'Añadir Nuevo Cliente' }, ...clients];
-        // Don't filter if the input is the selected client's name
         if (!searchTerm || (selectedClient && searchTerm === selectedClient.nombre)) {
              return allOptions;
         }
@@ -59,11 +59,9 @@ const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
         const handleClickOutside = (event) => {
             if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
                 setDropdownOpen(false);
-                // If dropdown closes and input is empty, ensure selection is cleared
                 if (!searchTerm) {
                     onSelect(null);
                 } else if (selectedClient) {
-                    // If dropdown closes and there's a selection, restore the name
                     setSearchTerm(selectedClient.nombre);
                 }
             }
@@ -247,7 +245,6 @@ const SetPricePopover = ({ item, targetElement, onClose, onApply, getPriceInfo, 
 const ProductDetailModal = ({ isOpen, onClose, product, currentUserSucursal }) => {
     if (!product) return null;
 
-    // Helper for rendering details to avoid repetition
     const DetailItem = ({ label, value }) => {
         if (!value) return null;
         return html`
@@ -387,44 +384,90 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
     const effectivePrice = customPrice ?? originalPrice;
     const hasCustomPrice = customPrice !== null && customPrice !== undefined;
     const priceListTooltip = `Precio ${activePriceListName} aplicado`;
+
+    const [translateX, setTranslateX] = useState(0);
+    const touchStartRef = useRef(null);
+    const isSwipingRef = useRef(false);
+
+    const handleTouchStart = (e) => {
+        touchStartRef.current = e.touches[0].clientX;
+        isSwipingRef.current = true;
+    };
+
+    const handleTouchMove = (e) => {
+        if (!isSwipingRef.current || touchStartRef.current === null) return;
+        const currentX = e.touches[0].clientX;
+        const diff = currentX - touchStartRef.current;
+        if (diff < 0) { // Only allow swiping to the left
+            setTranslateX(diff);
+        }
+    };
+
+    const handleTouchEnd = (e) => {
+        if (!isSwipingRef.current) return;
+        
+        const itemWidth = e.currentTarget.offsetWidth;
+        if (translateX < -itemWidth * 0.4) {
+            setTranslateX(-itemWidth);
+            setTimeout(() => {
+                onRemove(item.product.id);
+                setTranslateX(0); // Reset for potential re-render of same item
+            }, 200);
+        } else {
+            setTranslateX(0);
+        }
+        touchStartRef.current = null;
+        isSwipingRef.current = false;
+    };
     
     return html`
-        <div class="flex items-center gap-3 py-3">
-            <img src=${item.product.imagen_principal || NO_IMAGE_ICON_URL} alt=${item.product.nombre} class="h-14 w-14 rounded-md object-cover border" />
-            <div class="flex-grow">
-                <p class="text-sm font-semibold text-gray-800">${item.product.nombre}</p>
-                 <div class="flex items-center gap-1.5">
-                    <p class="text-xs text-gray-500">
-                        ${hasCustomPrice && html`<span class="line-through mr-1">${formatCurrency(originalPrice)}</span>`}
-                        <span class=${hasCustomPrice ? 'font-bold text-primary' : ''}>${formatCurrency(effectivePrice)} c/u</span>
-                    </p>
-                    ${priceSource === 'specific' && activePriceListName && html`
-                        <span title=${priceListTooltip} class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
-                           ${activePriceListName}
-                        </span>
-                    `}
-                 </div>
-                <div class="flex items-center gap-2 mt-1">
-                    <button onClick=${() => onUpdateQuantity(item.product.id, item.quantity - 1)} class="text-gray-500 hover:text-red-600 transition-colors">${ICONS.remove_circle}</button>
-                    <input 
-                        type="number"
-                        value=${item.quantity}
-                        onInput=${e => onUpdateQuantity(item.product.id, parseInt(e.target.value, 10))}
-                        class="w-14 text-center rounded-md border-gray-300 shadow-sm p-1 text-sm font-semibold focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 bg-white text-gray-900"
-                        min="1"
-                        aria-label="Cantidad"
-                    />
-                    <button onClick=${() => onUpdateQuantity(item.product.id, item.quantity + 1)} class="text-gray-500 hover:text-green-600 transition-colors">${ICONS.add_circle}</button>
-                     <button onClick=${(e) => onOpenPricePopover(e, item)} title="Establecer precio" class="ml-2 p-1 rounded-full ${hasCustomPrice ? 'text-green-600 bg-green-100' : 'text-gray-500'} hover:bg-green-100 hover:text-green-600">
-                       ${ICONS.local_offer}
+        <div class="relative bg-white overflow-hidden">
+             <div class="absolute inset-0 bg-red-500 flex justify-end items-center pr-6 pointer-events-none">
+                 <span class="text-white">${ICONS.delete}</span>
+            </div>
+            <div 
+                class="relative flex items-center gap-3 py-3 bg-white"
+                style=${{ transform: `translateX(${translateX}px)`, transition: 'transform 0.2s ease-out' }}
+                onTouchStart=${handleTouchStart}
+                onTouchMove=${handleTouchMove}
+                onTouchEnd=${handleTouchEnd}
+            >
+                <img src=${item.product.imagen_principal || NO_IMAGE_ICON_URL} alt=${item.product.nombre} class="h-14 w-14 rounded-md object-cover border" />
+                <div class="flex-grow">
+                    <p class="text-sm font-semibold text-gray-800">${item.product.nombre}</p>
+                     <div class="flex items-center gap-1.5">
+                        <p class="text-xs text-gray-500">
+                            ${hasCustomPrice && html`<span class="line-through mr-1">${formatCurrency(originalPrice)}</span>`}
+                            <span class=${hasCustomPrice ? 'font-bold text-primary' : ''}>${formatCurrency(effectivePrice)} c/u</span>
+                        </p>
+                        ${priceSource === 'specific' && activePriceListName && html`
+                            <span title=${priceListTooltip} class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                               ${activePriceListName}
+                            </span>
+                        `}
+                     </div>
+                    <div class="flex items-center gap-2 mt-1">
+                        <button onClick=${() => onUpdateQuantity(item.product.id, item.quantity - 1)} class="text-gray-500 hover:text-red-600 transition-colors">${ICONS.remove_circle}</button>
+                        <input 
+                            type="number"
+                            value=${item.quantity}
+                            onInput=${e => onUpdateQuantity(item.product.id, parseInt(e.target.value, 10))}
+                            class="w-14 text-center rounded-md border-gray-300 shadow-sm p-1 text-sm font-semibold focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 bg-white text-gray-900"
+                            min="1"
+                            aria-label="Cantidad"
+                        />
+                        <button onClick=${() => onUpdateQuantity(item.product.id, item.quantity + 1)} class="text-gray-500 hover:text-green-600 transition-colors">${ICONS.add_circle}</button>
+                         <button onClick=${(e) => onOpenPricePopover(e, item)} title="Establecer precio" class="ml-2 p-1 rounded-full ${hasCustomPrice ? 'text-green-600 bg-green-100' : 'text-gray-500'} hover:bg-green-100 hover:text-green-600">
+                           ${ICONS.local_offer}
+                        </button>
+                    </div>
+                </div>
+                <div class="text-right flex flex-col items-end">
+                    <p class="text-base font-bold text-gray-900">${formatCurrency(effectivePrice * item.quantity)}</p>
+                    <button onClick=${() => onRemove(item.product.id)} title="Eliminar del carrito" class="mt-1 p-1 rounded-full text-gray-500 hover:bg-red-100 hover:text-red-600">
+                        ${ICONS.delete}
                     </button>
                 </div>
-            </div>
-            <div class="text-right flex flex-col items-end">
-                <p class="text-base font-bold text-gray-900">${formatCurrency(effectivePrice * item.quantity)}</p>
-                <button onClick=${() => onRemove(item.product.id)} title="Eliminar del carrito" class="mt-1 p-1 rounded-full text-gray-500 hover:bg-red-100 hover:text-red-600">
-                    ${ICONS.delete}
-                </button>
             </div>
         </div>
     `;
@@ -462,14 +505,14 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
             </div>
         </div>
 
-        <div class="flex-grow overflow-y-auto p-4 divide-y divide-gray-200">
+        <div class="flex-grow overflow-y-auto p-4">
             ${cart.length === 0 ? html`
                 <div class="h-full flex flex-col items-center justify-center text-center text-gray-500">
                     <div class="text-5xl">${ICONS.pos}</div>
                     <p class="mt-2 font-semibold">Carrito Vacío</p>
                     <p class="text-sm">Añade productos desde el catálogo.</p>
                 </div>
-            ` : cart.map(item => {
+            ` : cart.map((item, index) => {
                 const product = item.product;
                 let priceSource = 'default';
                 const activePriceInfo = product.prices?.[activePriceListId];
@@ -479,17 +522,19 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
                 }
 
                 return html`
-                <${CartItem} 
-                    item=${item} 
-                    originalPrice=${getPriceForProduct(item.product)}
-                    customPrice=${customPrices[item.product.id]?.newPrice}
-                    onUpdateQuantity=${handleUpdateQuantity} 
-                    onRemove=${handleRemoveFromCart}
-                    onOpenPricePopover=${onOpenPricePopover}
-                    priceSource=${priceSource}
-                    activePriceListName=${activePriceListName}
-                    formatCurrency=${formatCurrency}
-                />
+                <div class="border-b ${index === cart.length - 1 ? 'border-transparent' : 'border-gray-200'}">
+                    <${CartItem} 
+                        item=${item} 
+                        originalPrice=${getPriceForProduct(item.product)}
+                        customPrice=${customPrices[item.product.id]?.newPrice}
+                        onUpdateQuantity=${handleUpdateQuantity} 
+                        onRemove=${handleRemoveFromCart}
+                        onOpenPricePopover=${onOpenPricePopover}
+                        priceSource=${priceSource}
+                        activePriceListName=${activePriceListName}
+                        formatCurrency=${formatCurrency}
+                    />
+                </div>
             `})}
         </div>
 
@@ -546,6 +591,23 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
     `;
 }
 
+const QuickAccessButton = ({ product, onClick, formatCurrency }) => {
+    return html`
+        <button 
+            onClick=${onClick}
+            class="group relative flex flex-col items-center justify-center text-center p-2 rounded-lg bg-slate-50 border hover:bg-primary-light hover:border-primary transition-all duration-150"
+        >
+            <div class="w-12 h-12 mb-1">
+                <img src=${product.imagen_principal || NO_IMAGE_ICON_URL} alt=${product.nombre} class="w-full h-full object-contain" />
+            </div>
+            <p class="text-xs font-semibold text-gray-700 group-hover:text-primary-dark leading-tight" style=${{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                ${product.nombre}
+            </p>
+            <p class="text-xs font-bold text-gray-800">${formatCurrency(product.precio_base)}</p>
+        </button>
+    `;
+};
+
 const initialFilters = {
     searchTerm: '',
     status: 'all',
@@ -591,6 +653,8 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const [selectedClientId, setSelectedClientId] = useState(null);
 
     const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+    const [skuInput, setSkuInput] = useState('');
+    const [isScannerOpen, setIsScannerOpen] = useState(false);
 
     const formatCurrency = (value) => {
         const number = Number(value || 0);
@@ -619,19 +683,13 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                 setDefaultPriceListId(posDataRes.data.price_lists[0].id);
             }
 
-            // Only set the active price list if it hasn't been set yet, to avoid overriding user selection
             setActivePriceListId(currentId => {
-                if (currentId) return currentId; // Keep current selection if it exists
-
-                if (defaultList) {
-                    return defaultList.id;
-                } else if (posDataRes.data.price_lists.length > 0) {
-                    return posDataRes.data.price_lists[0].id;
-                }
+                if (currentId) return currentId; 
+                if (defaultList) return defaultList.id;
+                if (posDataRes.data.price_lists.length > 0) return posDataRes.data.price_lists[0].id;
                 return null;
             });
         } catch (err) {
-            console.error("Error fetching POS data:", err);
             addToast({ message: `Error crítico al cargar datos: ${err.message}`, type: 'error', duration: 10000 });
         } finally {
             stopLoading();
@@ -654,10 +712,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     }, [isCartSidebarOpen]);
 
 
-    const cartMap = useMemo(() => {
-        return new Map(cart.map(item => [item.product.id, item]));
-    }, [cart]);
-
+    const cartMap = useMemo(() => new Map(cart.map(item => [item.product.id, item])), [cart]);
     const totalItemsInCart = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
 
     const filteredProducts = useMemo(() => {
@@ -666,18 +721,13 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
 
         const baseFiltered = posData.products.filter(p => {
             let matchesStatus = true;
-            if (filters.status === 'in_stock') {
-                matchesStatus = p.stock_sucursal > 0;
-            } else if (filters.status === 'on_sale') {
-                matchesStatus = p.prices && Object.keys(p.prices).some(priceListId => 
-                    priceListId !== defaultPriceListId && p.prices[priceListId]?.precio > 0
-                );
-            } else if (filters.status === 'new_arrival') {
-                matchesStatus = p.created_at && new Date(p.created_at) > thirtyDaysAgo;
-            }
+            if (filters.status === 'in_stock') matchesStatus = p.stock_sucursal > 0;
+            else if (filters.status === 'on_sale') matchesStatus = p.prices && Object.keys(p.prices).some(priceListId => priceListId !== defaultPriceListId && p.prices[priceListId]?.precio > 0);
+            else if (filters.status === 'new_arrival') matchesStatus = p.created_at && new Date(p.created_at) > thirtyDaysAgo;
 
             const matchesCategory = filters.category_ids.length === 0 || filters.category_ids.includes(p.categoria_id);
             const matchesBrand = filters.brand_names.length === 0 || filters.brand_names.includes(p.marca || 'Sin Marca');
+            
             const searchTermLower = filters.searchTerm.toLowerCase();
             const matchesSearch = filters.searchTerm === '' ||
                 p.nombre?.toLowerCase().includes(searchTermLower) ||
@@ -694,6 +744,13 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         return baseFiltered;
     }, [posData.products, filters, defaultPriceListId]);
 
+    const quickAccessProducts = useMemo(() => {
+        return [...posData.products]
+            .filter(p => p.stock_sucursal > 0)
+            .sort((a, b) => (b.unidades_vendidas_90_dias || 0) - (a.unidades_vendidas_90_dias || 0))
+            .slice(0, 8);
+    }, [posData.products]);
+
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
         setFilters(prev => ({ ...prev, [name]: value }));
@@ -704,33 +761,20 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         if(isAdvancedSearchOpen) setIsAdvancedSearchOpen(false);
     };
 
-    const isPriceRuleActive = (priceInfo) => {
-        return priceInfo && Number(priceInfo.ganancia_maxima) > 0;
-    };
+    const isPriceRuleActive = (priceInfo) => priceInfo && Number(priceInfo.ganancia_maxima) > 0;
 
-    const getDefaultPriceForProduct = (product) => {
-        return product.prices?.[defaultPriceListId]?.precio ?? 0;
-    };
+    const getDefaultPriceForProduct = (product) => product.prices?.[defaultPriceListId]?.precio ?? 0;
 
     const getActivePriceForProduct = (product) => {
         const activePriceInfo = product.prices?.[activePriceListId];
-        if (isPriceRuleActive(activePriceInfo)) {
-            return activePriceInfo.precio;
-        }
-        const defaultPriceInfo = product.prices?.[defaultPriceListId];
-        return defaultPriceInfo?.precio ?? 0;
+        if (isPriceRuleActive(activePriceInfo)) return activePriceInfo.precio;
+        return product.prices?.[defaultPriceListId]?.precio ?? 0;
     };
     
     const getPriceInfoForProduct = (product) => {
         const activePriceInfo = product.prices?.[activePriceListId];
-        if (isPriceRuleActive(activePriceInfo)) {
-            return activePriceInfo;
-        }
-        const defaultPriceInfo = product.prices?.[defaultPriceListId];
-        if (defaultPriceInfo) {
-            return defaultPriceInfo;
-        }
-        return { precio: 0, ganancia_maxima: 0, ganancia_minima: 0 };
+        if (isPriceRuleActive(activePriceInfo)) return activePriceInfo;
+        return product.prices?.[defaultPriceListId] || { precio: 0, ganancia_maxima: 0, ganancia_minima: 0 };
     };
     
     const handleShowDetails = (product) => {
@@ -758,18 +802,41 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             handleAddToCart(product);
         } else {
             const price = getDefaultPriceForProduct(product);
-            if (price <= 0) {
-                addToast({ message: 'Este producto no tiene un precio asignado y no puede ser vendido.', type: 'warning' });
-            } else { // out of stock
-                handleShowDetails(product);
+            if (price <= 0) addToast({ message: 'Este producto no tiene un precio asignado.', type: 'warning' });
+            else handleShowDetails(product);
+        }
+    };
+
+    const handleScanSuccess = (scannedSku) => {
+        setIsScannerOpen(false);
+        const product = posData.products.find(p => p.sku === scannedSku);
+        
+        if (product) {
+            addToast({ message: `Producto "${product.nombre}" añadido.`, type: 'success' });
+            handleProductAction(product, product.stock_sucursal > 0 && getDefaultPriceForProduct(product) > 0);
+        } else {
+            addToast({ message: `Producto con código "${scannedSku}" no encontrado.`, type: 'error' });
+        }
+    };
+
+    const handleSkuSubmit = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const term = skuInput.trim();
+            if (!term) return;
+
+            const product = posData.products.find(p => p.sku === term);
+            if (product) {
+                handleProductAction(product, product.stock_sucursal > 0 && getDefaultPriceForProduct(product) > 0);
+                setSkuInput(''); // Clear input on success
+            } else {
+                addToast({ message: `Producto con SKU "${term}" no encontrado.`, type: 'error' });
             }
         }
     };
 
     const handleUpdateQuantity = (productId, newQuantity) => {
-        if (isNaN(newQuantity)) {
-            return;
-        }
+        if (isNaN(newQuantity)) return;
 
         if (newQuantity <= 0) {
             handleRemoveFromCart(productId);
@@ -777,7 +844,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         }
         setCart(currentCart => {
             const itemToUpdate = currentCart.find(item => item.product.id === productId);
-            if (!itemToUpdate) { return currentCart; }
+            if (!itemToUpdate) return currentCart;
 
             let finalQuantity = newQuantity;
             if (newQuantity > itemToUpdate.product.stock_sucursal) {
@@ -785,9 +852,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                 finalQuantity = itemToUpdate.product.stock_sucursal;
             }
             
-            return currentCart.map(item => 
-                item.product.id === productId ? { ...item, quantity: finalQuantity } : item
-            );
+            return currentCart.map(item => item.product.id === productId ? { ...item, quantity: finalQuantity } : item);
         });
     };
 
@@ -813,9 +878,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         setPricePopover({ isOpen: true, item, target: e.currentTarget });
     };
 
-    const handleClosePricePopover = () => {
-        setPricePopover({ isOpen: false, item: null, target: null });
-    };
+    const handleClosePricePopover = () => setPricePopover({ isOpen: false, item: null, target: null });
 
     const handleApplyCustomPrice = (productId, newPrice) => {
         const product = cart.find(item => item.product.id === productId)?.product;
@@ -837,81 +900,47 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const handleSaveCliente = (action, savedClient) => {
         setIsClienteFormOpen(false);
         addToast({ message: `Cliente ${action === 'edit' ? 'actualizado' : 'creado'} con éxito.`, type: 'success' });
-        fetchData().then(() => {
-             if (action === 'create') {
-                setSelectedClientId(savedClient.id);
-             }
-        });
+        fetchData().then(() => { if (action === 'create') setSelectedClientId(savedClient.id); });
     };
 
     const totals = useMemo(() => {
-        // Calculate the subtotal based on the *effective price* (custom or original)
         const subtotal = cart.reduce((total, item) => {
             const originalPrice = getActivePriceForProduct(item.product);
             const effectivePrice = customPrices[item.product.id]?.newPrice ?? originalPrice;
             return total + (effectivePrice * item.quantity);
         }, 0);
 
-        // Tax is calculated on the new, adjusted subtotal
         const tax = Number(taxRate) || 0;
         let taxAmount = 0;
-        if (tax > 0 && tax < 100) {
-            const taxDecimal = tax / 100;
-            taxAmount = (subtotal / (1 - taxDecimal)) - subtotal;
-        }
+        if (tax > 0 && tax < 100) taxAmount = (subtotal / (1 - tax / 100)) - subtotal;
         
-        // Calculate the implicit discount from price adjustments to limit the global discount
         const implicitDiscountTotal = cart.reduce((total, item) => {
             const originalPrice = getActivePriceForProduct(item.product);
             const customPrice = customPrices[item.product.id]?.newPrice;
-            if (customPrice !== undefined && customPrice !== null) {
-                total += (originalPrice - customPrice) * item.quantity;
-            }
+            if (customPrice !== undefined) total += (originalPrice - customPrice) * item.quantity;
             return total;
         }, 0);
 
-        // Calculate the total available margin for discounts across all items
         const totalAvailableMargin = cart.reduce((margin, item) => {
             const priceInfo = getPriceInfoForProduct(item.product);
-            const max = Number(priceInfo.ganancia_maxima || 0);
-            const min = Number(priceInfo.ganancia_minima || 0);
-            const itemMargin = (max - min) * item.quantity;
-            return margin + itemMargin;
+            return margin + ((Number(priceInfo.ganancia_maxima || 0) - Number(priceInfo.ganancia_minima || 0)) * item.quantity);
         }, 0);
         
-        // The maximum global discount is what's left of the margin after implicit discounts
         const maxGlobalDiscount = Math.max(0, totalAvailableMargin - implicitDiscountTotal);
-        
-        const globalDiscountInput = Number(discountValue) || 0;
-        const globalDiscountAmount = Math.max(0, Math.min(globalDiscountInput, maxGlobalDiscount));
-
-        // The displayed discount is *only* the global discount
+        const globalDiscountAmount = Math.max(0, Math.min(Number(discountValue) || 0, maxGlobalDiscount));
         const totalDiscount = globalDiscountAmount;
         const finalTotal = subtotal + taxAmount - totalDiscount;
 
-        return {
-            subtotal,
-            taxAmount,
-            totalDiscount,
-            maxGlobalDiscount,
-            finalTotal: Math.max(0, finalTotal),
-        };
+        return { subtotal, taxAmount, totalDiscount, maxGlobalDiscount, finalTotal: Math.max(0, finalTotal) };
     }, [cart, activePriceListId, taxRate, discountValue, customPrices, getActivePriceForProduct, getPriceInfoForProduct]);
     
     const handleDiscountChange = (e) => {
         const rawValue = e.target.value;
         const numericValue = Number(rawValue);
-
-        // Ignore invalid input like '1.2.3' or negative numbers
-        if (rawValue !== '' && (isNaN(numericValue) || numericValue < 0)) {
-            return;
-        }
-
-        // If the typed value exceeds the max discount, cap it and notify the user.
+        if (rawValue !== '' && (isNaN(numericValue) || numericValue < 0)) return;
         if (numericValue > totals.maxGlobalDiscount) {
-            const maxDiscountStr = totals.maxGlobalDiscount.toFixed(2);
-            setDiscountValue(maxDiscountStr);
-            addToast({ message: `Descuento ajustado al máximo permitido: ${formatCurrency(totals.maxGlobalDiscount)}`, type: 'warning' });
+            setDiscountValue(totals.maxGlobalDiscount.toFixed(2));
+            addToast({ message: `Descuento ajustado al máximo: ${formatCurrency(totals.maxGlobalDiscount)}`, type: 'warning' });
         } else {
             setDiscountValue(rawValue);
         }
@@ -919,47 +948,36 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
 
     const handleConfirmSale = async (saleDetails) => {
         startLoading();
-        setIsCheckoutModalOpen(false); // Close modal immediately
+        setIsCheckoutModalOpen(false);
         try {
             const saleItems = cart.map(item => {
                 const originalPrice = getActivePriceForProduct(item.product);
                 const effectivePrice = customPrices[item.product.id]?.newPrice ?? originalPrice;
                 const fullProduct = posData.products.find(p => p.id === item.product.id);
+                const defaultPriceInfo = fullProduct?.prices?.[defaultPriceListId];
                 return {
                     producto_id: item.product.id,
                     cantidad: item.quantity,
                     precio_unitario_aplicado: effectivePrice,
-                    costo_unitario_en_venta: fullProduct?.prices?.[defaultPriceListId]?.precio - fullProduct?.prices?.[defaultPriceListId]?.ganancia_maxima || 0
+                    costo_unitario_en_venta: defaultPriceInfo ? (defaultPriceInfo.precio - defaultPriceInfo.ganancia_maxima) : 0,
                 };
             });
 
-            const payload = {
+            const { error } = await supabase.rpc('registrar_venta', {
                 p_venta: {
-                    cliente_id: selectedClientId,
-                    sucursal_id: user.sucursal_id,
-                    total: totals.finalTotal,
-                    subtotal: totals.subtotal,
-                    descuento: totals.totalDiscount,
-                    impuestos: totals.taxAmount,
-                    metodo_pago: saleDetails.metodoPago,
-                    tipo_venta: saleDetails.tipoVenta,
-                    abono_inicial: saleDetails.montoRecibido,
-                    fecha_vencimiento: saleDetails.fechaVencimiento
+                    cliente_id: selectedClientId, sucursal_id: user.sucursal_id, total: totals.finalTotal,
+                    subtotal: totals.subtotal, descuento: totals.totalDiscount, impuestos: totals.taxAmount,
+                    metodo_pago: saleDetails.metodoPago, tipo_venta: saleDetails.tipoVenta,
+                    abono_inicial: saleDetails.montoRecibido, fecha_vencimiento: saleDetails.fechaVencimiento,
                 },
                 p_items: saleItems
-            };
-
-            const { error } = await supabase.rpc('registrar_venta', payload);
+            });
 
             if (error) throw error;
-            
             addToast({ message: 'Venta registrada con éxito.', type: 'success' });
             handleClearCart();
-            // Immediate local update for better UX, while realtime handles other clients.
             await fetchData();
-
         } catch (err) {
-            console.error('Error al registrar la venta:', err);
             addToast({ message: `Error al registrar la venta: ${err.message}`, type: 'error' });
         } finally {
             stopLoading();
@@ -969,55 +987,73 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const cartPanelProps = {
         cart, posData, activePriceListId, setActivePriceListId,
         handleClearCart, getPriceForProduct: getActivePriceForProduct,
-        handleUpdateQuantity, handleRemoveFromCart, totals,
-        taxRate, setTaxRate, discountValue,
-        onDiscountChange: handleDiscountChange,
-        onFinalizeSale: () => setIsCheckoutModalOpen(true),
-        onOpenPricePopover: handleOpenPricePopover, customPrices,
-        defaultPriceListId, isPriceRuleActive, selectedClientId,
-        setSelectedClientId, setIsClienteFormOpen, formatCurrency
+        handleUpdateQuantity, handleRemoveFromCart, totals, taxRate, setTaxRate, discountValue,
+        onDiscountChange: handleDiscountChange, onFinalizeSale: () => setIsCheckoutModalOpen(true),
+        onOpenPricePopover: handleOpenPricePopover, customPrices, defaultPriceListId,
+        isPriceRuleActive, selectedClientId, setSelectedClientId, setIsClienteFormOpen, formatCurrency
     };
 
     return html`
         <${DashboardLayout} 
-            user=${user} 
-            onLogout=${onLogout}
-            onProfileUpdate=${onProfileUpdate}
-            activeLink="Punto de Venta"
-            breadcrumbs=${breadcrumbs}
-            companyInfo=${companyInfo}
-            notifications=${notifications}
-            disablePadding=${true}
+            user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate}
+            activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo}
+            notifications=${notifications} disablePadding=${true}
         >
-            <div class="h-full lg:h-auto lg:grid lg:grid-cols-[1fr_450px] lg:gap-6 lg:p-6">
-                
-                <div class="bg-white rounded-lg border shadow-sm h-full flex flex-col lg:h-auto">
-                    <div class="flex-shrink-0 p-4 border-b lg:sticky lg:top-0 lg:bg-white/80 lg:backdrop-blur-sm z-10">
+            <div class="h-full lg:grid lg:grid-cols-[1fr_450px] lg:gap-6 lg:p-6">
+                <div class="bg-white rounded-lg border shadow-sm h-full flex flex-col lg:h-auto overflow-hidden">
+                    <div class="flex-shrink-0 p-4 border-b space-y-4">
+                        <div class="flex gap-2">
+                            <div class="relative flex-grow">
+                                <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">${ICONS.search}</div>
+                                <${FormInput}
+                                    name="sku_input"
+                                    type="text"
+                                    label=""
+                                    value=${skuInput}
+                                    onInput=${e => setSkuInput(e.target.value)}
+                                    onKeyDown=${handleSkuSubmit}
+                                    placeholder="Ingresar SKU y presionar Enter"
+                                    required=${false}
+                                    className="pl-10"
+                                />
+                            </div>
+                            <button
+                                onClick=${() => setIsScannerOpen(true)}
+                                class="flex-shrink-0 flex items-center justify-center p-2.5 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors"
+                                title="Escanear código de barras con la cámara"
+                            >
+                                ${ICONS.qr_code_scanner}
+                            </button>
+                        </div>
                          <${FilterBar} 
-                            filters=${filters}
-                            onFilterChange=${handleFilterChange}
-                            onClear=${handleClearFilters}
-                            onToggleAdvanced=${() => setIsAdvancedSearchOpen(p => !p)}
-                            isAdvancedOpen=${isAdvancedSearchOpen}
+                            filters=${filters} onFilterChange=${handleFilterChange} onClear=${handleClearFilters}
+                            onToggleAdvanced=${() => setIsAdvancedSearchOpen(p => !p)} isAdvancedOpen=${isAdvancedSearchOpen}
                             statusOptions=${posStatusOptions}
                         />
-                        <${AdvancedFilterPanel}
-                            isOpen=${isAdvancedSearchOpen}
-                            filters=${filters}
-                            onFilterChange=${handleFilterChange}
-                            filterOptions=${filterOptions}
-                        />
+                        <${AdvancedFilterPanel} isOpen=${isAdvancedSearchOpen} filters=${filters}
+                            onFilterChange=${handleFilterChange} filterOptions=${filterOptions} />
                     </div>
 
-                    <div class="p-4 flex-grow lg:flex-grow-0 overflow-y-auto lg:overflow-visible">
+                    <div class="p-4 flex-grow overflow-y-auto">
+                        ${quickAccessProducts.length > 0 && html`
+                            <div class="mb-6">
+                                <h3 class="text-sm font-semibold text-gray-600 mb-2">Acceso Rápido</h3>
+                                <div class="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
+                                    ${quickAccessProducts.map(p => html`
+                                        <${QuickAccessButton} 
+                                            product=${p}
+                                            onClick=${() => handleProductAction(p, true)}
+                                            formatCurrency=${formatCurrency}
+                                        />
+                                    `)}
+                                </div>
+                            </div>
+                        `}
                         <div class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));">
                             ${filteredProducts.map(p => html`
                                 <${ProductCard} 
-                                    product=${p} 
-                                    onAction=${handleProductAction} 
-                                    onShowDetails=${handleShowDetails}
-                                    defaultPrice=${getDefaultPriceForProduct(p)}
-                                    quantityInCart=${cartMap.get(p.id)?.quantity || 0}
+                                    product=${p} onAction=${handleProductAction} onShowDetails=${handleShowDetails}
+                                    defaultPrice=${getDefaultPriceForProduct(p)} quantityInCart=${cartMap.get(p.id)?.quantity || 0}
                                     formatCurrency=${formatCurrency}
                                 />
                             `)}
@@ -1033,24 +1069,26 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                     </div>
                 </div>
 
-                <div class="lg:hidden fixed top-20 right-4 z-30">
+                <div class="lg:hidden fixed bottom-4 right-4 z-30">
                     <button 
                         onClick=${() => setCartSidebarOpen(true)}
-                        class="relative flex items-center justify-center bg-primary text-white rounded-full w-14 h-14 shadow-lg hover:bg-primary-hover transition-colors"
+                        class="relative flex items-center justify-center bg-primary text-white rounded-full h-16 w-16 shadow-lg hover:bg-primary-hover transition-transform duration-200 hover:scale-105"
                         aria-label="Ver carrito"
                     >
                         <span class="text-3xl">${ICONS.shopping_cart}</span>
                         ${totalItemsInCart > 0 && html`
-                            <span class="absolute -top-1 -right-1 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 border-2 border-primary">${totalItemsInCart}</span>
+                            <div class="absolute -top-1 -right-1 flex flex-col items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full w-8 h-8 border-2 border-white">
+                                <span>${totalItemsInCart}</span>
+                            </div>
                         `}
                     </button>
                 </div>
                 
-                <div class=${`fixed inset-0 z-40 flex justify-end lg:hidden transition-opacity duration-300 ease-linear ${isCartSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} role="dialog" aria-modal="true">
-                    <div class="fixed inset-0 bg-gray-600 bg-opacity-75" aria-hidden="true" onClick=${() => setCartSidebarOpen(false)}></div>
-                    <div class=${`relative flex w-full max-w-md flex-1 flex-col bg-white transform transition duration-300 ease-in-out ${isCartSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                <div class=${`fixed inset-0 z-40 flex justify-end lg:hidden transition-opacity duration-300 ${isCartSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} role="dialog" aria-modal="true">
+                    <div class="fixed inset-0 bg-black/60" aria-hidden="true" onClick=${() => setCartSidebarOpen(false)}></div>
+                    <div class=${`relative flex w-full max-w-md flex-1 flex-col bg-slate-50 transform transition duration-300 ${isCartSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                        <div class="absolute top-0 left-0 -ml-12 pt-2">
-                            <button type="button" class="ml-1 flex h-10 w-10 items-center justify-center rounded-full text-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white" onClick=${() => setCartSidebarOpen(false)}>
+                            <button type="button" class="ml-1 flex h-10 w-10 items-center justify-center rounded-full text-white focus:outline-none" onClick=${() => setCartSidebarOpen(false)}>
                                 <span class="sr-only">Cerrar carrito</span>
                                 ${ICONS.close}
                             </button>
@@ -1060,44 +1098,13 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                         </div>
                     </div>
                 </div>
-
             </div>
             
-            ${pricePopover.isOpen && html`
-                <${SetPricePopover}
-                    item=${pricePopover.item}
-                    targetElement=${pricePopover.target}
-                    onClose=${handleClosePricePopover}
-                    onApply=${handleApplyCustomPrice}
-                    getPriceInfo=${getPriceInfoForProduct}
-                    addToast=${addToast}
-                    formatCurrency=${formatCurrency}
-                />
-            `}
-            
-            <${ClienteFormModal}
-                isOpen=${isClienteFormOpen}
-                onClose=${() => setIsClienteFormOpen(false)}
-                onSave=${handleSaveCliente}
-                clienteToEdit=${clienteToEdit}
-                user=${user}
-            />
-
-            <${ProductDetailModal} 
-                isOpen=${isDetailModalOpen}
-                onClose=${() => setDetailModalOpen(false)}
-                product=${productForDetailView}
-                currentUserSucursal=${user.sucursal}
-            />
-
-            <${CheckoutModal}
-                isOpen=${isCheckoutModalOpen}
-                onClose=${() => setIsCheckoutModalOpen(false)}
-                onConfirm=${handleConfirmSale}
-                total=${totals.finalTotal}
-                clienteId=${selectedClientId}
-                companyInfo=${companyInfo}
-            />
+            ${pricePopover.isOpen && html`<${SetPricePopover} item=${pricePopover.item} targetElement=${pricePopover.target} onClose=${handleClosePricePopover} onApply=${handleApplyCustomPrice} getPriceInfo=${getPriceInfoForProduct} addToast=${addToast} formatCurrency=${formatCurrency} />`}
+            <${ClienteFormModal} isOpen=${isClienteFormOpen} onClose=${() => setIsClienteFormOpen(false)} onSave=${handleSaveCliente} clienteToEdit=${clienteToEdit} user=${user} />
+            <${ProductDetailModal} isOpen=${isDetailModalOpen} onClose=${() => setDetailModalOpen(false)} product=${productForDetailView} currentUserSucursal=${user.sucursal} />
+            <${CheckoutModal} isOpen=${isCheckoutModalOpen} onClose=${() => setIsCheckoutModalOpen(false)} onConfirm=${handleConfirmSale} total=${totals.finalTotal} clienteId=${selectedClientId} companyInfo=${companyInfo} />
+            <${CameraScanner} isOpen=${isScannerOpen} onClose=${() => setIsScannerOpen(false)} onScanSuccess=${handleScanSuccess} />
         <//>
     `;
 }

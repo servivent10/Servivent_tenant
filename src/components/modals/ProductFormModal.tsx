@@ -10,6 +10,7 @@ import { ICONS } from '../Icons.js';
 import { Spinner } from '../Spinner.js';
 import { useToast } from '../../hooks/useToast.js';
 import { supabase } from '../../lib/supabaseClient.js';
+import { CameraScanner } from '../CameraScanner.js';
 
 const unidadesDeMedida = ['Unidad', 'Pieza', 'Caja', 'Paquete', 'Docena', 'Kg', 'Gramo', 'Litro', 'Metro'];
 
@@ -32,6 +33,7 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
 
     const [isAddingCategory, setIsAddingCategory] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
+    const [isScannerOpen, setIsScannerOpen] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -92,6 +94,12 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
         if (name === 'nombre' && errors.nombre) {
              setErrors(prev => ({ ...prev, nombre: '' }));
         }
+    };
+    
+    const handleScanSuccess = (scannedCode) => {
+        handleInput({ target: { name: 'sku', value: scannedCode } });
+        setIsScannerOpen(false);
+        addToast({ message: 'Código de barras escaneado.', type: 'success' });
     };
 
     const handleFileChange = (e: Event) => {
@@ -250,7 +258,18 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
                                 <${FormInput} label="Marca" name="marca" type="text" value=${formData.marca} onInput=${handleInput} required=${false} />
                                 <${FormInput} label="Modelo" name="modelo" type="text" value=${formData.modelo} onInput=${handleInput} required=${false} />
                             </div>
-                            <${FormInput} label="SKU (Código)" name="sku" type="text" value=${formData.sku} onInput=${handleInput} required=${false} />
+                            
+                            <div class="relative">
+                                <${FormInput} label="SKU (Código)" name="sku" type="text" value=${formData.sku} onInput=${handleInput} required=${false} />
+                                <button 
+                                    type="button" 
+                                    onClick=${() => setIsScannerOpen(true)}
+                                    class="absolute top-8 right-3 text-gray-500 hover:text-primary p-1 rounded-full"
+                                    aria-label="Escanear código de barras"
+                                >
+                                    ${ICONS.qr_code_scanner}
+                                </button>
+                            </div>
                             
                             <div>
                                 <label for="categoria_id" class="block font-medium leading-6 text-gray-900">Categoría</label>
@@ -286,5 +305,11 @@ export function ProductFormModal({ isOpen, onClose, onSave, productToEdit, user 
                     </div>
                 </div>
         <//>
+
+        <${CameraScanner}
+            isOpen=${isScannerOpen}
+            onClose=${() => setIsScannerOpen(false)}
+            onScanSuccess=${handleScanSuccess}
+        />
     `;
 }

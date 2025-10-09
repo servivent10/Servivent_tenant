@@ -34,6 +34,7 @@ export const ICONS = {
     search: html`<${Icon} name="search" />`,
     payments: html`<${Icon} name="payments" />`,
     qr_code_2: html`<${Icon} name="qr_code_2" />`,
+    qr_code_scanner: html`<${Icon} name="qr_code_scanner" />`,
     shopping_cart: html`<${Icon} name="shopping_cart" />`,
     paid: html`<${Icon} name="paid" />`,
     credit_score: html`<${Icon} name="credit_score" />`,
