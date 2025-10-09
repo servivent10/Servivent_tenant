@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'preact/hooks';
 const COLORS = ['#3b82f6', '#10b981', '#f97316', '#ec4899'];
 const BORDER_COLORS = ['#2563eb', '#059669', '#ea580c', '#db2777'];
 
-export function ComparativeBarChart({ data, keys }) {
+export function ComparativeBarChart({ data, keys, currencySymbol = 'Bs' }) {
     const chartRef = useRef(null);
     const chartInstanceRef = useRef(null);
 
@@ -16,7 +16,7 @@ export function ComparativeBarChart({ data, keys }) {
         return html`<div class="flex items-center justify-center h-72 text-gray-500">No hay datos para mostrar en este período.</div>`;
     }
     
-    const formatCurrency = (value) => `Bs ${Number(value || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const formatCurrency = (value) => `${currencySymbol} ${Number(value || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     useEffect(() => {
         if (chartInstanceRef.current) {
@@ -98,7 +98,7 @@ export function ComparativeBarChart({ data, keys }) {
                 chartInstanceRef.current.destroy();
             }
         };
-    }, [data, keys]);
+    }, [data, keys, currencySymbol]);
 
     return html`
         <div class="relative h-80">

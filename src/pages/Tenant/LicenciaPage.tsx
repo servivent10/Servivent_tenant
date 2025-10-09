@@ -12,7 +12,7 @@ import { PlanCard } from '../../components/PlanCard.js';
 import { UPGRADE_PLANS } from '../../lib/plansConfig.js';
 
 // Componente para renderizar la lista de pagos de forma responsiva
-const PaymentHistory = ({ payments = [] }) => {
+const PaymentHistory = ({ payments = [], formatCurrency }) => {
     if (payments.length === 0) {
         return html`
             <div class="text-center py-12 rounded-lg border-2 border-dashed border-gray-300 bg-white mt-6">
@@ -28,14 +28,14 @@ const PaymentHistory = ({ payments = [] }) => {
     return html`
         <div class="mt-6">
              <p class="mb-4 text-sm text-gray-600">
-                Monto total registrado: <span class="font-bold text-emerald-600">Bs ${totalPaid.toFixed(2)}</span>
+                Monto total registrado: <span class="font-bold text-emerald-600">${formatCurrency(totalPaid)}</span>
             </p>
             <!-- Vista de tarjetas para móvil y tablet -->
             <div class="space-y-4 sm:hidden">
                 ${payments.map(payment => html`
                     <div class="bg-white p-4 rounded-lg shadow border">
                         <div class="flex justify-between items-center">
-                            <div class="font-bold text-lg text-gray-800">Bs ${Number(payment.monto).toFixed(2)}</div>
+                            <div class="font-bold text-lg text-gray-800">${formatCurrency(payment.monto)}</div>
                             <div class="text-xs text-gray-500">${new Date(payment.fecha_pago).toLocaleString()}</div>
                         </div>
                         <div class="text-sm text-gray-600 mt-1">Método: ${payment.metodo_pago}</div>
@@ -59,7 +59,7 @@ const PaymentHistory = ({ payments = [] }) => {
                         ${payments.map(payment => html`
                             <tr key=${payment.id}>
                                 <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm text-gray-500 sm:pl-0">${new Date(payment.fecha_pago).toLocaleString()}</td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900">Bs ${Number(payment.monto).toFixed(2)}</td>
+                                <td class="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900">${formatCurrency(payment.monto)}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${payment.metodo_pago}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${payment.notas}</td>
                             </tr>
@@ -74,6 +74,12 @@ const PaymentHistory = ({ payments = [] }) => {
 
 export function LicenciaPage({ user, onLogout, onProfileUpdate, companyInfo, notifications }) {
     const [activeTab, setActiveTab] = useState('plan');
+
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
 
     const breadcrumbs = [ { name: 'Licencia y Facturación', href: '#/licencia' } ];
     const tabs = [
@@ -136,14 +142,15 @@ export function LicenciaPage({ user, onLogout, onProfileUpdate, companyInfo, not
                                 <${PlanCard} 
                                     plan=${plan}
                                     isCurrentPlan=${plan.title === currentPlanName}
-                                    onSelect=${handleSelectPlan} 
+                                    onSelect=${handleSelectPlan}
+                                    currencySymbol=${companyInfo.monedaSimbolo}
                                 />
                             `)}
                         </div>
                     </div>
                 `}
                 ${activeTab === 'pagos' && html`
-                    <${PaymentHistory} payments=${paymentHistory} />
+                    <${PaymentHistory} payments=${paymentHistory} formatCurrency=${formatCurrency} />
                 `}
             </div>
 

@@ -19,6 +19,24 @@ Este documento es la guía fundamental que define las reglas, arquitecturas y pa
     *   Cualquier nueva tabla que requiera notificaciones en vivo **DEBE** ser añadida a la publicación `supabase_realtime` en PostgreSQL usando `ALTER PUBLICATION`.
     *   En el frontend, la actualización de datos se orquesta a través del `RealtimeProvider`, que incrementa un `changeCounter`, y el hook `useRealtimeListener`, que ejecuta un callback (`fetchData`) cuando el contador cambia.
 
+### 2.5. Blindaje del Sistema de Tiempo Real (Reglas Inquebrantables)
+
+Para garantizar la estabilidad del sistema de tiempo real, las siguientes tres reglas son innegociables y deben seguirse rigurosamente en cualquier desarrollo futuro.
+
+1.  **Checklist Estricta para Tablas Nuevas:**
+    Cada vez que se cree una nueva tabla que deba ser reactiva (ej. `gastos`, `traspasos`), se **DEBE** seguir esta checklist de 3 pasos sin excepción:
+    *   **Paso 1 (SQL):** Añadir la tabla a la publicación de PostgreSQL con `ALTER PUBLICATION supabase_realtime ADD TABLE public.mi_nueva_tabla;`.
+    *   **Paso 2 (SQL):** Crear su política RLS usando **SIEMPRE** la arquitectura JWT: `... USING (empresa_id = public.get_empresa_id_from_jwt())`.
+    *   **Paso 3 (Frontend):** Añadir el nombre de la tabla (`'mi_nueva_tabla'`) al array `tablesToTriggerRefresh` dentro de `src/hooks/useRealtime.js`.
+
+2.  **La Arquitectura JWT es la Única Permitida para RLS:**
+    **Nunca más** se creará una política RLS que consulte `public.usuarios` para obtener el `empresa_id`. La función `public.get_empresa_id_from_jwt()` es ahora la **única fuente de verdad** para la seguridad en las políticas. Esto elimina de raíz la causa de la recursión infinita.
+
+3.  **Centralización Absoluta de la Lógica en Frontend:**
+    Toda la lógica para recibir, interpretar y reaccionar a los eventos de tiempo real vivirá **exclusivamente** en el proveedor `RealtimeProvider` (`src/hooks/useRealtime.js`).
+    *   Ninguna otra página o componente (`DashboardPage`, `InventariosPage`, etc.) contendrá lógica de suscripción.
+    *   Las páginas solo deben usar el hook `useRealtimeListener(fetchData)`. Ellas no saben *por qué* se actualizan, solo que `RealtimeProvider` les ha ordenado hacerlo. Este desacoplamiento es crucial para la mantenibilidad.
+
 ## 3. Diseño de Interfaz y Experiencia de Usuario (UI/UX)
 
 La excelencia en la UI/UX es un pilar fundamental de ServiVENT. Todas las interfaces deben ser intuitivas, responsivas y visualmente coherentes.

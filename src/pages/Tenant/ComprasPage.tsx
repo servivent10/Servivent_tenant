@@ -238,6 +238,12 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
     const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
+
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
     
     const fetchData = async () => {
         startLoading();
@@ -364,7 +370,7 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
                         <div class="flex justify-between items-end mt-2 pt-2 border-t">
                             <div class="text-sm">
                                 <p class="text-gray-500">${new Date(c.fecha).toLocaleString()}</p>
-                                <p class="text-lg font-bold text-gray-900">${Number(c.total).toFixed(2)} <span class="text-xs font-normal">${c.moneda}</span></p>
+                                <p class="text-lg font-bold text-gray-900">${formatCurrency(c.total_bob)}</p>
                             </div>
                             <span class="text-xs text-primary font-semibold">Ver Detalles ${ICONS.chevron_right}</span>
                         </div>
@@ -389,7 +395,7 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
                                 <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">${c.folio}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${c.proveedor_nombre}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${new Date(c.fecha).toLocaleString()}</td>
-                                <td class="whitespace-nowrap px-3 py-4 text-sm font-semibold text-gray-800">Bs ${Number(c.total_bob).toFixed(2)}</td>
+                                <td class="whitespace-nowrap px-3 py-4 text-sm font-semibold text-gray-800">${formatCurrency(c.total_bob)}</td>
                                 <td class="whitespace-nowrap px-3 py-4 text-sm"><span class=${getStatusPill(c.estado_pago)}>${c.estado_pago}</span></td>
                             </tr>
                         `)}
@@ -425,7 +431,7 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
             <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mt-6">
                  <${KPI_Card}
                     title="Total Comprado"
-                    value=${`Bs ${kpis.totalFiltrado.toFixed(2)}`}
+                    value=${formatCurrency(kpis.totalFiltrado)}
                     icon=${ICONS.shopping_cart}
                     color="primary"
                     count=${kpis.totalComprasCount}
@@ -433,7 +439,7 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
                 />
                  <${KPI_Card}
                     title="Cuentas por Pagar"
-                    value=${`Bs ${kpis.cuentasPorPagar.toFixed(2)}`}
+                    value=${formatCurrency(kpis.cuentasPorPagar)}
                     icon=${ICONS.credit_score}
                     color="amber"
                     count=${kpis.cuentasPorPagarCount}
@@ -441,7 +447,7 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
                 />
                  <${KPI_Card}
                     title="Compras a Crédito"
-                    value=${`Bs ${kpis.totalComprasCredito.toFixed(2)}`}
+                    value=${formatCurrency(kpis.totalComprasCredito)}
                     icon=${ICONS.newExpense}
                     color="green"
                     count=${kpis.comprasCreditoCount}

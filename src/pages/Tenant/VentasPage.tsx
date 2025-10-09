@@ -248,6 +248,12 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
 
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
+
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
     
     const fetchData = async () => {
         startLoading();
@@ -366,7 +372,7 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
                 ${ventas.map(v => html`
                     <div key=${v.id} onClick=${() => handleRowClick(v)} class="bg-white p-4 rounded-lg shadow border cursor-pointer">
                         <div class="flex justify-between items-start"><div class="min-w-0"><div class="font-bold text-gray-800 truncate">${v.cliente_nombre || 'Consumidor Final'}</div><div class="text-sm text-gray-600">Folio: ${v.folio}</div></div><span class=${getStatusPill(v.estado_pago)}>${v.estado_pago}</span></div>
-                        <div class="flex justify-between items-end mt-2 pt-2 border-t"><div class="text-sm"><p class="text-gray-500">${new Date(v.fecha).toLocaleDateString()}</p><p class="text-lg font-bold text-primary">Bs ${Number(v.total).toFixed(2)}</p></div><span class="text-xs text-primary font-semibold">Ver Detalles ${ICONS.chevron_right}</span></div>
+                        <div class="flex justify-between items-end mt-2 pt-2 border-t"><div class="text-sm"><p class="text-gray-500">${new Date(v.fecha).toLocaleDateString()}</p><p class="text-lg font-bold text-primary">${formatCurrency(v.total)}</p></div><span class="text-xs text-primary font-semibold">Ver Detalles ${ICONS.chevron_right}</span></div>
                     </div>
                 `)}
             </div>
@@ -380,7 +386,7 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
                                 <td class="px-3 py-4 text-sm text-gray-500 truncate">${v.cliente_nombre || 'Consumidor Final'}</td>
                                 <td class="px-3 py-4 text-sm text-gray-500">${new Date(v.fecha).toLocaleDateString()}</td>
                                 <td class="px-3 py-4 text-sm text-gray-500 truncate">${v.usuario_nombre}</td>
-                                <td class="px-3 py-4 text-sm font-semibold text-primary">Bs ${Number(v.total).toFixed(2)}</td>
+                                <td class="px-3 py-4 text-sm font-semibold text-primary">${formatCurrency(v.total)}</td>
                                 <td class="px-3 py-4 text-sm"><span class=${getStatusPill(v.estado_pago)}>${v.estado_pago}</span></td>
                             </tr>
                         `)}
@@ -396,7 +402,7 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-6">
                  <${KPI_Card} 
                     title="Total Vendido" 
-                    value=${`Bs ${kpis.totalFiltrado.toFixed(2)}`} 
+                    value=${formatCurrency(kpis.totalFiltrado)} 
                     icon=${ICONS.sales} 
                     color="primary"
                     count=${filteredVentas.length}
@@ -404,7 +410,7 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
                 />
                  <${KPI_Card} 
                     title="Total Impuestos" 
-                    value=${`Bs ${kpis.totalImpuestos.toFixed(2)}`} 
+                    value=${formatCurrency(kpis.totalImpuestos)} 
                     icon=${ICONS.newExpense} 
                     color="green"
                     count=${kpis.ventasConImpuestosCount}
@@ -412,7 +418,7 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
                 />
                  <${KPI_Card} 
                     title="Cuentas por Cobrar" 
-                    value=${`Bs ${kpis.cuentasPorCobrar.toFixed(2)}`} 
+                    value=${formatCurrency(kpis.cuentasPorCobrar)} 
                     icon=${ICONS.credit_score} 
                     color="amber"
                     count=${kpis.cuentasPorCobrarCount}
@@ -420,7 +426,7 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
                 />
                  <${KPI_Card} 
                     title="Ventas a Crédito" 
-                    value=${`Bs ${kpis.totalVentasCredito.toFixed(2)}`}
+                    value=${formatCurrency(kpis.totalVentasCredito)}
                     icon=${ICONS.newSale} 
                     color="primary"
                     count=${kpis.ventasCreditoCount}

@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'preact/hooks';
 const BG_COLOR = '#3b82f6';
 const BORDER_COLOR = '#2563eb';
 
-export function HorizontalBarChart({ data }) {
+export function HorizontalBarChart({ data, currencySymbol = 'Bs' }) {
     const chartRef = useRef(null);
     const chartInstanceRef = useRef(null);
 
@@ -16,7 +16,7 @@ export function HorizontalBarChart({ data }) {
         return html`<p class="text-sm text-gray-500 text-center py-4">No hay datos de ventas de productos en este período.</p>`;
     }
 
-    const formatCurrency = (value) => `Bs ${Number(value || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const formatCurrency = (value) => `${currencySymbol} ${Number(value || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     useEffect(() => {
         if (chartInstanceRef.current) {
@@ -93,7 +93,7 @@ export function HorizontalBarChart({ data }) {
                 chartInstanceRef.current.destroy();
             }
         };
-    }, [data]);
+    }, [data, currencySymbol]);
     
     const chartHeight = data.length * 40 + 40; // Dynamic height
 

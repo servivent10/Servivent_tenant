@@ -26,6 +26,12 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
 
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
+
     const fetchData = async () => {
         startLoading();
         try {
@@ -145,7 +151,7 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
                      <div class="mt-3 pt-3 border-t flex justify-between text-sm">
                         <span class="text-gray-600">Saldo Pendiente:</span>
                         <span class="font-bold ml-2 ${c.saldo_pendiente > 0 ? 'text-red-600' : 'text-green-600'}">
-                            Bs ${Number(c.saldo_pendiente || 0).toFixed(2)}
+                            ${formatCurrency(c.saldo_pendiente)}
                         </span>
                     </div>
                 </div>
@@ -182,7 +188,7 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
                                 <div>${c.telefono || 'N/A'}</div>
                                 <div class="text-gray-400">${c.email}</div>
                             </td>
-                            <td class="px-3 py-4 text-sm font-bold ${c.saldo_pendiente > 0 ? 'text-red-600' : 'text-green-600'}">Bs ${Number(c.saldo_pendiente || 0).toFixed(2)}</td>
+                            <td class="px-3 py-4 text-sm font-bold ${c.saldo_pendiente > 0 ? 'text-red-600' : 'text-green-600'}">${formatCurrency(c.saldo_pendiente)}</td>
                             <td class="relative py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                                 <div class="flex justify-end gap-2">
                                     <button onClick=${() => handleEdit(c)} class="text-gray-400 hover:text-primary p-1 rounded-full hover:bg-gray-100">${ICONS.edit}</button>
@@ -223,7 +229,7 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-6">
                  <${KPI_Card} title="Clientes Totales" value=${kpis.totalClientes} icon=${ICONS.clients} color="primary" />
-                 <${KPI_Card} title="Cuentas por Cobrar" value=${`Bs ${kpis.cuentasPorCobrar.toFixed(2)}`} icon=${ICONS.credit_score} color="amber" />
+                 <${KPI_Card} title="Cuentas por Cobrar" value=${formatCurrency(kpis.cuentasPorCobrar)} icon=${ICONS.credit_score} color="amber" />
             </div>
 
             <${ClientesList} />

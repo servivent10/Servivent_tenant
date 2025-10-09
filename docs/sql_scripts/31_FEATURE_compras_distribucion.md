@@ -69,6 +69,8 @@ DECLARE
     new_price numeric;
     next_folio_number integer;
     cantidad_total_item numeric;
+    v_folio text;
+    v_proveedor_nombre text;
 BEGIN
     -- 1. Calcular el total de la compra sumando las cantidades de las distribuciones
     FOREACH item IN ARRAY p_items LOOP
@@ -94,13 +96,15 @@ BEGIN
     FROM public.compras 
     WHERE empresa_id = caller_empresa_id;
 
+    v_folio := 'COMP-' || lpad(next_folio_number::text, 5, '0');
+
     -- 4. Insertar la cabecera de la compra (usando la fecha del payload)
     INSERT INTO public.compras (
         empresa_id, sucursal_id, proveedor_id, usuario_id, folio, fecha, moneda, tasa_cambio, total, total_bob,
         tipo_pago, estado_pago, saldo_pendiente, n_factura, fecha_vencimiento
     ) VALUES (
         caller_empresa_id, p_compra.sucursal_id, p_compra.proveedor_id, caller_user_id,
-        'COMP-' || lpad(next_folio_number::text, 5, '0'), p_compra.fecha, p_compra.moneda, p_compra.tasa_cambio, total_compra, total_compra_bob,
+        v_folio, p_compra.fecha, p_compra.moneda, p_compra.tasa_cambio, total_compra, total_compra_bob,
         p_compra.tipo_pago, estado_final, saldo_final, p_compra.n_factura, p_compra.fecha_vencimiento
     ) RETURNING id INTO new_compra_id;
 
@@ -182,6 +186,14 @@ BEGIN
         INSERT INTO public.pagos_compras (compra_id, monto, metodo_pago)
         VALUES (new_compra_id, p_compra.abono_inicial, COALESCE(p_compra.metodo_abono, 'Abono Inicial'));
     END IF;
+
+    -- 7. **NUEVO: Generar notificación inteligente**
+    SELECT nombre INTO v_proveedor_nombre FROM proveedores WHERE id = p_compra.proveedor_id;
+    PERFORM notificar_cambio(
+        'NUEVA_COMPRA', 
+        'Compra <b>' || v_folio || '</b> a ' || v_proveedor_nombre || ' por <b>' || p_compra.moneda || ' ' || total_compra::text || '</b>',
+        new_compra_id
+    );
 
     RETURN new_compra_id;
 END;

@@ -24,7 +24,7 @@ Este componente es el corazón de la aplicación y gestiona:
 
 ### Lógica de Backend Centralizada
 
-La arquitectura del backend se basa en dos pilares principales dentro de Supabase:
+La arquitectura del backend se basa en tres pilares principales dentro de Supabase:
 
 #### a. Funciones RPC de PostgreSQL
 
@@ -36,3 +36,7 @@ Se utilizan funciones con `SECURITY DEFINER` para consolidar lógica de negocio 
 
 Para operaciones que requieren lógica más compleja o que combinan pasos de autenticación y base de datos, se utilizan Edge Functions.
 -   **`create-company-user`:** Esta función es crucial para crear nuevos usuarios, ya que valida los permisos del llamador y los límites del plan de la empresa antes de interactuar con `auth.users` y `public.usuarios`, reemplazando la antigua lógica de triggers de base de datos que era propensa a errores.
+
+#### c. Arquitectura JWT para RLS (Regla Crítica)
+
+Para evitar la recursión infinita que bloquea las notificaciones en tiempo real, todas las políticas de seguridad a nivel de fila (RLS) se basan en leer el `empresa_id` directamente del token (JWT) del usuario a través de la función `public.get_empresa_id_from_jwt()`. Un trigger de base de datos se encarga de mantener los metadatos del usuario (`empresa_id`, nombre, sucursal) sincronizados con `auth.users` para que Supabase los incluya en el token al iniciar sesión.

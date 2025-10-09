@@ -163,7 +163,7 @@ const StockPill = ({ stock }) => {
     return html`<span class="${pillClass} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">${text} (${stock})</span>`;
 };
 
-const ProductCard = ({ product, navigate, onEdit, onDelete, user }) => {
+const ProductCard = ({ product, navigate, onEdit, onDelete, user, formatCurrency }) => {
     const handleCardClick = () => {
         if (window.getSelection().toString()) {
             return;
@@ -202,7 +202,7 @@ const ProductCard = ({ product, navigate, onEdit, onDelete, user }) => {
                 </div>
                 <div class="mt-2 flex items-end justify-between">
                     <p class="text-lg font-semibold text-gray-900">
-                        ${Number(product.precio_base) > 0 ? `Bs ${Number(product.precio_base).toFixed(2)}` : html`<span class="text-sm text-amber-600 font-medium">Precio no asignado</span>`}
+                        ${Number(product.precio_base) > 0 ? formatCurrency(product.precio_base) : html`<span class="text-sm text-amber-600 font-medium">Precio no asignado</span>`}
                     </p>
                     <${StockPill} stock=${stockToShow} />
                 </div>
@@ -211,7 +211,7 @@ const ProductCard = ({ product, navigate, onEdit, onDelete, user }) => {
     `;
 };
 
-const ProductTable = ({ products, navigate, onEdit, onDelete, user }) => {
+const ProductTable = ({ products, navigate, onEdit, onDelete, user, formatCurrency }) => {
     const handleRowClick = (product) => {
         navigate(`/productos/${product.id}`);
     };
@@ -252,7 +252,7 @@ const ProductTable = ({ products, navigate, onEdit, onDelete, user }) => {
                 
                 <td class="whitespace-nowrap px-3 py-4 text-sm font-semibold text-gray-800">
                     ${Number(p.precio_base) > 0
-                    ? `Bs ${Number(p.precio_base).toFixed(2)}`
+                    ? formatCurrency(p.precio_base)
                     : html`<span class="text-xs text-amber-600 font-medium">Precio no asignado</span>`
                     }
                 </td>
@@ -304,6 +304,12 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
 
     const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
     const [isFabOpen, setIsFabOpen] = useState(false);
+
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
 
     const fetchData = useCallback(async () => {
         startLoading();
@@ -441,11 +447,11 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     const ProductList = () => html`
         <div class="grid grid-cols-1 xl:hidden gap-4">
             ${filteredProducts.map(p => html`
-                <${ProductCard} product=${p} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} user=${user} />
+                <${ProductCard} product=${p} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} user=${user} formatCurrency=${formatCurrency} />
             `)}
         </div>
         <div class="hidden xl:block">
-            <${ProductTable} products=${filteredProducts} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} user=${user} />
+            <${ProductTable} products=${filteredProducts} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} user=${user} formatCurrency=${formatCurrency} />
         </div>
     `;
 

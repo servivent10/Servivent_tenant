@@ -103,7 +103,7 @@ const FilterBar = ({ filters, onFilterChange, onClear, onToggleAdvanced, isAdvan
     `;
 };
 
-const GastosList = ({ gastos, onEdit, onDelete }) => {
+const GastosList = ({ gastos, onEdit, onDelete, formatCurrency }) => {
     const getStatusPill = (comprobante_url) => {
         const hasReceipt = comprobante_url && comprobante_url.trim() !== '';
         const baseClasses = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium';
@@ -138,7 +138,7 @@ const GastosList = ({ gastos, onEdit, onDelete }) => {
                     <div class="flex justify-between items-end mt-2 pt-2 border-t">
                         <div class="text-sm">
                             <p class="text-gray-500">${new Date(g.fecha).toLocaleDateString()}</p>
-                            <p class="text-lg font-bold text-gray-900">Bs ${Number(g.monto).toFixed(2)}</p>
+                            <p class="text-lg font-bold text-gray-900">${formatCurrency(g.monto)}</p>
                         </div>
                         <div class="flex items-center">
                             <button onClick=${() => onEdit(g)} class="p-2 text-gray-400 hover:text-primary hover:bg-gray-100 rounded-full">${ICONS.edit}</button>
@@ -166,7 +166,7 @@ const GastosList = ({ gastos, onEdit, onDelete }) => {
                             <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm text-gray-500 sm:pl-6">${new Date(g.fecha).toLocaleDateString()}</td>
                             <td class="whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-900">${g.concepto}</td>
                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${g.categoria_nombre || 'Sin categoría'}</td>
-                            <td class="whitespace-nowrap px-3 py-4 text-sm text-right font-semibold text-gray-800">Bs ${Number(g.monto).toFixed(2)}</td>
+                            <td class="whitespace-nowrap px-3 py-4 text-sm text-right font-semibold text-gray-800">${formatCurrency(g.monto)}</td>
                             <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                                 <div class="flex justify-end gap-2">
                                     ${g.comprobante_url && html`<a href=${g.comprobante_url} target="_blank" title="Ver Comprobante" class="text-gray-400 hover:text-blue-600 p-1 rounded-full hover:bg-gray-100">${ICONS.upload_file}</a>`}
@@ -196,6 +196,12 @@ export function GastosPage({ user, onLogout, onProfileUpdate, companyInfo, navig
     const [filters, setFilters] = useState(initialFilters);
     const [filterOptions, setFilterOptions] = useState({ categories: [], users: [], branches: [] });
     const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
+    
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
     
     useEffect(() => {
         if (user.role === 'Empleado') {
@@ -351,9 +357,9 @@ export function GastosPage({ user, onLogout, onProfileUpdate, companyInfo, navig
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mt-6">
-                <${KPI_Card} title="Total Gastado (Filtrado)" value=${`Bs ${kpis.totalGastado.toFixed(2)}`} icon=${ICONS.paid} color="amber" />
+                <${KPI_Card} title="Total Gastado (Filtrado)" value=${formatCurrency(kpis.totalGastado)} icon=${ICONS.paid} color="amber" />
                 <${KPI_Card} title="Nº de Gastos (Filtrado)" value=${kpis.numGastos} icon=${ICONS.newExpense} />
-                <${KPI_Card} title="Gasto Promedio (Filtrado)" value=${`Bs ${kpis.gastoPromedio.toFixed(2)}`} icon=${ICONS.chart} />
+                <${KPI_Card} title="Gasto Promedio (Filtrado)" value=${formatCurrency(kpis.gastoPromedio)} icon=${ICONS.chart} />
             </div>
 
             <div class="mt-8">
@@ -361,7 +367,7 @@ export function GastosPage({ user, onLogout, onProfileUpdate, companyInfo, navig
                 <${AdvancedFilterPanel} isOpen=${isAdvancedSearchOpen} filters=${filters} onFilterChange=${handleFilterChange} filterOptions=${filterOptions} user=${user} />
 
                 <div class="mt-6 md:mt-0">
-                    <${GastosList} gastos=${data.gastos} onEdit=${handleEdit} onDelete=${handleDelete} />
+                    <${GastosList} gastos=${data.gastos} onEdit=${handleEdit} onDelete=${handleDelete} formatCurrency=${formatCurrency} />
                 </div>
             </div>
 

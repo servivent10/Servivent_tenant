@@ -6,12 +6,18 @@ import { html } from 'htm/preact';
 import { useState } from 'preact/hooks';
 import { ICONS } from './Icons.js';
 
-export function PlanCard({ plan, onSelect, isCurrentPlan = false, showTrialInfo = false }) {
+export function PlanCard({ plan, onSelect, isCurrentPlan = false, showTrialInfo = false, currencySymbol = 'Bs' }) {
     const { title, prices, description, features, recommended } = plan;
 
     const availableCycles = Object.keys(prices).filter(c => c !== 'custom' && c !== 'free');
     const defaultCycle = availableCycles.includes('monthly') ? 'monthly' : availableCycles[0] || null;
     const [billingCycle, setBillingCycle] = useState(defaultCycle);
+
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${currencySymbol} ${formattedNumber}`;
+    };
 
     const cardClass = `relative flex flex-col rounded-2xl border ${isCurrentPlan ? 'border-primary ring-2 ring-primary' : (recommended ? 'border-primary' : 'border-gray-200')} bg-white p-8 shadow-sm`;
     
@@ -38,7 +44,7 @@ export function PlanCard({ plan, onSelect, isCurrentPlan = false, showTrialInfo 
             lifetime: 'pago único'
         };
         priceDisplay = html`
-            <span class="text-4xl font-bold tracking-tight text-gray-900">Bs ${prices[billingCycle]}</span>
+            <span class="text-4xl font-bold tracking-tight text-gray-900">${formatCurrency(prices[billingCycle])}</span>
             <span class="text-sm font-semibold leading-6 tracking-wide text-gray-600">${cycleText[billingCycle]}</span>
         `;
     } else {

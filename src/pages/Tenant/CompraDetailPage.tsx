@@ -18,6 +18,12 @@ export function CompraDetailPage({ compraId, user, onLogout, onProfileUpdate, co
     const { isLoading, startLoading, stopLoading } = useLoading();
     const { addToast } = useToast();
 
+    const formatCurrency = (value, currencyCode) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${currencyCode || companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
+
     const fetchData = async () => {
         startLoading();
         try {
@@ -79,10 +85,10 @@ export function CompraDetailPage({ compraId, user, onLogout, onProfileUpdate, co
             <div class="bg-white p-6 rounded-lg shadow-md border">
                 <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">${ICONS.payments} Gestión de Pagos</h3>
                 <dl class="mt-4 grid grid-cols-2 gap-4 text-sm">
-                    <div class="bg-slate-50 p-3 rounded-md"><dt class="text-gray-500">Monto Total</dt><dd class="font-bold text-lg text-gray-900">${Number(compraData.total).toFixed(2)} ${compraData.moneda}</dd></div>
-                    <div class="bg-slate-50 p-3 rounded-md"><dt class="text-gray-500">Monto Pagado</dt><dd class="font-bold text-lg text-green-600">${(Number(compraData.total) - Number(compraData.saldo_pendiente)).toFixed(2)} ${compraData.moneda}</dd></div>
+                    <div class="bg-slate-50 p-3 rounded-md"><dt class="text-gray-500">Monto Total</dt><dd class="font-bold text-lg text-gray-900">${formatCurrency(compraData.total, compraData.moneda)}</dd></div>
+                    <div class="bg-slate-50 p-3 rounded-md"><dt class="text-gray-500">Monto Pagado</dt><dd class="font-bold text-lg text-green-600">${formatCurrency(Number(compraData.total) - Number(compraData.saldo_pendiente), compraData.moneda)}</dd></div>
                     ${compraData.estado_pago !== 'Pagada' && html`
-                        <div class="bg-red-50 p-3 rounded-md col-span-2"><dt class="text-red-800 font-semibold">Saldo Pendiente</dt><dd class="font-bold text-2xl text-red-600">${Number(compraData.saldo_pendiente).toFixed(2)} ${compraData.moneda}</dd></div>
+                        <div class="bg-red-50 p-3 rounded-md col-span-2"><dt class="text-red-800 font-semibold">Saldo Pendiente</dt><dd class="font-bold text-2xl text-red-600">${formatCurrency(compraData.saldo_pendiente, compraData.moneda)}</dd></div>
                     `}
                 </dl>
 
@@ -95,7 +101,7 @@ export function CompraDetailPage({ compraId, user, onLogout, onProfileUpdate, co
                                     <p class="font-medium text-gray-800">${p.metodo_pago}</p>
                                     <p class="text-xs text-gray-500">${new Date(p.fecha_pago).toLocaleString()}</p>
                                 </div>
-                                <p class="font-semibold text-green-700">${Number(p.monto).toFixed(2)} ${compraData.moneda}</p>
+                                <p class="font-semibold text-green-700">${formatCurrency(p.monto, compraData.moneda)}</p>
                             </li>
                         `)}
                         ${compraData.pagos.length === 0 && html`<li class="py-3 text-sm text-center text-gray-500">No se han registrado pagos.</li>`}
@@ -177,8 +183,8 @@ export function CompraDetailPage({ compraId, user, onLogout, onProfileUpdate, co
                                         <tr>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.producto_nombre}</td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${item.cantidad}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${Number(item.costo_unitario).toFixed(2)}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-800">${(Number(item.cantidad) * Number(item.costo_unitario)).toFixed(2)}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${formatCurrency(item.costo_unitario, compra.moneda)}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-800">${formatCurrency(Number(item.cantidad) * Number(item.costo_unitario), compra.moneda)}</td>
                                         </tr>
                                     `)}
                                 </tbody>

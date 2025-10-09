@@ -31,7 +31,8 @@ export function RealtimeProvider({ children }) {
     const [changeCounter, setChangeCounter] = useState(0);
     const channelRef = useRef(null);
     const disconnectTimeRef = useRef(null);
-    
+    const sessionUserIdRef = useRef(null); // FIX: Use a ref for the user ID
+
     const addLogEntry = useCallback((type, message) => {
         const newEntry = { type, message, time: new Date() };
         setLog(prev => [newEntry, ...prev.slice(0, 9)]); // Keep last 10 entries
@@ -53,7 +54,7 @@ export function RealtimeProvider({ children }) {
         };
         const handleOnline = () => {
             setIsOnline(true);
-            const duration = disconnectTimeRef.current ? Math.round((new Date() - disconnectTimeRef.current.getTime()) / 1000) : 0;
+            const duration = disconnectTimeRef.current ? Math.round((new Date().getTime() - disconnectTimeRef.current.getTime()) / 1000) : 0;
             const message = `Conexión a internet restaurada (desconectado ${duration}s).`;
             addLogEntry('success', message);
             addToast({ message: 'Conexión a internet restaurada.', type: 'success' });
@@ -73,9 +74,20 @@ export function RealtimeProvider({ children }) {
         setChangeCounter(c => c + 1);
     }, []);
 
-    const debouncedIncrement = useCallback(debounce(incrementChangeCounter, 150), [incrementChangeCounter]);
+    const debouncedIncrement = useCallback(debounce(incrementChangeCounter, 250), [incrementChangeCounter]);
 
     useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) {
+                sessionUserIdRef.current = session.user.id;
+            }
+        });
+        
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            sessionUserIdRef.current = session ? session.user.id : null;
+        });
+
+
         addLogEntry('info', 'Inicializando conexión en tiempo real...');
         const channel = supabase.channel('db-changes');
 
@@ -85,31 +97,37 @@ export function RealtimeProvider({ children }) {
                 'color: lime; font-weight: bold; background-color: black; padding: 2px 5px; border-radius: 3px;',
                 payload
             );
-            
-            const tablesToWatch = {
-                productos: 'El catálogo de productos se ha actualizado.',
-                inventarios: 'El inventario se ha actualizado.',
-                precios_productos: 'Los precios se han actualizado.',
-                ventas: 'Se ha registrado una nueva venta.',
-                venta_items: 'Los detalles de una venta se han actualizado.',
-                compras: 'Se ha registrado una nueva compra.',
-                compra_items: 'Los detalles de una compra se han actualizado.',
-                clientes: 'La lista de clientes se ha actualizado.',
-                proveedores: 'La lista de proveedores se ha actualizado.',
-                gastos: 'Se ha registrado un nuevo gasto.',
-                pagos_ventas: 'Se ha registrado un pago de venta.',
-                pagos_compras: 'Se ha registrado un pago de compra.',
-                traspasos: 'El estado de un traspaso ha cambiado.',
-            };
 
-            if (tablesToWatch[payload.table]) {
-                addToast({ message: tablesToWatch[payload.table], type: 'info', duration: 3000 });
+            // **DEFINITIVE REALTIME LOGIC**
+
+            // 1. Always trigger data refresh for everyone on relevant changes.
+            const tablesToTriggerRefresh = [
+                'productos', 'inventarios', 'precios_productos', 'ventas', 'venta_items',
+                'compras', 'compra_items', 'clientes', 'proveedores', 'gastos',
+                'pagos_ventas', 'pagos_compras', 'traspasos', 'sucursales', 'usuarios',
+                'notificaciones' // Notifications also signal a business transaction has completed.
+            ];
+
+            if (tablesToTriggerRefresh.includes(payload.table)) {
+                addLogEntry('info', `Cambio detectado en tabla: ${payload.table}. Actualizando UI.`);
                 debouncedIncrement();
+            }
+
+            // 2. Show a toast notification ONLY to OTHER users.
+            if (payload.table === 'notificaciones' && payload.eventType === 'INSERT') {
+                const generatingUserId = payload.new.usuario_generador_id;
+                
+                // FIX: Use the ref to get the current user ID
+                if (generatingUserId && generatingUserId !== sessionUserIdRef.current) {
+                     addLogEntry('info', `Mostrando notificación a usuario ${sessionUserIdRef.current}.`);
+                     addToast({ message: payload.new.mensaje, type: 'info', duration: 8000 });
+                }
             }
         });
 
-        channel.subscribe((status, err) => {
+        channel.subscribe(async (status, err) => {
             setSupabaseStatus(status);
+
             if (err) {
                 addLogEntry('error', `Error de canal: ${err.message}`);
             } else if (status === 'SUBSCRIBED') {
@@ -124,6 +142,7 @@ export function RealtimeProvider({ children }) {
         channelRef.current = channel;
 
         return () => {
+            subscription.unsubscribe();
             if (channelRef.current) {
                 supabase.removeChannel(channelRef.current);
             }

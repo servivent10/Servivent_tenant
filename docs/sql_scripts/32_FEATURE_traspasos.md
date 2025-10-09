@@ -75,6 +75,9 @@ DECLARE
     item traspaso_item_input;
     next_folio_number integer;
     stock_origen_actual numeric;
+    v_folio text;
+    v_origen_nombre text;
+    v_destino_nombre text;
 BEGIN
     -- 1. Validar permisos
     IF caller_rol NOT IN ('Propietario', 'Administrador') THEN
@@ -84,6 +87,8 @@ BEGIN
     -- 2. Generar folio
     SELECT COALESCE(MAX(substring(folio from 7)::integer), 0) + 1 INTO next_folio_number 
     FROM public.traspasos WHERE empresa_id = caller_empresa_id;
+    
+    v_folio := 'TRASP-' || lpad(next_folio_number::text, 5, '0');
 
     -- 3. Insertar cabecera con estado 'En Camino' e información de envío
     INSERT INTO public.traspasos (
@@ -91,7 +96,7 @@ BEGIN
         folio, fecha, notas, estado, fecha_envio
     ) VALUES (
         caller_empresa_id, p_origen_id, p_destino_id, caller_user_id,
-        'TRASP-' || lpad(next_folio_number::text, 5, '0'),
+        v_folio,
         p_fecha, p_notas, 'En Camino', now()
     ) RETURNING id INTO new_traspaso_id;
 
@@ -115,6 +120,15 @@ BEGIN
         INSERT INTO public.movimientos_inventario (producto_id, sucursal_id, usuario_id, tipo_movimiento, cantidad_ajustada, stock_anterior, stock_nuevo, referencia_id)
         VALUES (item.producto_id, p_origen_id, caller_user_id, 'Salida por Traspaso', -item.cantidad, stock_origen_actual, stock_origen_actual - item.cantidad, new_traspaso_id);
     END LOOP;
+
+    -- 5. **NUEVO: Generar notificación inteligente**
+    SELECT nombre INTO v_origen_nombre FROM sucursales WHERE id = p_origen_id;
+    SELECT nombre INTO v_destino_nombre FROM sucursales WHERE id = p_destino_id;
+    PERFORM notificar_cambio(
+        'TRASPASO_ENVIADO', 
+        'Traspaso <b>' || v_folio || '</b> enviado desde ' || v_origen_nombre || ' hacia <b>' || v_destino_nombre || '</b>.',
+        new_traspaso_id
+    );
     
     RETURN new_traspaso_id;
 END;
@@ -136,6 +150,8 @@ DECLARE
     traspaso_rec record;
     item_rec record;
     stock_destino_actual numeric;
+    v_origen_nombre text;
+    v_destino_nombre text;
 BEGIN
     -- 1. Obtener traspaso y validar permisos
     SELECT * INTO traspaso_rec FROM public.traspasos WHERE id = p_traspaso_id;
@@ -175,6 +191,15 @@ BEGIN
         INSERT INTO public.movimientos_inventario (producto_id, sucursal_id, usuario_id, tipo_movimiento, cantidad_ajustada, stock_anterior, stock_nuevo, referencia_id)
         VALUES (item_rec.producto_id, traspaso_rec.sucursal_destino_id, caller_user_id, 'Entrada por Traspaso', item_rec.cantidad, stock_destino_actual, stock_destino_actual + item_rec.cantidad, p_traspaso_id);
     END LOOP;
+
+    -- 4. **NUEVO: Generar notificación inteligente**
+    SELECT nombre INTO v_origen_nombre FROM sucursales WHERE id = traspaso_rec.sucursal_origen_id;
+    SELECT nombre INTO v_destino_nombre FROM sucursales WHERE id = traspaso_rec.sucursal_destino_id;
+    PERFORM notificar_cambio(
+        'TRASPASO_RECIBIDO', 
+        'El traspaso <b>' || traspaso_rec.folio || '</b> desde ' || v_origen_nombre || ' ha sido <b>recibido</b> en ' || v_destino_nombre || '.',
+        p_traspaso_id
+    );
 END;
 $$;
 

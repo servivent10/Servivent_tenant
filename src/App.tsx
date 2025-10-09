@@ -32,6 +32,7 @@ import { TraspasoDetailPage } from './pages/Tenant/TraspasoDetailPage.js';
 import { GastosPage } from './pages/Tenant/GastosPage.js';
 import { LicenciaPage } from './pages/Tenant/LicenciaPage.js';
 import { ConfiguracionPage } from './pages/Tenant/ConfiguracionPage.js';
+import { NotificacionesPage } from './pages/Tenant/NotificacionesPage.js';
 import { SuspendedLicensePage } from './pages/Tenant/SuspendedLicensePage.js';
 import { PendingApprovalPage } from './pages/Tenant/PendingApprovalPage.js';
 import { AdminToolPage } from './pages/Admin/AdminToolPage.js';
@@ -370,7 +371,6 @@ function AppContent() {
                 user: displayUser, 
                 onLogout: handleLogout,
                 companyInfo: companyInfo,
-                notifications: { support: [], system: [] },
                 onProfileUpdate: handleProfileUpdate,
                 onCompanyInfoUpdate: handleCompanyInfoUpdate,
                 navigate: navigate,
@@ -404,6 +404,7 @@ function AppContent() {
             else if (currentPath === '/gastos') tenantContent = html`<${GastosPage} ...${commonProps} />`;
             else if (currentPath === '/licencia') tenantContent = html`<${LicenciaPage} ...${commonProps} />`;
             else if (currentPath === '/configuracion') tenantContent = html`<${ConfiguracionPage} ...${commonProps} />`;
+            else if (currentPath === '/notificaciones') tenantContent = html`<${NotificacionesPage} ...${commonProps} />`;
             else {
                 // Default route for logged-in users if hash is something unexpected
                 navigate('/dashboard');

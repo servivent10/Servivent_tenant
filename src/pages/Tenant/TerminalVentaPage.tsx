@@ -172,7 +172,7 @@ const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
     `;
 };
 
-const SetPricePopover = ({ item, targetElement, onClose, onApply, getPriceInfo, addToast }) => {
+const SetPricePopover = ({ item, targetElement, onClose, onApply, getPriceInfo, addToast, formatCurrency }) => {
     const { originalPrice, minPrice } = useMemo(() => {
         const priceInfo = getPriceInfo(item.product);
         if (!priceInfo) return { originalPrice: 0, minPrice: 0 };
@@ -201,11 +201,11 @@ const SetPricePopover = ({ item, targetElement, onClose, onApply, getPriceInfo, 
             return;
         }
         if (numPrice < minPrice) {
-            addToast({ message: `El precio no puede ser inferior a Bs ${minPrice.toFixed(2)}.`, type: 'error' });
+            addToast({ message: `El precio no puede ser inferior a ${formatCurrency(minPrice)}.`, type: 'error' });
             return;
         }
         if (numPrice > originalPrice) {
-            addToast({ message: `El precio no puede ser superior al original de Bs ${originalPrice.toFixed(2)}.`, type: 'error' });
+            addToast({ message: `El precio no puede ser superior al original de ${formatCurrency(originalPrice)}.`, type: 'error' });
             return;
         }
         onApply(item.product.id, numPrice);
@@ -224,7 +224,7 @@ const SetPricePopover = ({ item, targetElement, onClose, onApply, getPriceInfo, 
     return html`
         <div ref=${popoverRef} style=${popoverStyle} class="z-50 w-64 bg-white rounded-lg shadow-xl border p-4 animate-fade-in-down">
             <h4 class="text-sm font-bold text-gray-800">Establecer Precio Unitario</h4>
-            <p class="text-xs text-gray-500 mb-2">Mínimo: <span class="font-semibold text-amber-600">Bs ${minPrice.toFixed(2)}</span></p>
+            <p class="text-xs text-gray-500 mb-2">Mínimo: <span class="font-semibold text-amber-600">${formatCurrency(minPrice)}</span></p>
             <div class="relative">
                 <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500 text-sm">Bs</span>
                 <input 
@@ -333,7 +333,7 @@ const StockPill = ({ stock }) => {
 };
 
 
-const ProductCard = ({ product, onAction, defaultPrice, quantityInCart, onShowDetails }) => {
+const ProductCard = ({ product, onAction, defaultPrice, quantityInCart, onShowDetails, formatCurrency }) => {
     const hasStock = product.stock_sucursal > 0;
     const hasPrice = defaultPrice > 0;
     const isAvailable = hasStock && hasPrice;
@@ -359,7 +359,7 @@ const ProductCard = ({ product, onAction, defaultPrice, quantityInCart, onShowDe
                     </div>
                     <div class="mt-1">
                          ${hasPrice ? html`
-                            <p class="text-sm font-bold text-gray-900">Bs ${defaultPrice.toFixed(2)}</p>
+                            <p class="text-sm font-bold text-gray-900">${formatCurrency(defaultPrice)}</p>
                         ` : html`
                              <p class="text-xs font-bold text-amber-600">Precio no asignado</p>
                         `}
@@ -383,7 +383,7 @@ const ProductCard = ({ product, onAction, defaultPrice, quantityInCart, onShowDe
     `;
 };
 
-const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice, onOpenPricePopover, priceSource, activePriceListName }) => {
+const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice, onOpenPricePopover, priceSource, activePriceListName, formatCurrency }) => {
     const effectivePrice = customPrice ?? originalPrice;
     const hasCustomPrice = customPrice !== null && customPrice !== undefined;
     const priceListTooltip = `Precio ${activePriceListName} aplicado`;
@@ -395,8 +395,8 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
                 <p class="text-sm font-semibold text-gray-800">${item.product.nombre}</p>
                  <div class="flex items-center gap-1.5">
                     <p class="text-xs text-gray-500">
-                        ${hasCustomPrice && html`<span class="line-through mr-1">Bs ${originalPrice.toFixed(2)}</span>`}
-                        <span class=${hasCustomPrice ? 'font-bold text-primary' : ''}>Bs ${effectivePrice.toFixed(2)} c/u</span>
+                        ${hasCustomPrice && html`<span class="line-through mr-1">${formatCurrency(originalPrice)}</span>`}
+                        <span class=${hasCustomPrice ? 'font-bold text-primary' : ''}>${formatCurrency(effectivePrice)} c/u</span>
                     </p>
                     ${priceSource === 'specific' && activePriceListName && html`
                         <span title=${priceListTooltip} class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
@@ -421,7 +421,7 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
                 </div>
             </div>
             <div class="text-right flex flex-col items-end">
-                <p class="text-base font-bold text-gray-900">Bs ${(effectivePrice * item.quantity).toFixed(2)}</p>
+                <p class="text-base font-bold text-gray-900">${formatCurrency(effectivePrice * item.quantity)}</p>
                 <button onClick=${() => onRemove(item.product.id)} title="Eliminar del carrito" class="mt-1 p-1 rounded-full text-gray-500 hover:bg-red-100 hover:text-red-600">
                     ${ICONS.delete}
                 </button>
@@ -430,7 +430,7 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
     `;
 };
 
-function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, taxRate, setTaxRate, discountValue, onDiscountChange, onFinalizeSale, onOpenPricePopover, customPrices, defaultPriceListId, isPriceRuleActive, selectedClientId, setSelectedClientId, setIsClienteFormOpen }) {
+function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, taxRate, setTaxRate, discountValue, onDiscountChange, onFinalizeSale, onOpenPricePopover, customPrices, defaultPriceListId, isPriceRuleActive, selectedClientId, setSelectedClientId, setIsClienteFormOpen, formatCurrency }) {
     const activePriceListName = useMemo(() => {
         return posData.price_lists.find(pl => pl.id === activePriceListId)?.nombre || '';
     }, [activePriceListId, posData.price_lists]);
@@ -488,6 +488,7 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
                     onOpenPricePopover=${onOpenPricePopover}
                     priceSource=${priceSource}
                     activePriceListName=${activePriceListName}
+                    formatCurrency=${formatCurrency}
                 />
             `})}
         </div>
@@ -496,7 +497,7 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
             <div class="space-y-2 text-sm">
                 <div class="flex justify-between items-center">
                     <span class="text-gray-600">Subtotal</span>
-                    <span class="font-medium text-gray-800">Bs ${totals.subtotal.toFixed(2)}</span>
+                    <span class="font-medium text-gray-800">${formatCurrency(totals.subtotal)}</span>
                 </div>
                 
                 <div class="flex justify-between items-center">
@@ -506,7 +507,7 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
                             <span class="pl-2 text-gray-500 text-sm">%</span>
                             <input type="number" value=${taxRate} onInput=${e => setTaxRate(e.target.value)} placeholder="0" class="w-full border-0 bg-transparent p-1 text-sm text-right text-gray-900 focus:ring-0 focus:outline-none" />
                         </div>
-                        <span class="font-medium text-gray-800 w-24 text-right">+ Bs ${totals.taxAmount.toFixed(2)}</span>
+                        <span class="font-medium text-gray-800 w-24 text-right">+ ${formatCurrency(totals.taxAmount)}</span>
                     </div>
                 </div>
                 
@@ -524,17 +525,17 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
                                     class="w-full border-0 bg-transparent p-1 text-sm text-right text-gray-900 focus:ring-0 focus:outline-none"
                                 />
                             </div>
-                            <span class="font-medium text-red-600 w-24 text-right">- Bs ${totals.totalDiscount.toFixed(2)}</span>
+                            <span class="font-medium text-red-600 w-24 text-right">- ${formatCurrency(totals.totalDiscount)}</span>
                         </div>
                         ${totals.maxGlobalDiscount > 0 && html`
-                            <p class="text-xs text-gray-500 mt-1">Máx: Bs ${totals.maxGlobalDiscount.toFixed(2)}</p>
+                            <p class="text-xs text-gray-500 mt-1">Máx: ${formatCurrency(totals.maxGlobalDiscount)}</p>
                         `}
                     </div>
                 </div>
 
                 <div class="flex justify-between items-baseline text-2xl font-bold border-t pt-2 mt-2">
                     <span class="text-gray-900">Total</span>
-                    <span class="text-primary">Bs ${totals.finalTotal.toFixed(2)}</span>
+                    <span class="text-primary">${formatCurrency(totals.finalTotal)}</span>
                 </div>
             </div>
             <button onClick=${onFinalizeSale} disabled=${cart.length === 0} class="w-full flex items-center justify-center gap-2 text-center rounded-lg bg-green-600 px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
@@ -590,6 +591,12 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const [selectedClientId, setSelectedClientId] = useState(null);
 
     const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
 
     const fetchData = useCallback(async () => {
         startLoading();
@@ -904,7 +911,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         if (numericValue > totals.maxGlobalDiscount) {
             const maxDiscountStr = totals.maxGlobalDiscount.toFixed(2);
             setDiscountValue(maxDiscountStr);
-            addToast({ message: `Descuento ajustado al máximo permitido: Bs ${maxDiscountStr}`, type: 'warning' });
+            addToast({ message: `Descuento ajustado al máximo permitido: ${formatCurrency(totals.maxGlobalDiscount)}`, type: 'warning' });
         } else {
             setDiscountValue(rawValue);
         }
@@ -968,7 +975,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         onFinalizeSale: () => setIsCheckoutModalOpen(true),
         onOpenPricePopover: handleOpenPricePopover, customPrices,
         defaultPriceListId, isPriceRuleActive, selectedClientId,
-        setSelectedClientId, setIsClienteFormOpen
+        setSelectedClientId, setIsClienteFormOpen, formatCurrency
     };
 
     return html`
@@ -1011,6 +1018,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                                     onShowDetails=${handleShowDetails}
                                     defaultPrice=${getDefaultPriceForProduct(p)}
                                     quantityInCart=${cartMap.get(p.id)?.quantity || 0}
+                                    formatCurrency=${formatCurrency}
                                 />
                             `)}
                         </div>
@@ -1063,6 +1071,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                     onApply=${handleApplyCustomPrice}
                     getPriceInfo=${getPriceInfoForProduct}
                     addToast=${addToast}
+                    formatCurrency=${formatCurrency}
                 />
             `}
             
@@ -1087,6 +1096,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                 onConfirm=${handleConfirmSale}
                 total=${totals.finalTotal}
                 clienteId=${selectedClientId}
+                companyInfo=${companyInfo}
             />
         <//>
     `;

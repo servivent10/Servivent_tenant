@@ -193,34 +193,34 @@ BEGIN
     SELECT json_agg(activity) INTO recent_activity FROM (
         (SELECT 
             'venta' as type, 
-            'Venta ' || v.folio || ' a ' || COALESCE(c.nombre, 'Consumidor Final') || CASE WHEN p_sucursal_id IS NULL AND s.nombre IS NOT NULL THEN ' en <b>' || s.nombre || '</b>' ELSE '' END as description, 
+            'Venta <b>' || v.folio || '</b> a ' || COALESCE(c.nombre, 'Consumidor Final') as description, 
             v.total as amount, 
             v.created_at as timestamp,
             NULL as estado
-        FROM ventas v LEFT JOIN clientes c ON v.cliente_id = c.id LEFT JOIN sucursales s ON v.sucursal_id = s.id
+        FROM ventas v LEFT JOIN clientes c ON v.cliente_id = c.id
         WHERE v.empresa_id = caller_empresa_id AND (effective_sucursal_id IS NULL OR v.sucursal_id = effective_sucursal_id) )
         UNION ALL
         (SELECT 
             'compra' as type, 
-            'Compra ' || com.folio || ' de ' || p.nombre || CASE WHEN p_sucursal_id IS NULL AND s.nombre IS NOT NULL THEN ' para <b>' || s.nombre || '</b>' ELSE '' END as description, 
+            'Compra <b>' || com.folio || '</b> a <b>' || p.nombre || '</b>' as description, 
             com.total_bob as amount, 
             com.created_at as timestamp,
             NULL as estado
-        FROM compras com JOIN proveedores p ON com.proveedor_id = p.id LEFT JOIN sucursales s ON com.sucursal_id = s.id
+        FROM compras com JOIN proveedores p ON com.proveedor_id = p.id
         WHERE com.empresa_id = caller_empresa_id AND (effective_sucursal_id IS NULL OR com.sucursal_id = effective_sucursal_id) )
         UNION ALL
         (SELECT 
             'gasto' as type, 
-            'Gasto: ' || g.concepto || CASE WHEN p_sucursal_id IS NULL AND s.nombre IS NOT NULL THEN ' en <b>' || s.nombre || '</b>' ELSE '' END as description, 
+            'Gasto: <b>' || g.concepto || '</b>' as description, 
             g.monto as amount, 
             g.created_at as timestamp,
             NULL as estado
-        FROM gastos g LEFT JOIN sucursales s ON g.sucursal_id = s.id
+        FROM gastos g
         WHERE g.empresa_id = caller_empresa_id AND (effective_sucursal_id IS NULL OR g.sucursal_id = effective_sucursal_id) )
         UNION ALL
         (SELECT 
             'traspaso' as type, 
-            'Traspaso ' || t.folio || ' de <b>' || s_origen.nombre || '</b> a <b>' || s_destino.nombre || '</b>' as description, 
+            'Traspaso <b>' || t.folio || '</b> de <b>' || s_origen.nombre || '</b> a <b>' || s_destino.nombre || '</b>' as description, 
             NULL as amount, 
             t.created_at as timestamp,
             t.estado

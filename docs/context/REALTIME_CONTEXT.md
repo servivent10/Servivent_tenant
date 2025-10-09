@@ -11,32 +11,33 @@ El objetivo principal es mantener la consistencia de los datos en toda la aplica
 
 El sistema se basa en la funcionalidad "Realtime" de Supabase, que escucha los cambios directamente de la base de datos PostgreSQL (`postgres_changes`). El flujo completo es el siguiente:
 
-1.  **Cambio en la Base de Datos:** Un usuario realiza una acción que modifica una tabla (ej. `INSERT` en `ventas`, `UPDATE` en `inventarios`).
+1.  **Cambio en la Base de Datos:** Un usuario realiza una acción que modifica una tabla (ej. `INSERT` en `ventas`).
 
-2.  **Publicación de PostgreSQL (`supabase_realtime`):** La base de datos, gracias a la configuración del script `27_FINAL_REALTIME_PUBLICATION_FIX_V2.md`, tiene una "publicación" que actúa como un cartero. Esta publicación le dice a PostgreSQL: "Notifícame de cualquier cambio que ocurra en estas tablas específicas (`ventas`, `inventarios`, `productos`, etc.)".
+2.  **Publicación de PostgreSQL (`supabase_realtime`):** La base de datos, configurada mediante el script `27_FINAL_REALTIME_PUBLICATION_FIX_V2.md`, tiene una "publicación" que le indica de qué tablas debe notificar los cambios.
 
-3.  **Servicio de Replicación de Supabase:** La plataforma de Supabase tiene un servicio que escucha constantemente las notificaciones de este "cartero".
+3.  **Servicio de Replicación de Supabase:** La plataforma de Supabase escucha estas notificaciones de la base de datos.
 
-4.  **Comprobación de Seguridad (El Paso Crítico):** Antes de retransmitir una notificación a un navegador, el servicio de Supabase realiza una última y crucial comprobación de seguridad. Mira al usuario que está en el otro extremo (ej. en la tablet) y se pregunta: **"¿El usuario de la tablet tiene permiso, según las Políticas de Seguridad a Nivel de Fila (RLS), para *VER* la nueva fila que se acaba de crear?"**.
+4.  **Comprobación de Seguridad (La Causa del Problema y la Solución):** Antes de retransmitir una notificación a un navegador (ej. el de la tablet), el servicio de Supabase debe verificar si el usuario de la tablet tiene permiso para ver el cambio (la nueva venta). Para ello, ejecuta la Política de Seguridad a Nivel de Fila (RLS) de la tabla `ventas`.
+    -   **El Problema (Recursión Infinita):** La política RLS anterior intentaba verificar el `empresa_id` del usuario consultando la tabla `public.usuarios`. Esto activaba la RLS de `usuarios`, que a su vez consultaba a `usuarios`, creando un bucle infinito. La base de datos detectaba esto, abortaba la consulta con un error, y el servicio de Supabase **descartaba silenciosamente la notificación**.
+    -   **La Solución (Arquitectura JWT):** La nueva política RLS, implementada con el script `29_FINAL_RLS_RESET_V4_JWT.md`, ya no consulta la tabla `usuarios`. En su lugar, utiliza la función `public.get_empresa_id_from_jwt()`, que lee el `empresa_id` directamente del token de autenticación (JWT) del usuario. Esta operación es instantánea y no activa ninguna otra política, rompiendo el ciclo de recursión.
 
-5.  **Transmisión (Broadcast) por WebSocket:** Si la comprobación de RLS es exitosa, el servicio de Supabase envía la notificación del cambio a través de una conexión WebSocket a todos los navegadores que estén suscritos. Si la comprobación falla (como ocurría con el error de recursión infinita), la notificación se descarta silenciosamente.
+5.  **Transmisión (Broadcast) por WebSocket:** Con la validación de RLS ahora exitosa y sin recursión, el servicio de Supabase envía la notificación del cambio a través de WebSocket a todos los navegadores suscritos.
 
 6.  **Receptor en el Frontend (`RealtimeProvider`):**
-    -   El componente `src/hooks/useRealtime.js` establece una conexión permanente al canal de cambios de la base de datos.
-    -   Dentro de este componente, un `console.log` crucial nos permite ver **cada mensaje** que llega al navegador, lo que fue vital para el diagnóstico.
-    -   Cuando llega una notificación para una tabla relevante (`ventas`, `inventarios`, etc.), el proveedor hace dos cosas:
-        a.  Muestra una notificación `Toast` informativa al usuario (ej. "El inventario se ha actualizado.").
+    -   El componente `src/hooks/useRealtime.js` gestiona la conexión y recibe los mensajes.
+    -   Al recibir una notificación de un cambio en la tabla `notificaciones` (que ahora es la fuente de la verdad para las transacciones de negocio), el proveedor hace dos cosas:
+        a.  Muestra una notificación `Toast` con el mensaje del evento.
         b.  Incrementa un contador de cambios (`changeCounter`).
 
 7.  **Actualización de la UI (`useRealtimeListener`):**
-    -   Las páginas que necesitan datos en vivo (como `TerminalVentaPage`, `InventariosPage`) utilizan el hook `useRealtimeListener`.
-    -   Este hook simplemente "observa" el `changeCounter` del `RealtimeProvider`.
-    -   Cuando el contador cambia, el hook ejecuta la función de `callback` que se le pasó, que generalmente es `fetchData()`.
-    -   Esto provoca que la página vuelva a solicitar los datos más recientes de la base de datos y se renderice de nuevo con la información actualizada.
+    -   Las páginas como `DashboardPage`, `InventariosPage`, etc., usan el hook `useRealtimeListener`.
+    -   Este hook observa el `changeCounter`.
+    -   Cuando el contador cambia, ejecuta su callback, que es la función `fetchData()` de la página. Esto provoca que la página solicite los datos más recientes y se actualice.
 
 ## 3. Archivos Clave
 
 -   **`src/hooks/useRealtime.js`:** El corazón del sistema en el frontend. Gestiona la conexión, recibe los mensajes y orquesta la actualización de la UI.
 -   **`src/components/ConnectivityCenter.tsx`:** Un componente visual que muestra el estado de la conexión WebSocket.
--   **`docs/sql_scripts/29_FINAL_RLS_RESET_V4_JWT.md`:** La configuración de RLS que permite que el paso 4 (Comprobación de Seguridad) funcione sin errores.
+-   **`docs/sql_scripts/29_FINAL_RLS_RESET_V4_JWT.md`:** La configuración de RLS que implementa la arquitectura JWT, permitiendo que el paso 4 funcione sin errores.
 -   **`docs/sql_scripts/27_FINAL_REALTIME_PUBLICATION_FIX_V2.md`:** El script que configura el paso 2 (Publicación de PostgreSQL).
+-   **`docs/sql_scripts/33_FEATURE_notifications.md`:** El script que configura el sistema de notificaciones, incluyendo la función `notificar_cambio` que ahora también usa la arquitectura JWT.

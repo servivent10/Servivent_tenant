@@ -57,7 +57,7 @@ export const Toast = ({ toast, onDismiss }) => {
                         ${styles.icon}
                     </div>
                     <div class="ml-3 w-0 flex-1 pt-0.5">
-                        <p class="text-sm font-medium text-gray-900">${message}</p>
+                        <p class="text-sm font-medium text-gray-900" dangerouslySetInnerHTML=${{ __html: message }}></p>
                     </div>
                     <div class="ml-4 flex-shrink-0 flex">
                         <button onClick=${handleDismiss} class="rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-dark">

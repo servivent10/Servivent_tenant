@@ -55,6 +55,12 @@ export function InventariosPage({ user, onLogout, onProfileUpdate, companyInfo, 
     const [expandedRowId, setExpandedRowId] = useState(null);
     const [detailedStock, setDetailedStock] = useState({});
 
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
+
     const fetchData = useCallback(async () => {
         startLoading();
         try {
@@ -158,7 +164,7 @@ export function InventariosPage({ user, onLogout, onProfileUpdate, companyInfo, 
             <p class="mt-1 text-sm text-gray-600">Supervisa el stock de tus productos en todas las sucursales en tiempo real.</p>
             
              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-6">
-                <${KPI_Card} title="Valor del Inventario (Costo)" value=${`Bs ${kpis.inventoryValue.toFixed(2)}`} icon=${ICONS.paid} color="primary" />
+                <${KPI_Card} title="Valor del Inventario (Costo)" value=${formatCurrency(kpis.inventoryValue)} icon=${ICONS.paid} color="primary" />
                 <${KPI_Card} title="Productos Totales" value=${kpis.totalProducts} icon=${ICONS.products} />
                 <${KPI_Card} title="Productos con Bajo Stock" value=${kpis.lowStockCount} icon=${ICONS.warning} color="amber" />
                 <${KPI_Card} title="Productos Agotados" value=${kpis.outOfStockCount} icon=${ICONS.error} color="red" />
@@ -199,7 +205,7 @@ export function InventariosPage({ user, onLogout, onProfileUpdate, companyInfo, 
                                             <p class="text-xs text-gray-500">Modelo: ${p.modelo || 'N/A'}</p>
                                             <div class="mt-2 flex justify-between items-center">
                                                 <${StockStatusPill} stock=${p.stock_total} minStock=${p.stock_minimo || 0} />
-                                                <span class="text-xs text-gray-500">Costo: <span class="font-medium text-gray-700">Bs ${Number(p.precio_compra || 0).toFixed(2)}</span></span>
+                                                <span class="text-xs text-gray-500">Costo: <span class="font-medium text-gray-700">${formatCurrency(p.precio_compra || 0)}</span></span>
                                             </div>
                                         </div>
                                     </div>
@@ -210,7 +216,7 @@ export function InventariosPage({ user, onLogout, onProfileUpdate, companyInfo, 
                                         </div>
                                         <div>
                                             <p class="text-xs text-gray-500">Valor Inventario</p>
-                                            <p class="text-xl font-bold text-primary">Bs ${(p.stock_total * (p.precio_compra || 0)).toFixed(2)}</p>
+                                            <p class="text-xl font-bold text-primary">${formatCurrency(p.stock_total * (p.precio_compra || 0))}</p>
                                         </div>
                                     </div>
                                     ${expandedRowId === p.id && html`
@@ -261,9 +267,9 @@ export function InventariosPage({ user, onLogout, onProfileUpdate, companyInfo, 
                                             <td class="py-4 pl-4 pr-3 text-sm sm:pl-6">
                                                 <div class="flex items-center"><div class="h-10 w-10 flex-shrink-0"><img class="h-10 w-10 rounded-md object-cover" src=${p.imagen_principal || NO_IMAGE_ICON_URL} alt=${p.nombre} /></div><div class="ml-4 min-w-0"><div class="font-medium text-gray-900 truncate" title=${p.nombre}>${p.nombre}</div><div class="text-gray-500 truncate" title=${p.modelo || 'N/A'}>Modelo: ${p.modelo || 'N/A'}</div></div></div>
                                             </td>
-                                            <td class="px-3 py-4 text-sm text-gray-700">Bs ${Number(p.precio_compra || 0).toFixed(2)}</td>
+                                            <td class="px-3 py-4 text-sm text-gray-700">${formatCurrency(p.precio_compra || 0)}</td>
                                             <td class="px-3 py-4 text-sm font-bold text-gray-900">${p.stock_total}</td>
-                                            <td class="px-3 py-4 text-sm font-semibold text-gray-800">Bs ${(p.stock_total * (p.precio_compra || 0)).toFixed(2)}</td>
+                                            <td class="px-3 py-4 text-sm font-semibold text-gray-800">${formatCurrency(p.stock_total * (p.precio_compra || 0))}</td>
                                             <td class="px-3 py-4 text-sm text-gray-500"><${StockStatusPill} stock=${p.stock_total} minStock=${p.stock_minimo || 0} /></td>
                                             <td class="py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                                                 <a href=${`#/productos/${p.id}`} onClick=${(e) => { e.preventDefault(); navigate(`/productos/${p.id}`); }} class="text-primary hover:text-primary-dark">Ver Detalles</a>

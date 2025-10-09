@@ -18,6 +18,12 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
     const { isLoading, startLoading, stopLoading } = useLoading();
     const { addToast } = useToast();
 
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
+
     const fetchData = async () => {
         startLoading();
         try {
@@ -79,10 +85,10 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
             <div class="bg-white p-6 rounded-lg shadow-md border">
                 <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">${ICONS.payments} Gestión de Pagos</h3>
                 <dl class="mt-4 grid grid-cols-2 gap-4 text-sm">
-                    <div class="bg-slate-50 p-3 rounded-md"><dt class="text-gray-500">Monto Total</dt><dd class="font-bold text-lg text-gray-900">Bs ${Number(ventaData.total).toFixed(2)}</dd></div>
-                    <div class="bg-slate-50 p-3 rounded-md"><dt class="text-gray-500">Monto Pagado</dt><dd class="font-bold text-lg text-green-600">Bs ${(Number(ventaData.total) - Number(ventaData.saldo_pendiente)).toFixed(2)}</dd></div>
+                    <div class="bg-slate-50 p-3 rounded-md"><dt class="text-gray-500">Monto Total</dt><dd class="font-bold text-lg text-gray-900">${formatCurrency(ventaData.total)}</dd></div>
+                    <div class="bg-slate-50 p-3 rounded-md"><dt class="text-gray-500">Monto Pagado</dt><dd class="font-bold text-lg text-green-600">${formatCurrency(Number(ventaData.total) - Number(ventaData.saldo_pendiente))}</dd></div>
                     ${ventaData.estado_pago !== 'Pagada' && html`
-                        <div class="bg-red-50 p-3 rounded-md col-span-2"><dt class="text-red-800 font-semibold">Saldo Pendiente</dt><dd class="font-bold text-2xl text-red-600">Bs ${Number(ventaData.saldo_pendiente).toFixed(2)}</dd></div>
+                        <div class="bg-red-50 p-3 rounded-md col-span-2"><dt class="text-red-800 font-semibold">Saldo Pendiente</dt><dd class="font-bold text-2xl text-red-600">${formatCurrency(ventaData.saldo_pendiente)}</dd></div>
                     `}
                 </dl>
 
@@ -95,7 +101,7 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                                     <p class="font-medium text-gray-800">${p.metodo_pago}</p>
                                     <p class="text-xs text-gray-500">${new Date(p.fecha_pago).toLocaleString()}</p>
                                 </div>
-                                <p class="font-semibold text-green-700">Bs ${Number(p.monto).toFixed(2)}</p>
+                                <p class="font-semibold text-green-700">${formatCurrency(p.monto)}</p>
                             </li>
                         `)}
                         ${ventaData.pagos.length === 0 && html`<li class="py-3 text-sm text-center text-gray-500">No se han registrado pagos.</li>`}
@@ -177,27 +183,27 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                                         <tr>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.producto_nombre}</td>
                                             <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${item.cantidad}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">Bs ${Number(item.precio_unitario_aplicado).toFixed(2)}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-800">Bs ${(Number(item.cantidad) * Number(item.precio_unitario_aplicado)).toFixed(2)}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">${formatCurrency(item.precio_unitario_aplicado)}</td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-800">${formatCurrency(Number(item.cantidad) * Number(item.precio_unitario_aplicado))}</td>
                                         </tr>
                                     `)}
                                 </tbody>
                                 <tfoot class="bg-gray-50">
                                     <tr>
                                         <td colspan="3" class="px-6 py-2 text-right text-sm font-medium text-gray-600">Subtotal</td>
-                                        <td class="px-6 py-2 text-right text-sm font-semibold text-gray-800">Bs ${Number(venta.subtotal).toFixed(2)}</td>
+                                        <td class="px-6 py-2 text-right text-sm font-semibold text-gray-800">${formatCurrency(venta.subtotal)}</td>
                                     </tr>
                                      <tr>
                                         <td colspan="3" class="px-6 py-2 text-right text-sm font-medium text-gray-600">Descuento</td>
-                                        <td class="px-6 py-2 text-right text-sm font-semibold text-red-600">- Bs ${Number(venta.descuento).toFixed(2)}</td>
+                                        <td class="px-6 py-2 text-right text-sm font-semibold text-red-600">- ${formatCurrency(venta.descuento)}</td>
                                     </tr>
                                      <tr>
                                         <td colspan="3" class="px-6 py-2 text-right text-sm font-medium text-gray-600">Impuestos</td>
-                                        <td class="px-6 py-2 text-right text-sm font-semibold text-gray-800">+ Bs ${Number(venta.impuestos).toFixed(2)}</td>
+                                        <td class="px-6 py-2 text-right text-sm font-semibold text-gray-800">+ ${formatCurrency(venta.impuestos)}</td>
                                     </tr>
                                      <tr>
                                         <td colspan="3" class="px-6 py-3 text-right text-base font-bold text-gray-900 border-t-2">TOTAL</td>
-                                        <td class="px-6 py-3 text-right text-base font-bold text-primary border-t-2">Bs ${Number(venta.total).toFixed(2)}</td>
+                                        <td class="px-6 py-3 text-right text-base font-bold text-primary border-t-2">${formatCurrency(venta.total)}</td>
                                     </tr>
                                 </tfoot>
                             </table>

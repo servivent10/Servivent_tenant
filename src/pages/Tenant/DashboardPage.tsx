@@ -127,6 +127,12 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
     const [data, setData] = useState(null);
     const [datePreset, setDatePreset] = useState('this_week');
 
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
+
     const getDatesFromPreset = (preset) => {
         const now = new Date();
         let start, end;
@@ -219,8 +225,6 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
     }, [fetchData]);
 
     useRealtimeListener(fetchData);
-
-    const formatCurrency = (value) => `${companyInfo.monedaSimbolo} ${Number(value || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     const breadcrumbs = [{ name: 'Dashboard', href: '#/dashboard' }];
     
@@ -321,11 +325,12 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
                                 { key: 'sales', label: 'Ventas' },
                                 { key: 'profit', label: 'Ganancia' }
                             ]}
+                            currencySymbol=${companyInfo.monedaSimbolo}
                         />
                     <//>
                     
                     <${DashboardWidget} title="Productos Más Vendidos" icon=${ICONS.local_offer}>
-                        <${HorizontalBarChart} data=${top_selling_products} />
+                        <${HorizontalBarChart} data=${top_selling_products} currencySymbol=${companyInfo.monedaSimbolo} />
                     <//>
                 </div>
                 <div class="space-y-6">
@@ -363,7 +368,7 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
                                     <${ActivityIcon} type=${act.type} />
                                     <div class="flex-1 min-w-0">
                                         <div class="flex items-center">
-                                            <p class="text-sm text-gray-800 truncate" dangerouslySetInnerHTML=${{__html: act.description}}></p>
+                                            <p class="text-sm text-gray-800" dangerouslySetInnerHTML=${{__html: act.description}}></p>
                                             ${act.type === 'traspaso' && html`<${TraspasoStatusPill} status=${act.estado} />`}
                                         </div>
                                         <p class="text-xs text-gray-500">${new Date(act.timestamp).toLocaleString()}</p>

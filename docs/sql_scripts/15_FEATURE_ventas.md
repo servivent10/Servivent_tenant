@@ -116,6 +116,8 @@ DECLARE
     estado_final text;
     next_folio_number integer;
     stock_sucursal_anterior numeric;
+    v_folio text;
+    v_cliente_nombre text;
 BEGIN
     -- 1. Calcular saldo y estado del pago
     IF p_venta.tipo_venta = 'Contado' THEN
@@ -139,13 +141,15 @@ BEGIN
     FROM public.ventas 
     WHERE empresa_id = caller_empresa_id;
 
+    v_folio := 'VENTA-' || lpad(next_folio_number::text, 5, '0');
+
     -- 3. Insertar la cabecera de la venta
     INSERT INTO public.ventas (
         empresa_id, sucursal_id, cliente_id, usuario_id, folio, total, subtotal, descuento, impuestos,
         metodo_pago, tipo_venta, estado_pago, saldo_pendiente, fecha_vencimiento
     ) VALUES (
         caller_empresa_id, p_venta.sucursal_id, p_venta.cliente_id, caller_user_id,
-        'VENTA-' || lpad(next_folio_number::text, 5, '0'),
+        v_folio,
         p_venta.total, p_venta.subtotal, p_venta.descuento, p_venta.impuestos,
         p_venta.metodo_pago, p_venta.tipo_venta, estado_final, saldo_final, p_venta.fecha_vencimiento
     ) RETURNING id INTO new_venta_id;
@@ -189,6 +193,14 @@ BEGIN
         VALUES (new_venta_id, p_venta.abono_inicial, p_venta.metodo_pago);
     END IF;
 
+    -- 7. **NUEVO: Generar notificación inteligente**
+    SELECT nombre INTO v_cliente_nombre FROM clientes WHERE id = p_venta.cliente_id;
+    PERFORM notificar_cambio(
+        'NUEVA_VENTA', 
+        'Venta <b>' || v_folio || '</b> a ' || COALESCE(v_cliente_nombre, 'Consumidor Final') || ' por <b>Bs ' || p_venta.total::text || '</b>',
+        new_venta_id
+    );
+
     RETURN new_venta_id;
 END;
 $$;
@@ -211,7 +223,8 @@ RETURNS TABLE (
     estado_pago text,
     saldo_pendiente numeric,
     tipo_venta text,
-    metodo_pago text
+    metodo_pago text,
+    impuestos numeric
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -233,7 +246,8 @@ BEGIN
         v.estado_pago, 
         v.saldo_pendiente, 
         v.tipo_venta,
-        v.metodo_pago
+        v.metodo_pago,
+        v.impuestos
     FROM public.ventas v
     LEFT JOIN public.clientes c ON v.cliente_id = c.id
     LEFT JOIN public.usuarios u ON v.usuario_id = u.id

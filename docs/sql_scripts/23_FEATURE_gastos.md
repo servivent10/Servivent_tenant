@@ -109,8 +109,42 @@ END;
 $$;
 
 
--- Función upsert de gasto (sin cambios)
-CREATE OR REPLACE FUNCTION upsert_gasto(p_id uuid, p_concepto text, p_monto numeric, p_fecha date, p_categoria_id uuid, p_comprobante_url text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid := public.get_empresa_id_from_jwt(); caller_user_id uuid := auth.uid(); caller_sucursal_id uuid := (SELECT u.sucursal_id FROM public.usuarios u WHERE u.id = caller_user_id); BEGIN IF p_id IS NULL THEN INSERT INTO public.gastos(empresa_id, sucursal_id, usuario_id, concepto, monto, fecha, categoria_id, comprobante_url) VALUES (caller_empresa_id, caller_sucursal_id, caller_user_id, p_concepto, p_monto, p_fecha, p_categoria_id, p_comprobante_url); ELSE UPDATE public.gastos SET concepto = p_concepto, monto = p_monto, fecha = p_fecha, categoria_id = p_categoria_id, comprobante_url = p_comprobante_url WHERE id = p_id AND empresa_id = caller_empresa_id; END IF; END; $$;
+-- **FUNCIÓN ACTUALIZADA:** `upsert_gasto` ahora genera una notificación.
+CREATE OR REPLACE FUNCTION upsert_gasto(p_id uuid, p_concepto text, p_monto numeric, p_fecha date, p_categoria_id uuid, p_comprobante_url text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    caller_empresa_id uuid := public.get_empresa_id_from_jwt();
+    caller_user_id uuid := auth.uid();
+    caller_sucursal_id uuid := (SELECT u.sucursal_id FROM public.usuarios u WHERE u.id = caller_user_id);
+    v_gasto_id uuid;
+BEGIN
+    IF p_id IS NULL THEN
+        INSERT INTO public.gastos(empresa_id, sucursal_id, usuario_id, concepto, monto, fecha, categoria_id, comprobante_url)
+        VALUES (caller_empresa_id, caller_sucursal_id, caller_user_id, p_concepto, p_monto, p_fecha, p_categoria_id, p_comprobante_url)
+        RETURNING id INTO v_gasto_id;
+
+        -- Generar notificación para nuevo gasto
+        PERFORM notificar_cambio(
+            'NUEVO_GASTO', 
+            'Gasto por <b>' || p_concepto || '</b> de <b>Bs ' || p_monto::text || '</b> registrado.',
+            v_gasto_id
+        );
+    ELSE
+        UPDATE public.gastos
+        SET 
+            concepto = p_concepto, 
+            monto = p_monto, 
+            fecha = p_fecha, 
+            categoria_id = p_categoria_id, 
+            comprobante_url = p_comprobante_url
+        WHERE id = p_id AND empresa_id = caller_empresa_id;
+    END IF;
+END;
+$$;
 
 -- Función delete de gasto (sin cambios)
 CREATE OR REPLACE FUNCTION delete_gasto(p_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ BEGIN DELETE FROM public.gastos WHERE id = p_id AND empresa_id = public.get_empresa_id_from_jwt(); END; $$;

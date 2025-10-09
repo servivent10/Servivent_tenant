@@ -20,6 +20,12 @@ export function ProveedoresPage({ user, onLogout, onProfileUpdate, companyInfo, 
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
 
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
+
     const fetchData = async () => {
         startLoading();
         try {
@@ -73,7 +79,7 @@ export function ProveedoresPage({ user, onLogout, onProfileUpdate, companyInfo, 
                     <div class="mt-2 pt-2 border-t text-sm">
                         <span class="text-gray-600">Saldo Pendiente:</span>
                         <span class="font-bold ml-2 ${p.saldo_pendiente > 0 ? 'text-red-600' : 'text-green-600'}">
-                            Bs ${Number(p.saldo_pendiente || 0).toFixed(2)}
+                            ${formatCurrency(p.saldo_pendiente)}
                         </span>
                     </div>
                 </div>
@@ -101,7 +107,7 @@ export function ProveedoresPage({ user, onLogout, onProfileUpdate, companyInfo, 
                                 <div>${p.nombre_contacto || 'N/A'}</div>
                                 <div class="text-gray-400">${p.email}</div>
                             </td>
-                            <td class="px-3 py-4 text-sm font-bold ${p.saldo_pendiente > 0 ? 'text-red-600' : 'text-green-600'}">Bs ${Number(p.saldo_pendiente || 0).toFixed(2)}</td>
+                            <td class="px-3 py-4 text-sm font-bold ${p.saldo_pendiente > 0 ? 'text-red-600' : 'text-green-600'}">${formatCurrency(p.saldo_pendiente)}</td>
                             <td class="relative py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                                 <button onClick=${() => handleEdit(p)} class="text-gray-400 hover:text-primary p-1 rounded-full hover:bg-gray-100">${ICONS.edit}</button>
                             </td>
@@ -139,7 +145,7 @@ export function ProveedoresPage({ user, onLogout, onProfileUpdate, companyInfo, 
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-6">
                  <${KPI_Card} title="Proveedores Activos" value=${kpis.totalProveedores} icon=${ICONS.suppliers} color="primary" />
-                 <${KPI_Card} title="Deuda Total a Proveedores" value=${`Bs ${kpis.deudaTotal.toFixed(2)}`} icon=${ICONS.credit_score} color="amber" />
+                 <${KPI_Card} title="Deuda Total a Proveedores" value=${formatCurrency(kpis.deudaTotal)} icon=${ICONS.credit_score} color="amber" />
             </div>
 
             <div class="mt-8">

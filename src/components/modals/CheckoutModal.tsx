@@ -37,12 +37,18 @@ const SaleTypeButton = ({ label, type, activeType, onClick, disabled = false }) 
 };
 
 
-export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId }) {
+export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId, companyInfo }) {
     const [montoRecibido, setMontoRecibido] = useState('');
     const [metodoPago, setMetodoPago] = useState('Efectivo');
     const [tipoVenta, setTipoVenta] = useState('Contado');
     const [isProcessing, setIsProcessing] = useState(false);
     const [fechaVencimiento, setFechaVencimiento] = useState('');
+
+    const formatCurrency = (value) => {
+        const number = Number(value || 0);
+        const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
+    };
 
     useEffect(() => {
         if (isOpen) {
@@ -138,7 +144,7 @@ export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId
                 <div class="flex-grow p-6 overflow-y-auto space-y-6">
                     <div class="text-center">
                         <p class="text-sm text-gray-600">Total a Pagar</p>
-                        <p class="text-5xl font-bold text-primary">Bs ${total.toFixed(2)}</p>
+                        <p class="text-5xl font-bold text-primary">${formatCurrency(total)}</p>
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
@@ -146,7 +152,7 @@ export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId
                         <div>
                             <label class="block text-sm font-medium leading-6 text-gray-900">Cambio</label>
                             <div class="mt-2 p-2 rounded-md bg-gray-200 text-right h-[42px]">
-                                <span class="text-lg font-semibold text-gray-800">Bs ${cambio > 0 ? cambio.toFixed(2) : '0.00'}</span>
+                                <span class="text-lg font-semibold text-gray-800">${formatCurrency(cambio > 0 ? cambio : 0)}</span>
                             </div>
                         </div>
                     </div>

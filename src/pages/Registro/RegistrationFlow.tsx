@@ -31,6 +31,17 @@ const countries = [
     { name: 'Uruguay', timezone: 'America/Montevideo', moneda: 'UYU' },
 ];
 
+const getCurrencySymbol = (monedaCode) => {
+    const symbolMap = {
+        'BOB': 'Bs', 'ARS': '$', 'BRL': 'R$', 'CLP': '$',
+        'COP': '$', 'USD': '$', 'GTQ': 'Q', 'HNL': 'L',
+        'MXN': '$', 'PAB': 'B/.', 'PYG': '₲', 'PEN': 'S/',
+        'DOP': 'RD$', 'UYU': '$U', 'EUR': '€'
+    };
+    return symbolMap[monedaCode] || monedaCode;
+};
+
+
 function StepEmpresa({ onNext, navigate, formData, handleInput, formErrors }) {
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -105,14 +116,14 @@ function StepSucursal({ onNext, onBack, formData, handleInput, formErrors }) {
     `;
 }
 
-function StepPlan({ onBack, onSelectPlan, error }) {
+function StepPlan({ onBack, onSelectPlan, error, currencySymbol }) {
     return html`
         <div>
             <h3 class="text-lg font-semibold text-gray-900">5. Elige tu Plan</h3>
             ${error && html`<div class="mt-4 p-4 rounded-md bg-red-50 text-red-700 text-sm" aria-live="assertive"><p>${error}</p></div>`}
             
             <div class="isolate mx-auto mt-6 grid grid-cols-1 gap-8 md:grid-cols-2">
-                ${REGISTRATION_PLANS.filter(p => !p.prices.free).map(plan => html`<${PlanCard} plan=${plan} onSelect=${onSelectPlan} showTrialInfo=${true} />`)}
+                ${REGISTRATION_PLANS.filter(p => !p.prices.free).map(plan => html`<${PlanCard} plan=${plan} onSelect=${onSelectPlan} showTrialInfo=${true} currencySymbol=${currencySymbol} />`)}
             </div>
 
             <div class="mt-8 flex justify-start">
@@ -425,7 +436,7 @@ export function RegistrationFlow({ navigate }) {
                   ${step === 2 && html`<${StepLocalizacion} onNext=${nextStep} onBack=${prevStep} formData=${formData} handleCountryChange=${handleCountryChange} />`}
                   ${step === 3 && html`<${StepPropietario} onNext=${nextStep} onBack=${prevStep} ...${stepProps} />`}
                   ${step === 4 && html`<${StepSucursal} onNext=${nextStep} onBack=${prevStep} ...${stepProps} />`}
-                  ${step === 5 && html`<${StepPlan} onBack=${prevStep} onSelectPlan=${handleInitiateRegistration} error=${error} />`}
+                  ${step === 5 && html`<${StepPlan} onBack=${prevStep} onSelectPlan=${handleInitiateRegistration} error=${error} currencySymbol=${getCurrencySymbol(formData.moneda)} />`}
                 </div>
             </div>
 
