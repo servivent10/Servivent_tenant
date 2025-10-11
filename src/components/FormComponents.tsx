@@ -3,18 +3,46 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { html } from 'htm/preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { ICONS } from './Icons.js';
 
-export const FormInput = ({ label, name, type, required = true, value, onInput, error, disabled = false, theme = 'light', ...props }) => {
+export const FormInput = ({ label, name, type, required = true, value, onInput, error, disabled = false, theme = 'light', icon, rightElement, ...props }) => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-
-  const finalType = type === 'password' && isPasswordVisible ? 'text' : type;
+  const { className, ...restProps } = props;
 
   const togglePasswordVisibility = () => {
     setIsPasswordVisible(prev => !prev);
   };
+  
+  // --- Determine props based on input type ---
+  let inputType = type;
+  let inputValue = value;
+  let onInputHandler = onInput;
+  // FIX: Explicitly typed 'otherInputProps' as 'any' to allow adding properties like 'style' dynamically, resolving the TypeScript error.
+  const otherInputProps: any = {};
 
+  if (type === 'password' && isPasswordVisible) {
+    inputType = 'text';
+  }
+
+  if (type === 'date' || type === 'datetime-local') {
+    otherInputProps.style = { colorScheme: 'light' };
+  }
+
+  if (type === 'datetime-local') {
+    const formatISOToLocalInput = (isoString) => {
+        if (!isoString) return '';
+        try {
+            const date = new Date(isoString);
+            if (isNaN(date.getTime())) return '';
+            const tzoffset = (new Date()).getTimezoneOffset() * 60000;
+            return new Date(date.getTime() - tzoffset).toISOString().slice(0, 16);
+        } catch { return ''; }
+    };
+    inputValue = formatISOToLocalInput(value);
+  }
+
+  // --- Class definitions ---
   const hasError = !!error;
   const isDark = theme === 'dark';
 
@@ -33,99 +61,41 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
   
   const disabledClasses = disabled ? 'cursor-not-allowed' : '';
   const buttonClasses = isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700';
-
-  const handleFocus = (e) => e.target.select();
-
-  if (type === 'date') {
-    return html`
-      <div>
-        <label for=${name} class="block text-sm font-medium leading-6 ${labelClasses}">${label}</label>
-        <div class="mt-2 relative">
-          <input 
-            id=${name} 
-            name=${name} 
-            type="date" 
-            required=${required} 
-            value=${value}
-            onInput=${onInput}
-            onFocus=${handleFocus}
-            disabled=${disabled}
-            style=${{ colorScheme: 'light' }}
-            class="block w-full rounded-md p-2 shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses}" 
-            aria-invalid=${hasError}
-            ...${props}
-          />
-        </div>
-        ${hasError && html`<p id="${name}-error" class="mt-2 text-sm text-red-600" aria-live="polite">${error}</p>`}
-      </div>
-    `;
-  }
-
-  if (type === 'datetime-local') {
-    const handleDateTimeInput = (e) => {
-        const value = e.target.value;
-        onInput({ target: { name, value: value ? new Date(value).toISOString() : '' } });
-    };
-
-    const formatISOToLocalInput = (isoString) => {
-        if (!isoString) return '';
-        try {
-            const date = new Date(isoString);
-            if (isNaN(date.getTime())) return '';
-            
-            const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-            const localISOTime = (new Date(date.getTime() - tzoffset)).toISOString().slice(0, 16);
-            return localISOTime;
-        } catch {
-            return '';
-        }
-    };
-
-    return html`
-      <div>
-        <label for=${name} class="block text-sm font-medium leading-6 ${labelClasses}">${label}</label>
-        <div class="mt-2 relative">
-          <input 
-            id=${name} 
-            name=${name} 
-            type="datetime-local" 
-            required=${required} 
-            value=${formatISOToLocalInput(value)}
-            onInput=${handleDateTimeInput}
-            onFocus=${handleFocus}
-            disabled=${disabled}
-            style=${{ colorScheme: 'light' }}
-            class="block w-full rounded-md p-2 shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses}" 
-            aria-invalid=${hasError}
-            ...${props}
-          />
-        </div>
-        ${hasError && html`<p id="${name}-error" class="mt-2 text-sm text-red-600" aria-live="polite">${error}</p>`}
-      </div>
-    `;
-  }
   
-  const paddingClasses = type === 'password' ? 'p-2 pr-10' : (props.className && (props.className.includes('pl-') || props.className.includes('pr-')) ? '' : 'p-2');
+  let paddingClasses = 'p-2';
+  if (icon) {
+      paddingClasses += ' pl-10';
+  }
+  if (type === 'password' || rightElement) {
+      paddingClasses += ' pr-10';
+  }
 
+  const fullClass = `block w-full rounded-md shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses} ${paddingClasses} ${className || ''}`;
 
   return html`
     <div>
       ${label && html`<label for=${name} class="block text-sm font-medium leading-6 ${labelClasses}">${label}</label>`}
       <div class=${label ? 'mt-2' : ''}>
         <div class="relative">
+            ${icon && html`
+                <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <div class="text-gray-400">${icon}</div>
+                </div>
+            `}
             <input 
               id=${name} 
               name=${name} 
-              type=${finalType} 
+              type=${inputType} 
               required=${required} 
-              value=${value}
-              onInput=${onInput}
-              onFocus=${handleFocus}
+              value=${inputValue}
+              onInput=${onInputHandler}
+              onFocus=${(e) => e.target.select()}
               disabled=${disabled}
-              class="block w-full rounded-md shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses} ${paddingClasses}" 
+              class=${fullClass}
               aria-invalid=${hasError}
               aria-describedby=${hasError ? `${name}-error` : undefined}
-              ...${props}
+              ...${otherInputProps}
+              ...${restProps}
             />
             ${type === 'password' && html`
               <button 
@@ -137,12 +107,41 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
                 ${isPasswordVisible ? ICONS.eyeSlash : ICONS.eye}
               </button>
             `}
+            ${rightElement && html`
+                <div class="absolute inset-y-0 right-0 flex items-center pr-3">
+                    ${rightElement}
+                </div>
+            `}
         </div>
       </div>
       ${hasError && html`<p id="${name}-error" class="mt-2 text-sm text-red-600" aria-live="polite">${error}</p>`}
     </div>
   `;
 };
+
+export const FormSelect = ({ label, name, value, onInput, options, children, required = true, disabled = false, className = '' }) => {
+  const selectClasses = 'block w-full rounded-md border border-gray-300 p-2 bg-white text-gray-900 shadow-sm focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm';
+
+  return html`
+    <div>
+      ${label && html`<label for=${name} class="block text-sm font-medium leading-6 text-gray-900">${label}</label>`}
+      <div class=${label ? 'mt-2' : ''}>
+        <select
+          id=${name}
+          name=${name}
+          value=${value}
+          onInput=${onInput}
+          required=${required}
+          disabled=${disabled}
+          class="${selectClasses} ${className}"
+        >
+          ${options ? options.map(opt => html`<option key=${opt.value} value=${opt.value}>${opt.label}</option>`) : children}
+        </select>
+      </div>
+    </div>
+  `;
+};
+
 
 export const FormButtons = ({ onBack, backText = 'Volver', nextText = 'Siguiente' }) => html`
   <div class="mt-8 flex justify-between">

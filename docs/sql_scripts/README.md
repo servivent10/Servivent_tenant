@@ -36,24 +36,28 @@ Estos scripts añaden la lógica de backend para los diferentes módulos de la a
 -   `18_FIX_inventory_view_and_cost.md`: Corrige la función de vista de productos para incluir el costo y el stock mínimo, necesarios para el nuevo módulo de inventario.
 -   `19_FEATURE_import_export_clientes.md`: Añade la función de importación masiva de clientes.
 -   `20_FEATURE_inventarios_filtros.md`: Añade la función para obtener los datos de los filtros del inventario.
-
-### 3. Scripts de Configuración de Tiempo Real y Seguridad
-
-Estos scripts son fundamentales para el correcto funcionamiento de las notificaciones en tiempo real y la seguridad de los datos.
-
--   `21_FIX_realtime_rls_policies.md`: **(OBSOLETO)**
--   `22_FULL_RLS_RESET.md`: **(OBSOLETO)**
--   `23_FINAL_RLS_RESET.md`: **(OBSOLETO)**
--   `24_FINAL_RLS_RESET_FIXED.md`: **(OBSOLETO)**
+-   `21_FEATURE_inventarios_realtime_trigger.md`: (OBSOLETO) Limpia la implementación de realtime basada en `pg_notify`.
+-   `22_FEATURE_dashboard.md`: Implementa la función `get_dashboard_data` con soporte para zona horaria.
+-   `23_FEATURE_gastos.md`: Implementa el módulo de gastos.
+-   `24_FINAL_RLS_RESET.md`: **(OBSOLETO)**
 -   `25_FINAL_RLS_RESET_V2.md`: **(OBSOLETO)**
 -   `26_FINAL_REALTIME_PUBLICATION_FIX.md`: **(OBSOLETO)**
 -   `27_FINAL_REALTIME_PUBLICATION_FIX_V2.md`: **(CRÍTICO)** Configura la `publication` de PostgreSQL para que la base de datos *envíe* las notificaciones.
 -   `28_FINAL_RLS_RESET_V3.md`: **(OBSOLETO)** Reemplazado por la solución definitiva V4.
 -   `29_FINAL_RLS_RESET_V4_JWT.md`: **(CRÍTICO Y DEFINITIVO)** Este script implementa la arquitectura JWT para resolver el error de recursión infinita en las políticas RLS, que es la causa raíz de que las notificaciones en tiempo real fallen. **Este es el script de RLS que debe usarse.**
+-   `30_FEATURE_gastos_filtros.md`: Añade funciones para los filtros del módulo de gastos.
+-   `31_FEATURE_compras_distribucion.md`: Actualiza el módulo de compras para permitir la distribución de inventario.
+-   `32_FEATURE_traspasos.md`: Implementa el módulo de traspasos de inventario.
+-   `33_FEATURE_notifications.md`: Implementa el sistema de notificaciones inteligentes y el historial.
+-   `34_FEATURE_cajas.md`: Implementa el módulo de apertura y cierre de caja.
+-   `35_FEATURE_cajas_modos.md`: Implementa la lógica para modos de caja (por sucursal o por usuario).
+-   `36_FIX_cajas_modos_security.md`: Añade seguridad que impide cambiar el modo de caja si hay sesiones abiertas.
+-   `37_FEATURE_historial_cajas.md`: Implementa la lógica para la nueva página de historial de arqueos de caja.
+-   `38_FEATURE_realtime_updates_cajas.md`: **(NUEVO)** Habilita las actualizaciones en tiempo real para el estado de las cajas y el modo de operación de la empresa.
 
 ---
 
-### 4. ¡ACCIÓN OBLIGATORIA DESPUÉS DE LOS SCRIPTS!
+### 3. ¡ACCIÓN OBLIGATORIA DESPUÉS DE LOS SCRIPTS!
 
 Una vez ejecutados los scripts críticos (especialmente el `27` y el `29`), hay dos acciones manuales que son **fundamentales** para que las notificaciones en tiempo real funcionen.
 

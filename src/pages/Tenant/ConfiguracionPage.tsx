@@ -304,17 +304,41 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
     const [formData, setFormData] = useState({
         nombre: '',
         nit: '',
+        modo_caja: 'por_sucursal',
     });
     const [logoFile, setLogoFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
     const [dataError, setDataError] = useState(null);
+    const [hasOpenSessions, setHasOpenSessions] = useState(false);
+    const [isCheckingSessions, setIsCheckingSessions] = useState(true);
+
+    const checkSessions = async () => {
+        setIsCheckingSessions(true);
+        try {
+            const { data, error } = await supabase.rpc('check_any_open_sessions');
+            if (error) throw error;
+            setHasOpenSessions(data);
+        } catch (err) {
+            addToast({ message: `Error al verificar cajas abiertas: ${err.message}`, type: 'error' });
+            setHasOpenSessions(false); // Assume it's safe if check fails, backend will block anyway
+        } finally {
+            setIsCheckingSessions(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'terminal') {
+            checkSessions();
+        }
+    }, [activeTab]);
 
     useEffect(() => {
         if (companyInfo) {
             setFormData({
                 nombre: companyInfo.name || '',
                 nit: companyInfo.nit || '',
+                modo_caja: companyInfo.modo_caja || 'por_sucursal',
             });
             setPreviewUrl(companyInfo.logo);
         }
@@ -384,7 +408,8 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
             const { error: rpcError } = await supabase.rpc('update_company_info', {
                 p_nombre: formData.nombre,
                 p_nit: formData.nit,
-                p_logo: logoUrl
+                p_logo: logoUrl,
+                p_modo_caja: formData.modo_caja,
             });
 
             if (rpcError) throw rpcError;
@@ -393,6 +418,7 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                 name: formData.nombre,
                 logo: logoUrl,
                 nit: formData.nit,
+                modo_caja: formData.modo_caja,
             });
 
             addToast({ message: 'Configuración guardada con éxito.', type: 'success' });
@@ -413,6 +439,7 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
     const tabs = [
         { id: 'empresa', label: 'Datos de la Empresa' },
         { id: 'precios', label: 'Listas de Precios' },
+        { id: 'terminal', label: 'Terminal de Venta' },
     ];
 
     const canEdit = user.role === 'Propietario';
@@ -514,6 +541,59 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                 
                 ${activeTab === 'precios' && html`
                     <${PriceListsTab} />
+                `}
+
+                ${activeTab === 'terminal' && html`
+                    <div>
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                            <div>
+                                <h2 class="text-xl font-semibold text-gray-800">Configuración del Terminal de Venta</h2>
+                                <p class="mt-1 text-sm text-gray-600">Define cómo se gestionan las sesiones de caja en el Punto de Venta.</p>
+                            </div>
+                            ${canEdit && html`
+                                <button onClick=${handleSave} disabled=${isSaving || !!dataError || hasOpenSessions || isCheckingSessions} class="flex-shrink-0 w-full sm:w-auto flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-400 min-w-[120px]">
+                                    ${isSaving ? html`<${Spinner}/>` : 'Guardar Cambios'}
+                                </button>
+                            `}
+                        </div>
+                        <div class="mt-4 max-w-4xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-sm border">
+                            <fieldset class="space-y-4" disabled=${!canEdit || !!dataError || hasOpenSessions || isCheckingSessions}>
+                                <legend class="text-base font-semibold leading-6 text-gray-900">Modo de Operación de Caja</legend>
+                                <div class="relative flex items-start p-4 border rounded-lg ${formData.modo_caja === 'por_sucursal' ? 'bg-blue-50 border-blue-200' : 'bg-white'}">
+                                    <div class="flex h-6 items-center">
+                                        <input id="modo_caja_sucursal" name="modo_caja" type="radio" value="por_sucursal" checked=${formData.modo_caja === 'por_sucursal'} onInput=${handleInput} class="h-4 w-4 border-gray-300 text-primary focus:ring-primary" />
+                                    </div>
+                                    <div class="ml-3 text-sm leading-6">
+                                        <label for="modo_caja_sucursal" class="font-medium text-gray-900">Caja por Sucursal (Recomendado)</label>
+                                        <p class="text-gray-500">Solo se puede abrir una sesión de caja a la vez por cada sucursal. Ideal para la mayoría de negocios.</p>
+                                    </div>
+                                </div>
+                                <div class="relative flex items-start p-4 border rounded-lg ${formData.modo_caja === 'por_usuario' ? 'bg-blue-50 border-blue-200' : 'bg-white'}">
+                                    <div class="flex h-6 items-center">
+                                        <input id="modo_caja_usuario" name="modo_caja" type="radio" value="por_usuario" checked=${formData.modo_caja === 'por_usuario'} onInput=${handleInput} class="h-4 w-4 border-gray-300 text-primary focus:ring-primary" />
+                                    </div>
+                                    <div class="ml-3 text-sm leading-6">
+                                        <label for="modo_caja_usuario" class="font-medium text-gray-900">Caja por Usuario</label>
+                                        <p class="text-gray-500">Cada usuario (vendedor) debe abrir y cerrar su propia caja individualmente al iniciar y finalizar su turno.</p>
+                                    </div>
+                                </div>
+                            </fieldset>
+                             ${(hasOpenSessions || isCheckingSessions) && html`
+                                <div class="mt-4 p-3 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-sm flex items-start gap-2">
+                                    <div class="text-xl text-amber-600 mt-0.5">${ICONS.warning}</div>
+                                    <div>
+                                        <p class="font-bold">Modo de operación bloqueado</p>
+                                        <p>${isCheckingSessions ? 'Verificando estado de las cajas...' : 'No se puede cambiar el modo de operación mientras haya una o más cajas abiertas en la empresa. Por favor, cierra todas las sesiones de caja para habilitar esta opción.'}</p>
+                                    </div>
+                                </div>
+                             `}
+                             ${!canEdit && !dataError && html`
+                                <div class="mt-6 p-4 rounded-md bg-blue-50 text-blue-700 text-sm" role="alert">
+                                    <p>Solo el rol de <strong>Propietario</strong> puede editar esta información.</p>
+                                </div>
+                            `}
+                        </div>
+                    </div>
                 `}
             </div>
         <//>

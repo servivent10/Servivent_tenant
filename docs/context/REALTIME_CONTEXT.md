@@ -5,13 +5,13 @@ Este documento describe la lógica y el funcionamiento del sistema de notificaci
 
 ## 1. Objetivo del Sistema
 
-El objetivo principal es mantener la consistencia de los datos en toda la aplicación sin necesidad de que el usuario recargue la página. Por ejemplo, si un vendedor registra una venta en la `TerminalVentaPage`, el stock de los productos vendidos debe actualizarse automáticamente para otro usuario que esté viendo la página de `InventariosPage` en otro dispositivo.
+El objetivo principal es mantener la consistencia de los datos en toda la aplicación sin necesidad de que el usuario recargue la página. Por ejemplo, si un vendedor registra una venta en la `TerminalVentaPage`, o un propietario cambia una configuración de la empresa, el estado de la aplicación debe actualizarse automáticamente para todos los usuarios afectados que estén viendo cualquier página relevante (`InventariosPage`, `TerminalVentaPage`, etc.) en otros dispositivos.
 
 ## 2. Arquitectura y Flujo de Datos
 
 El sistema se basa en la funcionalidad "Realtime" de Supabase, que escucha los cambios directamente de la base de datos PostgreSQL (`postgres_changes`). El flujo completo es el siguiente:
 
-1.  **Cambio en la Base de Datos:** Un usuario realiza una acción que modifica una tabla (ej. `INSERT` en `ventas`).
+1.  **Cambio en la Base de Datos:** Un usuario realiza una acción que modifica una tabla (ej. `INSERT` en `ventas`, `UPDATE` en `empresas`).
 
 2.  **Publicación de PostgreSQL (`supabase_realtime`):** La base de datos, configurada mediante el script `27_FINAL_REALTIME_PUBLICATION_FIX_V2.md`, tiene una "publicación" que le indica de qué tablas debe notificar los cambios.
 
@@ -24,15 +24,14 @@ El sistema se basa en la funcionalidad "Realtime" de Supabase, que escucha los c
 5.  **Transmisión (Broadcast) por WebSocket:** Con la validación de RLS ahora exitosa y sin recursión, el servicio de Supabase envía la notificación del cambio a través de WebSocket a todos los navegadores suscritos.
 
 6.  **Receptor en el Frontend (`RealtimeProvider`):**
-    -   El componente `src/hooks/useRealtime.js` gestiona la conexión y recibe los mensajes.
-    -   Al recibir una notificación de un cambio en la tabla `notificaciones` (que ahora es la fuente de la verdad para las transacciones de negocio), el proveedor hace dos cosas:
-        a.  Muestra una notificación `Toast` con el mensaje del evento.
-        b.  Incrementa un contador de cambios (`changeCounter`).
+    -   El componente `src/hooks/useRealtime.js` es el núcleo del sistema en el frontend. Gestiona la conexión WebSocket y se suscribe a los cambios de una **lista predefinida de tablas de negocio** (ej. `ventas`, `inventarios`, `sesiones_caja`, `empresas`, etc.).
+    -   Al recibir una notificación de CUALQUIER cambio (INSERT, UPDATE, DELETE) en una de estas tablas, su acción principal es **incrementar un contador de cambios (`changeCounter`)**.
+    -   Adicionalmente, si el cambio proviene específicamente de la tabla `notificaciones`, también se encarga de mostrar un `Toast` al usuario (siempre que el cambio no haya sido generado por el mismo usuario).
 
 7.  **Actualización de la UI (`useRealtimeListener`):**
-    -   Las páginas como `DashboardPage`, `InventariosPage`, etc., usan el hook `useRealtimeListener`.
+    -   Las páginas como `DashboardPage`, `InventariosPage`, `TerminalVentaPage`, etc., usan el hook `useRealtimeListener`.
     -   Este hook observa el `changeCounter`.
-    -   Cuando el contador cambia, ejecuta su callback, que es la función `fetchData()` de la página. Esto provoca que la página solicite los datos más recientes y se actualice.
+    -   Cuando el contador cambia, ejecuta su callback, que es la función `fetchData()` de la página. Esto provoca que la página solicite los datos más recientes y se actualice de forma fluida.
 
 ## 3. Archivos Clave
 

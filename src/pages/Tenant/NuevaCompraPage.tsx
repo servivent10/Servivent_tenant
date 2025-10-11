@@ -488,12 +488,15 @@ function Step2({ formData, handleEditItem, handleRemoveItem, total, productos, h
             <div>
                 <h3 class="text-lg font-semibold text-gray-900">Catálogo de Productos</h3>
                 <div class="mt-4">
-                    <input 
-                        type="text" 
-                        value=${searchTerm} 
-                        onInput=${e => setSearchTerm(e.target.value)} 
-                        placeholder="Buscar por nombre, modelo o SKU..." 
-                        class="block w-full rounded-md border border-gray-300 p-2 bg-white text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm"
+                    <${FormInput}
+                        label=""
+                        name="productSearch"
+                        type="text"
+                        placeholder="Buscar por nombre, modelo o SKU..."
+                        value=${searchTerm}
+                        onInput=${e => setSearchTerm(e.target.value)}
+                        icon=${ICONS.search}
+                        required=${false}
                     />
                 </div>
                 <div class="mt-2 p-2 bg-gray-50 border rounded-lg max-h-[25rem] overflow-y-auto">

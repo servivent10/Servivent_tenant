@@ -16,8 +16,11 @@ import { ClienteFormModal } from '../../components/modals/ClienteFormModal.js';
 import { Avatar } from '../../components/Avatar.js';
 import { CheckoutModal } from '../../components/modals/CheckoutModal.js';
 import { useRealtimeListener } from '../../hooks/useRealtime.js';
-import { FormInput } from '../../components/FormComponents.js';
+import { FormInput, FormSelect } from '../../components/FormComponents.js';
 import { CameraScanner } from '../../components/CameraScanner.js';
+import { AperturaCajaModal } from '../../components/modals/AperturaCajaModal.js';
+import { CierreCajaModal } from '../../components/modals/CierreCajaModal.js';
+import { Spinner } from '../../components/Spinner.js';
 
 const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -110,32 +113,33 @@ const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
             setDropdownOpen(false);
         }
     };
-
+    
+    const clearButton = html`
+        <button 
+            type="button"
+            onClick=${handleClear}
+            class="text-gray-400 hover:text-gray-600"
+            aria-label="Limpiar búsqueda"
+        >
+            ${ICONS.close}
+        </button>
+    `;
 
     return html`
         <div ref=${wrapperRef} class="relative">
-            <label for="client-search" class="block text-sm font-medium text-gray-700">Cliente</label>
-            <div class="relative mt-1">
-                <input
-                    id="client-search"
-                    type="text"
-                    value=${searchTerm}
-                    onInput=${e => { setSearchTerm(e.target.value); if (!isDropdownOpen) setDropdownOpen(true); }}
-                    onFocus=${(e) => { e.target.select(); setDropdownOpen(true); }}
-                    onKeyDown=${handleKeyDown}
-                    placeholder="Buscar cliente..."
-                    class="w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm"
-                />
-                ${searchTerm && html`
-                    <button 
-                        onClick=${handleClear}
-                        class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
-                        aria-label="Limpiar búsqueda"
-                    >
-                        ${ICONS.close}
-                    </button>
-                `}
-            </div>
+            <${FormInput}
+                label="Cliente"
+                name="client-search"
+                type="text"
+                value=${searchTerm}
+                onInput=${e => { setSearchTerm(e.target.value); if (!isDropdownOpen) setDropdownOpen(true); }}
+                onFocus=${(e) => { e.target.select(); setDropdownOpen(true); }}
+                onKeyDown=${handleKeyDown}
+                placeholder="Buscar cliente..."
+                icon=${ICONS.search}
+                required=${false}
+                rightElement=${searchTerm ? clearButton : null}
+            />
              ${isDropdownOpen && html`
                 <ul class="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
                     ${filteredClients.map((c, index) => html`
@@ -473,17 +477,36 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
     `;
 };
 
-function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, taxRate, setTaxRate, discountValue, onDiscountChange, onFinalizeSale, onOpenPricePopover, customPrices, defaultPriceListId, isPriceRuleActive, selectedClientId, setSelectedClientId, setIsClienteFormOpen, formatCurrency }) {
+function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, taxRate, setTaxRate, discountValue, onDiscountChange, onFinalizeSale, onOpenPricePopover, customPrices, defaultPriceListId, isPriceRuleActive, selectedClientId, setSelectedClientId, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user }) {
     const activePriceListName = useMemo(() => {
         return posData.price_lists.find(pl => pl.id === activePriceListId)?.nombre || '';
     }, [activePriceListId, posData.price_lists]);
+
+    const canCloseCaja = user.role !== 'Empleado' || currentModoCaja === 'por_usuario';
     
     return html`
         <div class="p-4 flex-shrink-0 border-b flex justify-between items-center">
             <h2 class="text-lg font-semibold text-gray-800">Carrito de Venta</h2>
-            <button onClick=${handleClearCart} disabled=${cart.length === 0} class="text-sm font-medium text-red-600 hover:text-red-800 disabled:text-gray-400 disabled:cursor-not-allowed">
-                Vaciar Carrito
-            </button>
+            
+            <div class="flex items-center gap-3">
+                ${currentModoCaja && canCloseCaja && html`
+                    <div class="flex items-center bg-slate-100 rounded-full text-sm font-medium text-slate-700 shadow-sm">
+                        <div class="flex items-center gap-1.5 pl-3 py-1.5">
+                            ${currentModoCaja === 'por_usuario' ? ICONS.users : ICONS.storefront}
+                            <span>${currentModoCaja === 'por_usuario' ? 'Por Usuario' : 'Por Sucursal'}</span>
+                        </div>
+                        <div class="h-5 w-px bg-slate-300 mx-2"></div>
+                        <button onClick=${handleOpenCierreModal} class="flex items-center gap-1 pr-3 py-1.5 text-amber-600 hover:text-amber-800 rounded-r-full hover:bg-slate-200 transition-colors">
+                            ${ICONS.savings}
+                            <span>Cerrar Caja</span>
+                        </button>
+                    </div>
+                `}
+
+                <button onClick=${handleClearCart} disabled=${cart.length === 0} class="p-2 rounded-full text-gray-500 hover:bg-red-100 hover:text-red-600 disabled:text-gray-300 disabled:bg-transparent disabled:cursor-not-allowed transition-colors" title="Vaciar Carrito">
+                    ${ICONS.delete}
+                </button>
+            </div>
         </div>
 
         <div class="p-4 flex-shrink-0 border-b">
@@ -497,10 +520,14 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
                     />
                 </div>
                 <div class="w-1/3">
-                    <label for="price-list" class="block text-sm font-medium text-gray-700">Lista de Precios</label>
-                    <select id="price-list" value=${activePriceListId} onChange=${e => setActivePriceListId(e.target.value)} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
+                    <${FormSelect} 
+                        label="Lista de Precios"
+                        name="price-list"
+                        value=${activePriceListId}
+                        onInput=${e => setActivePriceListId(e.target.value)}
+                    >
                         ${posData.price_lists.map(pl => html`<option value=${pl.id}>${pl.nombre}</option>`)}
-                    </select>
+                    <//>
                 </div>
             </div>
         </div>
@@ -623,7 +650,7 @@ const posStatusOptions = [
     { value: 'new_arrival', label: 'Nuevos Productos' },
 ];
 
-export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo, notifications }) {
+export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo, notifications, navigate }) {
     const breadcrumbs = [ { name: 'Punto de Venta', href: '#/terminal-venta' } ];
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
@@ -656,14 +683,75 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const [skuInput, setSkuInput] = useState('');
     const [isScannerOpen, setIsScannerOpen] = useState(false);
 
+    const [activeSession, setActiveSession] = useState(null);
+    const [sessionState, setSessionState] = useState('checking'); // 'checking', 'open', 'closed'
+    const [isCierreModalOpen, setIsCierreModalOpen] = useState(false);
+    const [sessionSummary, setSessionSummary] = useState(null);
+    const [currentModoCaja, setCurrentModoCaja] = useState(companyInfo.modo_caja);
+
     const formatCurrency = (value) => {
         const number = Number(value || 0);
         const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
     };
+    
+    const checkActiveSession = useCallback(async () => {
+        try {
+            const { data, error } = await supabase.rpc('get_sesion_activa');
+            if (error) throw error;
+            setActiveSession(data?.session || null);
+            if (data?.modo_caja) {
+                setCurrentModoCaja(data.modo_caja);
+            }
+            setSessionState(data?.session ? 'open' : 'closed');
+        } catch (err) {
+            addToast({ message: `Error al verificar sesión: ${err.message}`, type: 'error' });
+            setSessionState('closed'); // Default to closed on error
+        }
+    }, [addToast]);
+    
+    const handleOpenCierreModal = async () => {
+        startLoading();
+        try {
+            const { data, error } = await supabase.rpc('get_resumen_sesion_activa');
+            if (error) throw error;
+            
+            const summaryWithTheoretical = {
+                ...data,
+                saldo_final_teorico_efectivo: data.saldo_inicial + data.total_ventas_efectivo - data.total_gastos_efectivo
+            };
+            
+            setSessionSummary(summaryWithTheoretical);
+            setIsCierreModalOpen(true);
+        } catch (err) {
+            addToast({ message: `Error al obtener resumen: ${err.message}`, type: 'error' });
+        } finally {
+            stopLoading();
+        }
+    };
+
+    const handleConfirmCierre = async (saldoReal, totales) => {
+        startLoading();
+        try {
+            const { error } = await supabase.rpc('cerrar_caja', {
+                p_sesion_id: sessionSummary.id,
+                p_saldo_final_real_efectivo: saldoReal,
+                p_totales: totales
+            });
+            if (error) throw error;
+            addToast({ message: 'Caja cerrada exitosamente.', type: 'success' });
+            setIsCierreModalOpen(false);
+            setSessionSummary(null);
+            setActiveSession(null);
+            setSessionState('closed');
+        } catch (err) {
+            addToast({ message: `Error al cerrar la caja: ${err.message}`, type: 'error' });
+        } finally {
+            stopLoading();
+        }
+    };
 
     const fetchData = useCallback(async () => {
-        startLoading();
         try {
              const [posDataRes, optionsRes] = await Promise.all([
                 supabase.rpc('get_pos_data'),
@@ -691,16 +779,27 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             });
         } catch (err) {
             addToast({ message: `Error crítico al cargar datos: ${err.message}`, type: 'error', duration: 10000 });
+        }
+    }, [addToast]);
+    
+    const internalFetch = useCallback(async () => {
+        startLoading();
+        try {
+            await Promise.all([
+                checkActiveSession(),
+                fetchData()
+            ]);
         } finally {
             stopLoading();
         }
-    }, [startLoading, stopLoading, addToast]);
+    }, [checkActiveSession, fetchData, startLoading, stopLoading]);
+
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        internalFetch();
+    }, [internalFetch]);
 
-    useRealtimeListener(fetchData);
+    useRealtimeListener(internalFetch);
 
     useEffect(() => {
         if (isCartSidebarOpen) {
@@ -984,13 +1083,37 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         }
     };
 
+    if (sessionState === 'checking') {
+        return html`
+            <${DashboardLayout} 
+                user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate}
+                activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo}
+                notifications=${notifications} disablePadding=${true}
+            >
+                <div class="h-full"></div>
+            <//>
+        `;
+    }
+
+    if (sessionState === 'closed') {
+        return html`
+            <${DashboardLayout} 
+                user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate}
+                activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo}
+                notifications=${notifications} disablePadding=${true}
+            >
+                 <${AperturaCajaModal} onSessionOpen=${internalFetch} companyInfo=${companyInfo} user=${user} navigate=${navigate} modoCaja=${currentModoCaja} />
+            <//>
+        `;
+    }
+
     const cartPanelProps = {
         cart, posData, activePriceListId, setActivePriceListId,
         handleClearCart, getPriceForProduct: getActivePriceForProduct,
         handleUpdateQuantity, handleRemoveFromCart, totals, taxRate, setTaxRate, discountValue,
         onDiscountChange: handleDiscountChange, onFinalizeSale: () => setIsCheckoutModalOpen(true),
         onOpenPricePopover: handleOpenPricePopover, customPrices, defaultPriceListId,
-        isPriceRuleActive, selectedClientId, setSelectedClientId, setIsClienteFormOpen, formatCurrency
+        isPriceRuleActive, selectedClientId, setSelectedClientId, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user
     };
 
     return html`
@@ -1004,7 +1127,6 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                     <div class="flex-shrink-0 p-4 border-b space-y-4">
                         <div class="flex gap-2">
                             <div class="relative flex-grow">
-                                <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">${ICONS.search}</div>
                                 <${FormInput}
                                     name="sku_input"
                                     type="text"
@@ -1014,7 +1136,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                                     onKeyDown=${handleSkuSubmit}
                                     placeholder="Ingresar SKU y presionar Enter"
                                     required=${false}
-                                    className="pl-10"
+                                    icon=${ICONS.search}
                                 />
                             </div>
                             <button
@@ -1105,6 +1227,15 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             <${ProductDetailModal} isOpen=${isDetailModalOpen} onClose=${() => setDetailModalOpen(false)} product=${productForDetailView} currentUserSucursal=${user.sucursal} />
             <${CheckoutModal} isOpen=${isCheckoutModalOpen} onClose=${() => setIsCheckoutModalOpen(false)} onConfirm=${handleConfirmSale} total=${totals.finalTotal} clienteId=${selectedClientId} companyInfo=${companyInfo} />
             <${CameraScanner} isOpen=${isScannerOpen} onClose=${() => setIsScannerOpen(false)} onScanSuccess=${handleScanSuccess} />
+            <${CierreCajaModal} 
+                isOpen=${isCierreModalOpen} 
+                onClose=${() => setIsCierreModalOpen(false)} 
+                onConfirm=${handleConfirmCierre} 
+                sessionSummary=${sessionSummary} 
+                companyInfo=${companyInfo} 
+                user=${user}
+                modoCaja=${currentModoCaja}
+            />
         <//>
     `;
 }

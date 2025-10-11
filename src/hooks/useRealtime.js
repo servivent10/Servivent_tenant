@@ -105,7 +105,7 @@ export function RealtimeProvider({ children }) {
                 'productos', 'inventarios', 'precios_productos', 'ventas', 'venta_items',
                 'compras', 'compra_items', 'clientes', 'proveedores', 'gastos',
                 'pagos_ventas', 'pagos_compras', 'traspasos', 'sucursales', 'usuarios',
-                'notificaciones' // Notifications also signal a business transaction has completed.
+                'notificaciones', 'sesiones_caja', 'empresas'
             ];
 
             if (tablesToTriggerRefresh.includes(payload.table)) {

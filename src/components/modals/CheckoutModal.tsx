@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { html } from 'htm/preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useMemo } from 'preact/hooks';
 import { ICONS } from '../Icons.js';
 import { FormInput } from '../FormComponents.js';
 import { Spinner } from '../Spinner.js';
@@ -91,9 +91,16 @@ export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId
             setFechaVencimiento('');
         }
     }, [tipoVenta]);
-
+    
+    const handleMetodoPagoChange = (newMethod) => {
+        setMetodoPago(newMethod);
+        if (newMethod !== 'Efectivo') {
+            setMontoRecibido(total.toFixed(2));
+        }
+    };
 
     const handleConfirm = () => {
+        setIsProcessing(true);
         onConfirm({
             total,
             metodoPago,
@@ -105,17 +112,21 @@ export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId
     };
 
     const cambio = Number(montoRecibido) - total;
-    const canConfirm = () => {
+
+    const canConfirm = useMemo(() => {
         if (isProcessing) return false;
         if (total <= 0) return false;
         if (tipoVenta === 'Crédito') return true;
-        if (metodoPago === 'Tarjeta' || metodoPago === 'QR' || metodoPago === 'Transferencia Bancaria') {
-            setMontoRecibido(total.toFixed(2));
-            return true;
-        };
-        return Number(montoRecibido) >= total;
-    };
-    const isConfirmDisabled = !canConfirm();
+        if (metodoPago !== 'Efectivo') return true;
+        
+        // Corregir imprecisiones de punto flotante.
+        // `montoRecibido` es un string de 2 decimales, `total` puede tener más.
+        // Se compara con un pequeño margen de error para evitar fallos.
+        const MARGIN_DE_ERROR = 0.001; 
+        return Number(montoRecibido) >= total - MARGIN_DE_ERROR;
+    }, [isProcessing, total, tipoVenta, metodoPago, montoRecibido]);
+
+    const isConfirmDisabled = !canConfirm;
     
     const [showModal, setShowModal] = useState(isOpen);
     useEffect(() => {
@@ -162,7 +173,15 @@ export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
-                         <${FormInput} label="Monto Recibido" name="monto_recibido" type="number" value=${montoRecibido} onInput=${e => setMontoRecibido(e.target.value)} required=${false} />
+                         <${FormInput} 
+                            label="Monto Recibido" 
+                            name="monto_recibido" 
+                            type="number" 
+                            value=${montoRecibido} 
+                            onInput=${e => setMontoRecibido(e.target.value)} 
+                            required=${false}
+                            disabled=${metodoPago !== 'Efectivo'}
+                        />
                         <div>
                             <label class="block text-sm font-medium leading-6 text-gray-900">Cambio</label>
                             <div class="mt-2 p-2 rounded-md bg-gray-200 text-right h-[42px]">
@@ -184,10 +203,10 @@ export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId
                     <div>
                         <label class="block text-sm font-medium leading-6 text-gray-900 mb-2">Método de Pago</label>
                         <div class="flex items-center gap-2">
-                             <${PaymentButton} icon=${ICONS.payments} label="Efectivo" method="Efectivo" activeMethod=${metodoPago} onClick=${setMetodoPago} />
-                             <${PaymentButton} icon=${ICONS.credit_card} label="Tarjeta" method="Tarjeta" activeMethod=${metodoPago} onClick=${setMetodoPago} />
-                             <${PaymentButton} icon=${ICONS.qr_code_2} label="QR" method="QR" activeMethod=${metodoPago} onClick=${setMetodoPago} />
-                             <${PaymentButton} icon=${ICONS.currency_exchange} label="Transf." method="Transferencia Bancaria" activeMethod=${metodoPago} onClick=${setMetodoPago} />
+                             <${PaymentButton} icon=${ICONS.payments} label="Efectivo" method="Efectivo" activeMethod=${metodoPago} onClick=${handleMetodoPagoChange} />
+                             <${PaymentButton} icon=${ICONS.credit_card} label="Tarjeta" method="Tarjeta" activeMethod=${metodoPago} onClick=${handleMetodoPagoChange} />
+                             <${PaymentButton} icon=${ICONS.qr_code_2} label="QR" method="QR" activeMethod=${metodoPago} onClick=${handleMetodoPagoChange} />
+                             <${PaymentButton} icon=${ICONS.currency_exchange} label="Transf." method="Transferencia Bancaria" activeMethod=${metodoPago} onClick=${handleMetodoPagoChange} />
                         </div>
                     </div>
                     

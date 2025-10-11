@@ -12,7 +12,7 @@ import { useToast } from '../../hooks/useToast.js';
 import { useRealtimeListener } from '../../hooks/useRealtime.js';
 import { ComparativeBarChart } from '../../components/charts/ComparativeBarChart.js';
 import { HorizontalBarChart } from '../../components/charts/HorizontalBarChart.js';
-import { FormInput } from '../../components/FormComponents.js';
+import { FormInput, FormSelect } from '../../components/FormComponents.js';
 import { Avatar } from '../../components/Avatar.js';
 
 const KPICard = ({ title, value, change, icon, iconBgColor, count, countLabel }) => {
@@ -270,14 +270,19 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
                         <button onClick=${() => handleDatePresetChange('custom')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'custom' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`} title="Rango personalizado">${ICONS.calendar_month}</button>
                     </div>
                     ${user.role === 'Propietario' && html`
-                        <select 
-                            value=${filters.sucursalId || 'all'}
-                            onChange=${(e) => setFilters(prev => ({ ...prev, sucursalId: e.target.value === 'all' ? null : e.target.value }))}
-                            class="rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm"
-                        >
-                            <option value="all">Todas las Sucursales</option>
-                            ${all_branches.map(branch => html`<option value=${branch.id}>${branch.nombre}</option>`)}
-                        </select>
+                        <div class="flex-grow">
+                            <${FormSelect} 
+                                label=""
+                                name="sucursal-filter"
+                                value=${filters.sucursalId || 'all'}
+                                onInput=${(e) => setFilters(prev => ({ ...prev, sucursalId: e.target.value === 'all' ? null : e.target.value }))}
+                                required=${false}
+                                className="h-full"
+                            >
+                                <option value="all">Todas las Sucursales</option>
+                                ${all_branches.map(branch => html`<option value=${branch.id}>${branch.nombre}</option>`)}
+                            <//>
+                        </div>
                     `}
                 </div>
             </div>

@@ -50,10 +50,46 @@ La excelencia en la UI/UX es un pilar fundamental de ServiVENT. Todas las interf
 3.  **Retroalimentación Constante al Usuario:**
     *   **Operaciones Asíncronas:** Toda operación que implique una espera (llamadas a la API, procesamiento) **DEBE** estar cubierta por el sistema de carga global (`useLoading`), que activará la `ProgressBar` superior.
     *   **Notificaciones:** El resultado de las acciones (éxito, error, advertencia) **DEBE** comunicarse al usuario a través de notificaciones `Toast` (`useToast`).
-4.  **Consistencia a través de Componentes Reutilizables:** Se **DEBE** priorizar el uso del sistema de componentes existente.
-    *   **Layout:** `DashboardLayout.tsx` es la base para todas las páginas autenticadas.
-    *   **Indicadores:** `KPI_Card.tsx`, `Tabs.tsx`, `Avatar.tsx`.
-    *   **Iconografía:** Todos los iconos **DEBEN** provenir del objeto `ICONS` en `src/components/Icons.tsx`.
+4.  **Consistencia a través de Componentes Reutilizables:** Se **DEBE** priorizar el uso del sistema de componentes existente para mantener la coherencia visual y funcional. El siguiente es un catálogo de los componentes clave:
+
+    *   **Layout y Estructura:**
+        *   `DashboardLayout.tsx`: La plantilla base para todas las páginas autenticadas. Proporciona la barra lateral, la cabecera con el menú de perfil y el contenedor principal del contenido.
+        *   `Tabs.tsx`: Componente para crear navegación por pestañas dentro de una página.
+
+    *   **Formularios y Entradas:**
+        *   `FormInput.tsx`: Componente base para todos los campos de entrada (`input`). Implementa el estilo de enfoque (`borde azul con destello`) y la selección automática del contenido.
+        *   `FormSelect.tsx`: Componente base para menús desplegables (`select`).
+        *   `SearchableSelect`: Componente personalizado para selectores con capacidad de búsqueda.
+        *   `MultiSelectDropdown` / `SearchableMultiSelectDropdown`: Componentes para selección múltiple con/sin búsqueda.
+        *   `FormButtons.tsx`: Botones estandarizados ("Siguiente", "Volver") para flujos de varios pasos.
+
+    *   **Retroalimentación y Estado:**
+        *   `ProgressBar.tsx`: Barra de progreso superior controlada por el hook `useLoading`.
+        *   `Spinner.tsx`: Icono de carga animado para botones y operaciones en proceso.
+        *   `Toast`: Notificaciones flotantes controladas por el hook `useToast` para comunicar éxito, error, etc.
+
+    *   **Modales:**
+        *   `ConfirmationModal.tsx`: El modal base para todas las confirmaciones y formularios. Es responsivo y gestiona el estado de apertura/cierre.
+        *   **Modales de Formulario:** `ClienteFormModal.tsx`, `ProveedorFormModal.tsx`, `ProductFormModal.tsx`, `GastoFormModal.tsx`, `SucursalFormModal.tsx`, etc. Todos usan `ConfirmationModal` como contenedor.
+        *   **Modales de Flujo Específico:** `AperturaCajaModal.tsx`, `CierreCajaModal.tsx`.
+
+    *   **Visualización de Datos:**
+        *   `KPI_Card.tsx`: Tarjeta para mostrar Indicadores Clave de Rendimiento en los dashboards.
+        *   `Avatar.tsx`: Componente para mostrar avatares de usuario o iniciales con colores dinámicos.
+
+    *   **Acciones y Navegación:**
+        *   `FloatingActionButton.tsx` (FAB): Botón de acción flotante para acciones principales en vistas móviles.
+
+    *   **Filtrado:**
+        *   `FilterBar.tsx`: Componente que encapsula los filtros rápidos de una página.
+        *   `AdvancedFilterPanel.tsx`: Panel desplegable con filtros avanzados.
+
+    *   **Componentes Especializados:**
+        *   `CameraScanner.tsx`: Interfaz de escaneo de códigos de barras mediante la cámara del dispositivo.
+
+    *   **Iconografía y Marca:**
+        *   `Icons.tsx`: Objeto `ICONS` que centraliza todos los iconos de la aplicación (Material Symbols). **El uso de este objeto es obligatorio.**
+        *   `ServiVentLogo.tsx`: El logo oficial de la aplicación.
 
 ### 3.2. Reglas Específicas para Formularios
 
@@ -86,6 +122,26 @@ Los modales son una parte crítica de la interacción y deben ser robustos y res
 
 2.  **Componente Base:**
     *   `ConfirmationModal.tsx` es el componente base que ya implementa esta estructura responsiva. Todos los modales de formulario (`UserFormModal`, `ProductFormModal`, etc.) **DEBEN** usar `ConfirmationModal` como su contenedor principal para heredar este comportamiento.
+
+### 3.4. Formato de Moneda Unificado
+
+1.  **Regla de Oro para Precios:** Toda representación de un valor monetario en la interfaz de usuario **DEBE** seguir el formato `[Símbolo] [Número]`, por ejemplo, `Bs 1.250,50`. El número siempre debe tener dos decimales y separadores de miles.
+2.  **Fuente del Símbolo:** El símbolo de la moneda (`Bs`, `$`, etc.) **DEBE** obtenerse del objeto `companyInfo.monedaSimbolo`, que se carga al iniciar la sesión y se pasa como prop a todos los componentes principales.
+3.  **Función de Formato Numérico:** Para garantizar la consistencia, se **DEBE** utilizar una función de formato local en cada componente que maneje precios. La implementación estándar es la siguiente, que usa la configuración regional de Bolivia como base para el formato de número:
+    ```javascript
+    const formatNumber = (value) => {
+        const number = Number(value || 0);
+        return number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+    ```
+4.  **Uso Combinado en la UI:** Es una buena práctica crear una segunda función `formatCurrency` que combine el símbolo y el número formateado para encapsular la lógica.
+    ```javascript
+    // Dentro de un componente que recibe `companyInfo`
+    const formatCurrency = (value) => `${companyInfo.monedaSimbolo} ${formatNumber(value)}`;
+
+    // Uso
+    html`<p>Total: ${formatCurrency(totalValue)}</p>`
+    ```
 
 ## 4. Flujos y Patrones Específicos de Módulos
 

@@ -45,6 +45,7 @@ export const ICONS = {
     person_add: html`<${Icon} name="person_add" />`,
     emoji_events: html`<${Icon} name="emoji_events" />`,
     history_edu: html`<${Icon} name="history_edu" />`,
+    savings: html`<${Icon} name="savings" />`,
 
 
     // Connectivity

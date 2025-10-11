@@ -22,6 +22,7 @@ import { NuevaCompraPage } from './pages/Tenant/NuevaCompraPage.js';
 import { CompraDetailPage } from './pages/Tenant/CompraDetailPage.js';
 import { VentasPage } from './pages/Tenant/VentasPage.js';
 import { VentaDetailPage } from './pages/Tenant/VentaDetailPage.js';
+import { HistorialCajasPage } from './pages/Tenant/HistorialCajasPage.js';
 import { SucursalesListPage } from './pages/Tenant/SucursalesListPage.js';
 import { SucursalDetailPage } from './pages/Tenant/SucursalDetailPage.js';
 import { ProveedoresPage } from './pages/Tenant/ProveedoresPage.js';
@@ -197,6 +198,7 @@ function AppContent() {
                         timezone: profile.empresa_timezone,
                         moneda: profile.empresa_moneda,
                         monedaSimbolo: getCurrencySymbol(profile.empresa_moneda),
+                        modo_caja: profile.empresa_modo_caja || 'por_sucursal',
                     };
                 }
                 setCompanyInfo(companyData);
@@ -394,6 +396,7 @@ function AppContent() {
             else if (compraDetailsMatch) { const id = compraDetailsMatch[1]; tenantContent = html`<${CompraDetailPage} compraId=${id} ...${commonProps} />`; }
             else if (currentPath === '/ventas') tenantContent = html`<${VentasPage} ...${commonProps} />`;
             else if (ventaDetailsMatch) { const id = ventaDetailsMatch[1]; tenantContent = html`<${VentaDetailPage} ventaId=${id} ...${commonProps} />`; }
+            else if (currentPath === '/historial-cajas') tenantContent = html`<${HistorialCajasPage} ...${commonProps} />`;
             else if (currentPath === '/sucursales') tenantContent = html`<${SucursalesListPage} ...${commonProps} />`;
             else if (sucursalDetailsMatch) { const id = sucursalDetailsMatch[1]; tenantContent = html`<${SucursalDetailPage} sucursalId=${id} ...${commonProps} />`; }
             else if (currentPath === '/proveedores') tenantContent = html`<${ProveedoresPage} ...${commonProps} />`;

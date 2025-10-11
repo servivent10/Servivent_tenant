@@ -5,6 +5,7 @@
 import { html } from 'htm/preact';
 import { ICONS } from '../Icons.js';
 import { SearchableMultiSelectDropdown } from '../SearchableMultiSelectDropdown.js';
+import { FormInput } from '../FormComponents.js';
 
 export const AdvancedFilterPanel = ({ isOpen, filters, onFilterChange, filterOptions }) => {
     if (!isOpen) return null;
@@ -38,17 +39,16 @@ export const FilterBar = ({ filters, onFilterChange, onClear, onToggleAdvanced, 
     return html`
         <div class="p-4 bg-white rounded-t-lg shadow-sm border-b-0 border">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div class="lg:col-span-1 relative">
-                    <label for="searchTerm" class="sr-only">Buscar</label>
-                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">${ICONS.search}</div>
-                    <input 
-                        id="searchTerm"
+                <div class="lg:col-span-1">
+                    <${FormInput}
+                        label=""
                         name="searchTerm"
                         type="text"
                         placeholder="Buscar por nombre, SKU o modelo..."
                         value=${filters.searchTerm}
                         onInput=${onFilterChange}
-                        class="block w-full rounded-md border-gray-300 py-2 pl-10 text-base bg-white text-gray-900 focus:outline-none ${focusClasses} sm:text-sm"
+                        icon=${ICONS.search}
+                        required=${false}
                     />
                 </div>
                 <div>

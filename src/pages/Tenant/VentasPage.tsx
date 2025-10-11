@@ -10,10 +10,9 @@ import { KPI_Card } from '../../components/KPI_Card.js';
 import { useToast } from '../../hooks/useToast.js';
 import { useLoading } from '../../hooks/useLoading.js';
 import { supabase } from '../../lib/supabaseClient.js';
-import { FormInput } from '../../components/FormComponents.js';
+import { FormInput, FormSelect } from '../../components/FormComponents.js';
 
 const initialFilters = {
-    datePreset: 'all',
     startDate: '',
     endDate: '',
     status: 'all',
@@ -178,59 +177,63 @@ const AdvancedFilterPanel = ({ isOpen, filters, onFilterChange, filterOptions, u
 };
 
 
-const FilterBar = ({ filters, onFilterChange, onClear, onToggleAdvanced, isAdvancedOpen }) => {
-    const isCustomDate = filters.datePreset === 'custom';
-    
-    const advancedFilterCount = (filters.cliente_id !== 'all' ? 1 : 0) +
-                                filters.vendedor_ids.length +
-                                filters.sucursal_ids.length +
-                                filters.metodos_pago.length;
-
+const FilterBar = ({ datePreset, onDatePresetChange, filters, onFilterChange, onClear, onToggleAdvanced, isAdvancedOpen }) => {
     return html`
         <div class="p-4 bg-white rounded-t-lg shadow-sm border-b-0 border">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                    <label for="datePreset" class="block text-sm font-medium text-gray-700">Rango de Fechas</label>
-                    <select id="datePreset" name="datePreset" value=${filters.datePreset} onChange=${onFilterChange} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
-                        <option value="all">Todas</option>
-                        <option value="today">Hoy</option>
-                        <option value="yesterday">Ayer</option>
-                        <option value="last7">Últimos 7 días</option>
-                        <option value="thisMonth">Este Mes</option>
-                        <option value="custom">Personalizado</option>
-                    </select>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+                <div class="sm:col-span-2 lg:col-span-5">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Rango de Fechas</label>
+                    <div class="flex items-center flex-wrap bg-white border rounded-md shadow-sm p-1">
+                        <button onClick=${() => onDatePresetChange('today')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'today' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>Hoy</button>
+                        <button onClick=${() => onDatePresetChange('this_week')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'this_week' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>Semana</button>
+                        <button onClick=${() => onDatePresetChange('this_month')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'this_month' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>Mes</button>
+                        <button onClick=${() => onDatePresetChange('this_year')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'this_year' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>Año</button>
+                        <button onClick=${() => onDatePresetChange('custom')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'custom' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`} title="Rango personalizado">${ICONS.calendar_month}</button>
+                    </div>
                 </div>
-                <div>
-                    <label for="status" class="block text-sm font-medium text-gray-700">Estado de Pago</label>
-                    <select id="status" name="status" value=${filters.status} onChange=${onFilterChange} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
-                        <option value="all">Todos</option>
-                        <option value="Pagada">Pagada</option>
-                        <option value="Pendiente">Pendiente</option>
-                        <option value="Abono Parcial">Abono Parcial</option>
-                    </select>
+                
+                <div class="lg:col-span-2">
+                    <${FormSelect}
+                        label="Estado de Pago"
+                        name="status"
+                        value=${filters.status}
+                        onInput=${onFilterChange}
+                        options=${[
+                            { value: 'all', label: 'Todos' },
+                            { value: 'Pagada', label: 'Pagada' },
+                            { value: 'Pendiente', label: 'Pendiente' },
+                            { value: 'Abono Parcial', label: 'Abono Parcial' },
+                        ]}
+                    />
                 </div>
-                <div>
-                    <label for="type" class="block text-sm font-medium text-gray-700">Tipo de Venta</label>
-                    <select id="type" name="type" value=${filters.type} onChange=${onFilterChange} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
-                        <option value="all">Todas</option>
-                        <option value="Contado">Contado</option>
-                        <option value="Crédito">Crédito</option>
-                    </select>
+
+                <div class="lg:col-span-2">
+                    <${FormSelect}
+                        label="Tipo de Venta"
+                        name="type"
+                        value=${filters.type}
+                        onInput=${onFilterChange}
+                        options=${[
+                            { value: 'all', label: 'Todas' },
+                            { value: 'Contado', label: 'Contado' },
+                            { value: 'Crédito', label: 'Crédito' },
+                        ]}
+                    />
                 </div>
-                <div class="flex items-end gap-2">
-                    <button onClick=${onToggleAdvanced} class="relative w-full rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 flex items-center justify-center gap-2">
-                        Búsqueda Avanzada ${isAdvancedOpen ? ICONS.chevron_up : ICONS.chevron_down}
-                        ${advancedFilterCount > 0 && html`
-                            <span class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-white text-xs font-bold">${advancedFilterCount}</span>
-                        `}
+
+                <div class="lg:col-span-3 flex items-center gap-2">
+                    <button onClick=${onToggleAdvanced} class="relative w-full rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-500 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 flex items-center justify-between text-left">
+                        <span>Avanzada</span>
+                        ${isAdvancedOpen ? ICONS.chevron_up : ICONS.chevron_down}
                     </button>
-                    <button onClick=${onClear} title="Limpiar todos los filtros" class="rounded-md bg-white p-2 text-gray-500 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                    <button onClick=${onClear} title="Limpiar filtros" class="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-md bg-white p-2 text-gray-500 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
                         ${ICONS.delete}
                     </button>
                 </div>
             </div>
-            ${isCustomDate && html`
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 mt-4 border-t animate-fade-in-down">
+            
+            ${datePreset === 'custom' && html`
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4 border-t animate-fade-in-down">
                     <${FormInput} label="Fecha Desde" name="startDate" type="date" value=${filters.startDate} onInput=${onFilterChange} required=${false} />
                     <${FormInput} label="Fecha Hasta" name="endDate" type="date" value=${filters.endDate} onInput=${onFilterChange} required=${false} />
                 </div>
@@ -239,10 +242,57 @@ const FilterBar = ({ filters, onFilterChange, onClear, onToggleAdvanced, isAdvan
     `;
 };
 
+const getDatesFromPreset = (preset) => {
+    const now = new Date();
+    let start, end;
+    now.setHours(0, 0, 0, 0);
+
+    switch (preset) {
+        case 'today':
+            start = new Date(now);
+            end = new Date(now);
+            end.setHours(23, 59, 59, 999);
+            break;
+        case 'this_week':
+            start = new Date(now);
+            const day = start.getDay();
+            const diffToMonday = day === 0 ? -6 : 1 - day;
+            start.setDate(start.getDate() + diffToMonday);
+            end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            end.setHours(23, 59, 59, 999);
+            break;
+        case 'this_month':
+            start = new Date(now.getFullYear(), now.getMonth(), 1);
+            end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            end.setHours(23, 59, 59, 999);
+            break;
+        case 'this_year':
+            start = new Date(now.getFullYear(), 0, 1);
+            end = new Date(now.getFullYear(), 11, 31);
+            end.setHours(23, 59, 59, 999);
+            break;
+        case 'all':
+            return { startDate: null, endDate: null };
+        default:
+            return { startDate: null, endDate: null };
+    }
+    return { startDate: start, endDate: end };
+};
+
 
 export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
     const [ventas, setVentas] = useState([]);
-    const [filters, setFilters] = useState(initialFilters);
+    const [datePreset, setDatePreset] = useState('this_month');
+    const [filters, setFilters] = useState(() => {
+        const { startDate, endDate } = getDatesFromPreset('this_month');
+        const toISODateString = (d) => d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split("T")[0] : '';
+        return {
+            ...initialFilters,
+            startDate: toISODateString(startDate),
+            endDate: toISODateString(endDate)
+        };
+    });
     const [filterOptions, setFilterOptions] = useState({ clients: [], users: [], branches: [] });
     const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
 
@@ -278,6 +328,19 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
     useEffect(() => {
         fetchData();
     }, []);
+
+    const handleDatePresetChange = (preset) => {
+        setDatePreset(preset);
+        const toISODateString = (d) => d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split("T")[0] : '';
+        if (preset !== 'custom') {
+            const { startDate, endDate } = getDatesFromPreset(preset);
+            setFilters(prev => ({ 
+                ...prev, 
+                startDate: toISODateString(startDate), 
+                endDate: toISODateString(endDate)
+            }));
+        }
+    };
     
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
@@ -285,34 +348,33 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
     };
 
     const handleClearFilters = () => {
-        setFilters(initialFilters);
+        const { startDate, endDate } = getDatesFromPreset('this_month');
+        const toISODateString = (d) => d ? new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split("T")[0] : '';
+        setFilters({
+            ...initialFilters,
+            startDate: toISODateString(startDate),
+            endDate: toISODateString(endDate),
+        });
+        setDatePreset('this_month');
         setIsAdvancedSearchOpen(false);
     };
 
     const filteredVentas = useMemo(() => {
+        let { startDate, endDate } = getDatesFromPreset(datePreset);
+        if (datePreset === 'custom') {
+            startDate = filters.startDate ? new Date(filters.startDate.replace(/-/g, '/')) : null;
+            if(startDate) startDate.setHours(0,0,0,0);
+            endDate = filters.endDate ? new Date(filters.endDate.replace(/-/g, '/')) : null;
+            if(endDate) endDate.setHours(23,59,59,999);
+        }
+
         return ventas.filter(venta => {
-            // Quick filters
             const ventaDate = new Date(venta.fecha);
-            if (filters.datePreset !== 'all') {
-                const today = new Date(); today.setHours(0, 0, 0, 0);
-                let startDate, endDate = new Date(today); endDate.setDate(endDate.getDate() + 1); 
-                switch(filters.datePreset) {
-                    case 'today': startDate = new Date(today); break;
-                    case 'yesterday': endDate = new Date(today); startDate = new Date(today); startDate.setDate(startDate.getDate() - 1); break;
-                    case 'last7': startDate = new Date(today); startDate.setDate(startDate.getDate() - 6); break;
-                    case 'thisMonth': startDate = new Date(today.getFullYear(), today.getMonth(), 1); break;
-                    case 'custom':
-                        startDate = filters.startDate ? new Date(filters.startDate.replace(/-/g, '/')) : null;
-                        endDate = filters.endDate ? new Date(filters.endDate.replace(/-/g, '/')) : null;
-                        if (endDate) endDate.setDate(endDate.getDate() + 1);
-                        break;
-                }
-                if ((startDate && ventaDate < startDate) || (endDate && ventaDate >= endDate)) return false;
-            }
+            
+            if (startDate && ventaDate < startDate) return false;
+            if (endDate && ventaDate > endDate) return false;
             if (filters.status !== 'all' && venta.estado_pago !== filters.status) return false;
             if (filters.type !== 'all' && venta.tipo_venta !== filters.type) return false;
-
-            // Advanced filters
             if (filters.cliente_id !== 'all' && venta.cliente_id !== filters.cliente_id) return false;
             if (filters.vendedor_ids.length > 0 && !filters.vendedor_ids.includes(venta.usuario_id)) return false;
             if (user.role === 'Propietario' && filters.sucursal_ids.length > 0 && !filters.sucursal_ids.includes(venta.sucursal_id)) return false;
@@ -320,7 +382,7 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
             
             return true;
         });
-    }, [ventas, filters, user.role]);
+    }, [ventas, filters, datePreset, user.role]);
 
 
     const kpis = useMemo(() => {
@@ -434,7 +496,7 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
                  />
             </div>
             <div class="mt-8">
-                 <${FilterBar} filters=${filters} onFilterChange=${handleFilterChange} onClear=${handleClearFilters} onToggleAdvanced=${() => setIsAdvancedSearchOpen(prev => !prev)} isAdvancedOpen=${isAdvancedSearchOpen} />
+                 <${FilterBar} datePreset=${datePreset} onDatePresetChange=${handleDatePresetChange} filters=${filters} onFilterChange=${handleFilterChange} onClear=${handleClearFilters} onToggleAdvanced=${() => setIsAdvancedSearchOpen(prev => !prev)} isAdvancedOpen=${isAdvancedSearchOpen} />
                  <${AdvancedFilterPanel} isOpen=${isAdvancedSearchOpen} filters=${filters} onFilterChange=${handleFilterChange} filterOptions=${filterOptions} user=${user} />
                  <div class="mt-6 md:mt-0">
                     <${VentasList} ventas=${filteredVentas} />

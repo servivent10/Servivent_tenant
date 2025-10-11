@@ -17,7 +17,8 @@ export function getTenantSidebarLinks(role) {
     if (role === 'Propietario' || role === 'Administrador') {
         links.push(
             { name: 'Compras', href: '#/compras', icon: ICONS.purchases },
-            { name: 'Ventas', href: '#/ventas', icon: ICONS.sales }
+            { name: 'Ventas', href: '#/ventas', icon: ICONS.sales },
+            { name: 'Historial de Cajas', href: '#/historial-cajas', icon: ICONS.history_edu }
         );
     } else if (role === 'Empleado') {
         links.push({ name: 'Ventas', href: '#/ventas', icon: ICONS.sales });

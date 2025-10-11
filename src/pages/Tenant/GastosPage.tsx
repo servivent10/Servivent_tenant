@@ -14,11 +14,10 @@ import { supabase } from '../../lib/supabaseClient.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { GastoFormModal } from '../../components/modals/GastoFormModal.js';
 import { useRealtimeListener } from '../../hooks/useRealtime.js';
-import { FormInput } from '../../components/FormComponents.js';
+import { FormInput, FormSelect } from '../../components/FormComponents.js';
 import { SearchableMultiSelectDropdown } from '../../components/SearchableMultiSelectDropdown.js';
 
 const initialFilters = {
-    datePreset: 'all',
     startDate: '',
     endDate: '',
     category_ids: [],
@@ -62,39 +61,34 @@ const AdvancedFilterPanel = ({ isOpen, filters, onFilterChange, filterOptions, u
 };
 
 
-const FilterBar = ({ filters, onFilterChange, onClear, onToggleAdvanced, isAdvancedOpen }) => {
-    const isCustomDate = filters.datePreset === 'custom';
-    
-    const advancedFilterCount = filters.category_ids.length + filters.usuario_ids.length + filters.sucursal_ids.length;
-
+const FilterBar = ({ datePreset, onDatePresetChange, filters, onFilterChange, onClear, onToggleAdvanced, isAdvancedOpen }) => {
     return html`
         <div class="p-4 bg-white rounded-t-lg shadow-sm border-b-0 border">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div class="lg:col-span-2">
-                    <label for="datePreset" class="block text-sm font-medium text-gray-700">Rango de Fechas</label>
-                    <select id="datePreset" name="datePreset" value=${filters.datePreset} onChange=${onFilterChange} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
-                        <option value="all">Todos</option>
-                        <option value="today">Hoy</option>
-                        <option value="yesterday">Ayer</option>
-                        <option value="last7">Últimos 7 días</option>
-                        <option value="thisMonth">Este Mes</option>
-                        <option value="custom">Personalizado</option>
-                    </select>
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
+                <div class="lg:col-span-8">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Rango de Fechas</label>
+                    <div class="flex items-center flex-wrap bg-white border rounded-md shadow-sm p-1">
+                        <button onClick=${() => onDatePresetChange('today')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'today' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>Hoy</button>
+                        <button onClick=${() => onDatePresetChange('this_week')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'this_week' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>Semana</button>
+                        <button onClick=${() => onDatePresetChange('this_month')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'this_month' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>Mes</button>
+                        <button onClick=${() => onDatePresetChange('this_year')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'this_year' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>Año</button>
+                        <button onClick=${() => onDatePresetChange('custom')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'custom' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`} title="Rango personalizado">${ICONS.calendar_month}</button>
+                    </div>
                 </div>
-                <div class="flex items-end gap-2">
-                    <button onClick=${onToggleAdvanced} class="relative w-full rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 flex items-center justify-center gap-2">
-                        Filtros Avanzados ${isAdvancedOpen ? ICONS.chevron_up : ICONS.chevron_down}
-                        ${advancedFilterCount > 0 && html`
-                            <span class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-white text-xs font-bold">${advancedFilterCount}</span>
-                        `}
+
+                <div class="lg:col-span-4 flex items-center gap-2">
+                    <button onClick=${onToggleAdvanced} class="relative w-full rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-500 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 flex items-center justify-between text-left">
+                        <span>Filtros Avanzados</span>
+                        ${isAdvancedOpen ? ICONS.chevron_up : ICONS.chevron_down}
                     </button>
-                    <button onClick=${onClear} title="Limpiar todos los filtros" class="rounded-md bg-white p-2 text-gray-500 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                    <button onClick=${onClear} title="Limpiar todos los filtros" class="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-md bg-white p-2 text-gray-500 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
                         ${ICONS.delete}
                     </button>
                 </div>
             </div>
-            ${isCustomDate && html`
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 mt-4 border-t animate-fade-in-down">
+            
+            ${datePreset === 'custom' && html`
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4 border-t animate-fade-in-down">
                     <${FormInput} label="Fecha Desde" name="startDate" type="date" value=${filters.startDate} onInput=${onFilterChange} required=${false} />
                     <${FormInput} label="Fecha Hasta" name="endDate" type="date" value=${filters.endDate} onInput=${onFilterChange} required=${false} />
                 </div>
@@ -182,6 +176,44 @@ const GastosList = ({ gastos, onEdit, onDelete, formatCurrency }) => {
     `;
 };
 
+const getDatesFromPreset = (preset) => {
+    const now = new Date();
+    let start, end;
+
+    const toISODateString = (date) => {
+        if (!date) return '';
+        return new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().split("T")[0];
+    };
+
+    switch (preset) {
+        case 'today':
+            start = new Date(now);
+            end = new Date(now);
+            break;
+        case 'this_week':
+            start = new Date(now);
+            const day = start.getDay();
+            const diffToMonday = day === 0 ? -6 : 1 - day;
+            start.setDate(start.getDate() + diffToMonday);
+            end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            break;
+        case 'this_month':
+            start = new Date(now.getFullYear(), now.getMonth(), 1);
+            end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            break;
+        case 'this_year':
+            start = new Date(now.getFullYear(), 0, 1);
+            end = new Date(now.getFullYear(), 11, 31);
+            break;
+        case 'all':
+            return { startDate: '', endDate: '' };
+        default:
+            return { startDate: '', endDate: '' };
+    }
+    return { startDate: toISODateString(start), endDate: toISODateString(end) };
+};
+
 
 export function GastosPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
     const { addToast } = useToast();
@@ -193,7 +225,11 @@ export function GastosPage({ user, onLogout, onProfileUpdate, companyInfo, navig
     const [gastoToEdit, setGastoToEdit] = useState(null);
     const [gastoToDelete, setGastoToDelete] = useState(null);
 
-    const [filters, setFilters] = useState(initialFilters);
+    const [datePreset, setDatePreset] = useState('this_month');
+    const [filters, setFilters] = useState(() => {
+        const { startDate, endDate } = getDatesFromPreset('this_month');
+        return { ...initialFilters, startDate, endDate };
+    });
     const [filterOptions, setFilterOptions] = useState({ categories: [], users: [], branches: [] });
     const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
     
@@ -210,16 +246,14 @@ export function GastosPage({ user, onLogout, onProfileUpdate, companyInfo, navig
         }
     }, [user.role, navigate, addToast]);
 
-    const fetchData = useCallback(async (currentFilters) => {
+    const fetchData = useCallback(async () => {
         if (user.role === 'Empleado') return;
         startLoading();
         try {
-            const { startDate, endDate } = getDatesFromPreset(currentFilters.datePreset, currentFilters.startDate, currentFilters.endDate);
-            
             let sucursalIdsToSend = null;
             if (user.role === 'Propietario') {
-                if (currentFilters.sucursal_ids.length > 0) {
-                    sucursalIdsToSend = currentFilters.sucursal_ids;
+                if (filters.sucursal_ids.length > 0) {
+                    sucursalIdsToSend = filters.sucursal_ids;
                 }
             } else if (user.role === 'Administrador') {
                 sucursalIdsToSend = [user.sucursal_id];
@@ -227,10 +261,10 @@ export function GastosPage({ user, onLogout, onProfileUpdate, companyInfo, navig
             
             const [gastosRes, optionsRes] = await Promise.all([
                 supabase.rpc('get_company_gastos', {
-                    p_start_date: startDate,
-                    p_end_date: endDate,
-                    p_category_ids: currentFilters.category_ids.length > 0 ? currentFilters.category_ids : null,
-                    p_user_ids: currentFilters.usuario_ids.length > 0 ? currentFilters.usuario_ids : null,
+                    p_start_date: filters.startDate || null,
+                    p_end_date: filters.endDate || null,
+                    p_category_ids: filters.category_ids.length > 0 ? filters.category_ids : null,
+                    p_user_ids: filters.usuario_ids.length > 0 ? filters.usuario_ids : null,
                     p_sucursal_ids: sucursalIdsToSend
                 }),
                 supabase.rpc('get_gastos_filter_data')
@@ -246,49 +280,17 @@ export function GastosPage({ user, onLogout, onProfileUpdate, companyInfo, navig
         } finally {
             stopLoading();
         }
-    }, [user.role, user.sucursal_id, addToast, startLoading, stopLoading]);
+    }, [user.role, user.sucursal_id, addToast, startLoading, stopLoading, filters]);
 
     useEffect(() => {
-        fetchData(filters);
-    }, [filters, fetchData]);
+        fetchData();
+    }, [fetchData]);
 
-    useRealtimeListener(() => fetchData(filters));
+    useRealtimeListener(fetchData);
     
     if (user.role === 'Empleado') {
         return null; 
     }
-
-    const getDatesFromPreset = (preset, customStart, customEnd) => {
-        if (preset === 'custom') {
-            return { startDate: customStart || null, endDate: customEnd || null };
-        }
-        if (preset === 'all') {
-            return { startDate: null, endDate: null };
-        }
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-        let start = new Date(now);
-        let end = new Date(now);
-
-        switch (preset) {
-            case 'today':
-                break;
-            case 'yesterday':
-                start.setDate(start.getDate() - 1);
-                end.setDate(end.getDate() - 1);
-                break;
-            case 'last7':
-                start.setDate(start.getDate() - 6);
-                break;
-            case 'thisMonth':
-                start = new Date(now.getFullYear(), now.getMonth(), 1);
-                end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-                break;
-        }
-        
-        const toISODateString = (date) => date.toISOString().split('T')[0];
-        return { startDate: toISODateString(start), endDate: toISODateString(end) };
-    };
     
     const kpis = useMemo(() => {
         const total = data.stats?.total || 0;
@@ -311,7 +313,7 @@ export function GastosPage({ user, onLogout, onProfileUpdate, companyInfo, navig
             const { error } = await supabase.rpc('delete_gasto', { p_id: gastoToDelete.id });
             if (error) throw error;
             addToast({ message: `Gasto eliminado.`, type: 'success' });
-            fetchData(filters);
+            fetchData();
         } catch(err) {
              addToast({ message: `Error al eliminar: ${err.message}`, type: 'error' });
         } finally {
@@ -322,14 +324,26 @@ export function GastosPage({ user, onLogout, onProfileUpdate, companyInfo, navig
 
     const handleSave = () => {
         setFormModalOpen(false);
-        fetchData(filters);
+        fetchData();
     };
 
+    const handleDatePresetChange = (preset) => {
+        setDatePreset(preset);
+        if (preset !== 'custom') {
+            const { startDate, endDate } = getDatesFromPreset(preset);
+            setFilters(prev => ({ ...prev, startDate, endDate }));
+        }
+    };
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
         setFilters(prev => ({ ...prev, [name]: value }));
     };
-    const handleClearFilters = () => { setFilters(initialFilters); setIsAdvancedSearchOpen(false); };
+    const handleClearFilters = () => { 
+        const { startDate, endDate } = getDatesFromPreset('this_month');
+        setFilters({ ...initialFilters, startDate, endDate }); 
+        setDatePreset('this_month'); 
+        setIsAdvancedSearchOpen(false); 
+    };
     
     const breadcrumbs = [ { name: 'Gastos', href: '#/gastos' } ];
 
@@ -363,7 +377,7 @@ export function GastosPage({ user, onLogout, onProfileUpdate, companyInfo, navig
             </div>
 
             <div class="mt-8">
-                <${FilterBar} filters=${filters} onFilterChange=${handleFilterChange} onClear=${handleClearFilters} onToggleAdvanced=${() => setIsAdvancedSearchOpen(p => !p)} isAdvancedOpen=${isAdvancedSearchOpen} />
+                <${FilterBar} datePreset=${datePreset} onDatePresetChange=${handleDatePresetChange} filters=${filters} onFilterChange=${handleFilterChange} onClear=${handleClearFilters} onToggleAdvanced=${() => setIsAdvancedSearchOpen(p => !p)} isAdvancedOpen=${isAdvancedSearchOpen} />
                 <${AdvancedFilterPanel} isOpen=${isAdvancedSearchOpen} filters=${filters} onFilterChange=${handleFilterChange} filterOptions=${filterOptions} user=${user} />
 
                 <div class="mt-6 md:mt-0">
@@ -379,7 +393,7 @@ export function GastosPage({ user, onLogout, onProfileUpdate, companyInfo, navig
                 isOpen=${isFormModalOpen}
                 onClose=${() => setFormModalOpen(false)}
                 onSave=${handleSave}
-                onCategoryAdded=${() => fetchData(filters)}
+                onCategoryAdded=${fetchData}
                 gastoToEdit=${gastoToEdit}
                 categorias=${filterOptions.categories}
                 user=${user}

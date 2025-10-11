@@ -5,7 +5,7 @@
 import { useState } from 'preact/hooks';
 import { html } from 'htm/preact';
 import { supabase } from '../../lib/supabaseClient.js';
-import { FormInput, FormButtons } from '../../components/FormComponents.js';
+import { FormInput, FormButtons, FormSelect } from '../../components/FormComponents.js';
 import { PlanCard } from '../../components/PlanCard.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { ICONS } from '../../components/Icons.js';
@@ -69,10 +69,14 @@ function StepLocalizacion({ onNext, onBack, formData, handleCountryChange }) {
             <h3 class="text-lg font-semibold text-gray-900">2. Localización</h3>
             <p class="mt-1 text-sm text-gray-600">Selecciona el país donde opera tu empresa. Esto configurará la zona horaria y la moneda por defecto.</p>
             <div class="mt-6">
-                 <label for="pais" class="block text-sm font-medium leading-6 text-gray-900">País</label>
-                <select id="pais" name="pais" value=${formData.pais} onChange=${handleCountryChange} class="mt-2 block w-full rounded-md border border-gray-300 bg-white py-2 pl-3 pr-10 text-gray-900 shadow-sm focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/25 sm:text-sm sm:leading-6">
+                 <${FormSelect} 
+                    label="País" 
+                    name="pais" 
+                    value=${formData.pais} 
+                    onInput=${handleCountryChange}
+                >
                     ${countries.map(c => html`<option key=${c.name} value=${c.name}>${c.name}</option>`)}
-                </select>
+                <//>
             </div>
             <${FormButtons} onBack=${onBack} />
         </form>
