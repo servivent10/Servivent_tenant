@@ -17,6 +17,7 @@ import { TerminalVentaPage } from './pages/Tenant/TerminalVentaPage.js';
 import { ProductosPage } from './pages/Tenant/ProductosPage.js';
 import { ProductoDetailPage } from './pages/Tenant/ProductoDetailPage.js';
 import { InventariosPage } from './pages/Tenant/InventariosPage.js';
+import { HistorialInventarioPage } from './pages/Tenant/HistorialInventarioPage.js';
 import { ComprasPage } from './pages/Tenant/ComprasPage.js';
 import { NuevaCompraPage } from './pages/Tenant/NuevaCompraPage.js';
 import { CompraDetailPage } from './pages/Tenant/CompraDetailPage.js';
@@ -34,6 +35,7 @@ import { GastosPage } from './pages/Tenant/GastosPage.js';
 import { LicenciaPage } from './pages/Tenant/LicenciaPage.js';
 import { ConfiguracionPage } from './pages/Tenant/ConfiguracionPage.js';
 import { NotificacionesPage } from './pages/Tenant/NotificacionesPage.js';
+import { AuditoriaPage } from './pages/Tenant/AuditoriaPage.js';
 import { SuspendedLicensePage } from './pages/Tenant/SuspendedLicensePage.js';
 import { PendingApprovalPage } from './pages/Tenant/PendingApprovalPage.js';
 import { AdminToolPage } from './pages/Admin/AdminToolPage.js';
@@ -391,6 +393,7 @@ function AppContent() {
             else if (currentPath === '/productos') tenantContent = html`<${ProductosPage} ...${commonProps} />`;
             else if (productoDetailsMatch) { const id = productoDetailsMatch[1]; tenantContent = html`<${ProductoDetailPage} productoId=${id} ...${commonProps} />`; }
             else if (currentPath === '/inventarios') tenantContent = html`<${InventariosPage} ...${commonProps} />`;
+            else if (currentPath === '/historial-inventario') tenantContent = html`<${HistorialInventarioPage} ...${commonProps} />`;
             else if (currentPath === '/compras') tenantContent = html`<${ComprasPage} ...${commonProps} />`;
             else if (currentPath === '/compras/nueva') tenantContent = html`<${NuevaCompraPage} ...${commonProps} />`;
             else if (compraDetailsMatch) { const id = compraDetailsMatch[1]; tenantContent = html`<${CompraDetailPage} compraId=${id} ...${commonProps} />`; }
@@ -405,6 +408,7 @@ function AppContent() {
             else if (currentPath === '/traspasos/nuevo') tenantContent = html`<${NuevoTraspasoPage} ...${commonProps} />`;
             else if (traspasoDetailsMatch) { const id = traspasoDetailsMatch[1]; tenantContent = html`<${TraspasoDetailPage} traspasoId=${id} ...${commonProps} />`; }
             else if (currentPath === '/gastos') tenantContent = html`<${GastosPage} ...${commonProps} />`;
+            else if (currentPath === '/auditoria') tenantContent = html`<${AuditoriaPage} ...${commonProps} />`;
             else if (currentPath === '/licencia') tenantContent = html`<${LicenciaPage} ...${commonProps} />`;
             else if (currentPath === '/configuracion') tenantContent = html`<${ConfiguracionPage} ...${commonProps} />`;
             else if (currentPath === '/notificaciones') tenantContent = html`<${NotificacionesPage} ...${commonProps} />`;

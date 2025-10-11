@@ -15,6 +15,10 @@ export function getTenantSidebarLinks(role) {
     links.push({ name: 'Inventarios', href: '#/inventarios', icon: ICONS.inventory });
 
     if (role === 'Propietario' || role === 'Administrador') {
+        links.push({ name: 'Historial de Inventario', href: '#/historial-inventario', icon: ICONS.inventory_history });
+    }
+
+    if (role === 'Propietario' || role === 'Administrador') {
         links.push(
             { name: 'Compras', href: '#/compras', icon: ICONS.purchases },
             { name: 'Ventas', href: '#/ventas', icon: ICONS.sales },
@@ -33,7 +37,8 @@ export function getTenantSidebarLinks(role) {
             { name: 'Proveedores', href: '#/proveedores', icon: ICONS.suppliers },
             { name: 'Clientes', href: '#/clientes', icon: ICONS.clients },
             { name: 'Traspasos', href: '#/traspasos', icon: ICONS.transfers },
-            { name: 'Gastos', href: '#/gastos', icon: ICONS.expenses }
+            { name: 'Gastos', href: '#/gastos', icon: ICONS.expenses },
+            { name: 'Auditoría', href: '#/auditoria', icon: ICONS.manage_history }
         );
     }
     
