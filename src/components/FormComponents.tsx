@@ -97,7 +97,7 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
               ...${otherInputProps}
               ...${restProps}
             />
-            ${type === 'password' && html`
+            ${type === 'password' && !rightElement && html`
               <button 
                 type="button" 
                 onClick=${togglePasswordVisibility}

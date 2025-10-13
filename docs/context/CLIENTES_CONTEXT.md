@@ -22,7 +22,7 @@ Este documento define la arquitectura y funcionalidad del módulo de **Clientes*
 
 ## 3. Componentes y Modales
 
--   **`ClienteFormModal.tsx`:** Un modal para crear o editar la información de un cliente. Incluye campos para nombre, NIT/CI, contacto y dirección, además de una opción para subir una foto de perfil (avatar).
+-   **`ClienteFormModal.tsx`:** Un modal para crear o editar la información de un cliente. Incluye campos para nombre, NIT/CI, contacto y dirección, y una opción para subir un avatar. **Destaca por su validación de correo electrónico en tiempo real**: mientras el usuario escribe, se comunica con el backend para verificar que el formato es válido, que pertenece a un proveedor común (gmail, hotmail, etc.) y que no está en uso por otro cliente, proporcionando retroalimentación instantánea y específica.
 -   **`ImportClientesModal.tsx`:** Un modal de varios pasos que guía al usuario para:
     1.  Descargar una plantilla CSV.
     2.  Subir el archivo CSV con los datos de los clientes.
@@ -32,5 +32,6 @@ Este documento define la arquitectura y funcionalidad del módulo de **Clientes*
 
 -   **`get_company_clients()`:** Obtiene la lista completa de clientes de la empresa, incluyendo su saldo pendiente calculado.
 -   **`upsert_client()`:** Función para crear un nuevo cliente o actualizar uno existente. Al crear, genera un `codigo_cliente` único y aleatorio.
+-   **`validate_client_email()`:** Valida un correo electrónico en el backend. Verifica que el formato sea correcto, que el dominio pertenezca a un proveedor común (ej. gmail, hotmail) y que no esté ya en uso por otro cliente de la misma empresa, devolviendo la razón específica del fallo.
 -   **`delete_client()`:** Elimina un cliente. Las ventas asociadas no se eliminan, sino que se desvinculan (el campo `cliente_id` en la venta pasa a ser `NULL`).
--   **`import_clients_in_bulk()`:** Procesa un array de datos de clientes desde el frontend. Itera sobre los registros, actualizando los existentes y creando los nuevos, y devuelve un resumen de la operación.
+-   **`import_clients_in_bulk()`:** Procesa un array de datos de clientes desde el frontend. Itera sobre los registros, actualizando los existentes (basado en `nit_ci`) y creando los nuevos, y devuelve un resumen de la operación.

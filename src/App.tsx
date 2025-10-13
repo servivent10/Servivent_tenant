@@ -43,12 +43,14 @@ import { ToastProvider, useToast } from './hooks/useToast.js';
 import { LoadingProvider } from './hooks/useLoading.js';
 import { UPGRADE_PLANS, REGISTRATION_PLANS } from './lib/plansConfig.js';
 import { RealtimeProvider } from './hooks/useRealtime.js';
+import { CatalogApp } from './pages/Public/CatalogApp.js';
 
 
 function AppContent() {
     const [session, setSession] = useState(null);
     const [companyInfo, setCompanyInfo] = useState(null);
     const [displayUser, setDisplayUser] = useState(null);
+    const [customerProfile, setCustomerProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [loadingSteps, setLoadingSteps] = useState([]);
@@ -74,12 +76,32 @@ function AppContent() {
             }
         });
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             setSession(session);
             if (!session) {
                 setLoading(false);
                 setIsLoggingOut(false);
                 setLoadingSteps([]);
+                setCustomerProfile(null);
+            } else {
+                 const currentHash = window.location.hash.substring(1);
+                if (currentHash.startsWith('/catalogo/')) {
+                    const slug = currentHash.split('/')[2];
+                    if (slug && session.user.email) {
+                        try {
+                            const { data, error } = await supabase.rpc('get_public_client_profile', {
+                                p_slug: slug,
+                                p_email: session.user.email
+                            }).single();
+
+                            if (error) throw error;
+                            setCustomerProfile(data);
+                        } catch (err) {
+                            console.error("Error fetching customer profile:", err);
+                            addToast({ message: 'No se pudo cargar tu perfil de cliente.', type: 'error' });
+                        }
+                    }
+                }
             }
         });
 
@@ -95,9 +117,30 @@ function AppContent() {
 
     // Effect 2: Manages data fetching based on session state.
     useEffect(() => {
+        const isCatalogRoute = currentPath.startsWith('/catalogo');
+
+        if (isCatalogRoute) {
+            if (session && !customerProfile) {
+                const slug = currentPath.split('/')[2];
+                if (slug && session.user.email) {
+                    supabase.rpc('get_public_client_profile', {
+                        p_slug: slug,
+                        p_email: session.user.email
+                    }).single().then(({ data, error }) => {
+                        if (data) setCustomerProfile(data);
+                        setLoading(false);
+                    });
+                    return;
+                }
+            }
+            setLoading(false);
+            return;
+        }
+
         if (!session) {
             setDisplayUser(null);
             setCompanyInfo(null);
+            setCustomerProfile(null);
             setLoading(false);
             setHasLoadFailed(false);
             const current = window.location.hash.substring(1);
@@ -201,6 +244,7 @@ function AppContent() {
                         moneda: profile.empresa_moneda,
                         monedaSimbolo: getCurrencySymbol(profile.empresa_moneda),
                         modo_caja: profile.empresa_modo_caja || 'por_sucursal',
+                        slug: profile.empresa_slug,
                     };
                 }
                 setCompanyInfo(companyData);
@@ -261,7 +305,7 @@ function AppContent() {
 
         loadUserData();
 
-    }, [session, hasLoadFailed, displayUser]);
+    }, [session, hasLoadFailed, displayUser, currentPath, customerProfile]);
 
 
     const handleLogin = async (email, pass) => {
@@ -320,6 +364,7 @@ function AppContent() {
         setSession(null);
         setDisplayUser(null);
         setCompanyInfo(null);
+        setCustomerProfile(null);
         setLoading(false);
         setIsLoggingOut(false);
         setHasLoadFailed(false);
@@ -343,8 +388,11 @@ function AppContent() {
     let content;
     const isRegistrationRoute = currentPath.startsWith('/registro');
     const isAdminToolRoute = currentPath === '/admin-delete-tool';
+    const isCatalogRoute = currentPath.startsWith('/catalogo');
 
-    if (session) {
+    if (isCatalogRoute) {
+        content = html`<${CatalogApp} path=${currentPath} navigate=${navigate} session=${session} customerProfile=${customerProfile} />`;
+    } else if (session) {
         if (!displayUser) {
             const shellUser = { name: ' ', email: session.user.email, role: '', sucursal: 'Cargando...', avatar: null };
             const shellCompany = { name: ' ', licenseStatus: 'Activa' };

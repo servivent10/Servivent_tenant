@@ -105,7 +105,7 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
             addToast({ message: 'No hay clientes para exportar.', type: 'info' });
             return;
         }
-        const headers = ['codigo_cliente', 'nombre', 'nit_ci', 'telefono', 'email', 'direccion', 'saldo_pendiente'];
+        const headers = ['codigo_cliente', 'nombre', 'nit_ci', 'telefono', 'correo', 'direccion', 'saldo_pendiente'];
         const csvRows = [
             headers.join(','),
             ...clientes.map(c => headers.map(h => escapeCsvCell(c[h])).join(','))
@@ -142,7 +142,7 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
                         <div class="flex-1 min-w-0">
                             <div class="font-bold text-gray-800 truncate">${c.nombre}</div>
                             <p class="text-sm text-gray-400 font-mono">${c.codigo_cliente}</p>
-                            <div class="text-sm text-gray-500 truncate mt-1">${c.telefono || c.email || 'Sin contacto'}</div>
+                            <div class="text-sm text-gray-500 truncate mt-1">${c.telefono || c.correo || 'Sin contacto'}</div>
                         </div>
                         <div class="flex-shrink-0">
                              <button onClick=${() => handleEdit(c)} class="text-gray-400 hover:text-primary p-2 -m-2 rounded-full">${ICONS.edit}</button>
@@ -186,7 +186,7 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
                             <td class="px-3 py-4 text-sm text-gray-500 font-mono">${c.codigo_cliente}</td>
                             <td class="px-3 py-4 text-sm text-gray-500">
                                 <div>${c.telefono || 'N/A'}</div>
-                                <div class="text-gray-400">${c.email}</div>
+                                <div class="text-gray-400">${c.correo}</div>
                             </td>
                             <td class="px-3 py-4 text-sm font-bold ${c.saldo_pendiente > 0 ? 'text-red-600' : 'text-green-600'}">${formatCurrency(c.saldo_pendiente)}</td>
                             <td class="relative py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">

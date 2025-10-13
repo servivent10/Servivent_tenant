@@ -203,6 +203,7 @@ const FilterBar = ({ datePreset, onDatePresetChange, filters, onFilterChange, on
                             { value: 'Pagada', label: 'Pagada' },
                             { value: 'Pendiente', label: 'Pendiente' },
                             { value: 'Abono Parcial', label: 'Abono Parcial' },
+                            { value: 'Pedido Web Pendiente', label: 'Pedido Web Pendiente' },
                         ]}
                     />
                 </div>
@@ -418,6 +419,7 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
             case 'Pagada': return `${baseClasses} bg-green-100 text-green-800`;
             case 'Pendiente': return `${baseClasses} bg-red-100 text-red-800`;
             case 'Abono Parcial': return `${baseClasses} bg-amber-100 text-amber-800`;
+            case 'Pedido Web Pendiente': return `${baseClasses} bg-cyan-100 text-cyan-800`;
             default: return `${baseClasses} bg-gray-100 text-gray-800`;
         }
     };

@@ -108,7 +108,7 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                     </ul>
                 </div>
                 
-                ${ventaData.estado_pago !== 'Pagada' && html`
+                ${ventaData.estado_pago !== 'Pagada' && ventaData.estado_pago !== 'Pedido Web Pendiente' && html`
                     <div class="mt-6">
                         <h4 class="font-semibold text-gray-700">Registrar Nuevo Abono</h4>
                          <div class="mt-2 grid grid-cols-3 gap-2">
@@ -142,6 +142,8 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                 </div>
             `;
         }
+        
+        const isWebOrder = venta.estado_pago === 'Pedido Web Pendiente';
 
         return html`
             <div class="flex items-center gap-4 mb-4">
@@ -153,6 +155,21 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                     <p class="text-sm text-gray-500">Cliente: ${venta.cliente_nombre || 'Consumidor Final'}</p>
                 </div>
             </div>
+
+            ${isWebOrder && html`
+                <div class="mb-6 p-4 rounded-md bg-cyan-50 text-cyan-800 border border-cyan-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4" role="alert">
+                    <div class="flex items-start gap-3">
+                        <div class="text-2xl flex-shrink-0 mt-0.5">${ICONS.bolt}</div>
+                        <div>
+                            <h3 class="font-bold">Este es un Pedido Web Pendiente</h3>
+                            <p class="text-sm">Verifica el stock y los detalles, luego procede a finalizar la venta en el Terminal o registrar el pago.</p>
+                        </div>
+                    </div>
+                    <button onClick=${() => addToast({ message: 'Funcionalidad no implementada.'})} class="mt-2 sm:mt-0 flex-shrink-0 w-full sm:w-auto rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-cyan-600">
+                        Finalizar Venta
+                    </button>
+                </div>
+            `}
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-6">
                 <div class="lg:col-span-2 space-y-6">

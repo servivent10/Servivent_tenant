@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { html } from 'htm/preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { ConfirmationModal } from '../ConfirmationModal.js';
 import { FormInput } from '../FormComponents.js';
 import { Spinner } from '../Spinner.js';
@@ -17,7 +17,7 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
     const { addToast } = useToast();
     
     const getInitialState = () => ({
-        nombre: '', nit_ci: '', telefono: '', email: '', direccion: ''
+        nombre: '', nit_ci: '', telefono: '', correo: '', direccion: ''
     });
 
     const [formData, setFormData] = useState(getInitialState());
@@ -25,7 +25,12 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
     const [avatarFile, setAvatarFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
     const fileInputRef = useRef(null);
+
+    const [emailError, setEmailError] = useState('');
+    const [emailValidationStatus, setEmailValidationStatus] = useState('idle'); // idle, checking, valid, invalid
     
+    const debounceTimeoutRef = useRef(null);
+
     useEffect(() => {
         if(isOpen) {
             if (isEditMode) {
@@ -33,7 +38,7 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
                     nombre: clienteToEdit.nombre || '',
                     nit_ci: clienteToEdit.nit_ci || '',
                     telefono: clienteToEdit.telefono || '',
-                    email: clienteToEdit.email || '',
+                    correo: clienteToEdit.correo || '',
                     direccion: clienteToEdit.direccion || '',
                 });
                 setPreviewUrl(clienteToEdit.avatar_url);
@@ -42,10 +47,70 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
                 setPreviewUrl(null);
             }
             setAvatarFile(null);
+            setEmailError('');
+            setEmailValidationStatus('idle');
         }
     }, [isOpen, clienteToEdit]);
 
-    const handleInput = (e) => setFormData(prev => ({...prev, [e.target.name]: e.target.value}));
+    const validateEmail = useCallback(async (email) => {
+        if (!email.trim()) {
+            setEmailValidationStatus('idle');
+            setEmailError('');
+            return;
+        }
+
+        setEmailValidationStatus('checking');
+        setEmailError('');
+
+        try {
+            const { data, error } = await supabase.rpc('validate_client_email', {
+                p_correo: email,
+                p_cliente_id_to_exclude: isEditMode ? clienteToEdit.id : null
+            });
+
+            if (error) throw error;
+
+            if (data.valid) {
+                setEmailValidationStatus('valid');
+                setEmailError('');
+            } else {
+                setEmailValidationStatus('invalid');
+                if (data.reason === 'format') {
+                    setEmailError('Formato o proveedor de correo no válido (ej: gmail, hotmail).');
+                } else if (data.reason === 'exists') {
+                    setEmailError('Este correo electrónico ya está en uso.');
+                }
+            }
+        } catch (err) {
+            setEmailValidationStatus('error');
+            setEmailError('No se pudo verificar el correo.');
+            addToast({ message: 'Error al validar el correo.', type: 'error' });
+        }
+    }, [isEditMode, clienteToEdit?.id, addToast]);
+
+
+    const handleInput = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({...prev, [name]: value}));
+        
+        if (name === 'correo') {
+            setEmailValidationStatus('idle');
+            setEmailError('');
+            if (debounceTimeoutRef.current) {
+                clearTimeout(debounceTimeoutRef.current);
+            }
+            debounceTimeoutRef.current = setTimeout(() => {
+                validateEmail(value);
+            }, 500); // 500ms debounce
+        }
+    };
+    
+    const handleEmailBlur = (e) => {
+        if (debounceTimeoutRef.current) {
+            clearTimeout(debounceTimeoutRef.current);
+        }
+        validateEmail(e.target.value);
+    };
     
     const handleFileChange = (e) => {
         const file = e.target.files[0];
@@ -64,6 +129,15 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
             addToast({ message: 'El nombre completo y el teléfono son obligatorios.', type: 'error' });
             return;
         }
+        if (emailValidationStatus === 'invalid') {
+            addToast({ message: emailError, type: 'error' });
+            return;
+        }
+        if (emailValidationStatus === 'checking') {
+            addToast({ message: 'Por favor, espera a que termine la validación del correo.', type: 'warning' });
+            return;
+        }
+        
         setIsLoading(true);
         try {
             let avatarUrl = isEditMode ? clienteToEdit.avatar_url : null;
@@ -72,10 +146,10 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
             const { data: upsertedData, error: upsertError } = await supabase.rpc('upsert_client', {
                 p_id: clienteId,
                 p_nombre: formData.nombre,
-                p_nit_ci: formData.nit_ci,
+                p_nit_ci: formData.nit_ci || null,
                 p_telefono: formData.telefono,
-                p_email: formData.email,
-                p_direccion: formData.direccion,
+                p_correo: formData.correo || null,
+                p_direccion: formData.direccion || null,
                 p_avatar_url: avatarUrl
             }).single();
 
@@ -97,7 +171,7 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
 
                 const { error: finalUpdateError } = await supabase.rpc('upsert_client', {
                     p_id: clienteId, p_nombre: formData.nombre, p_nit_ci: formData.nit_ci,
-                    p_telefono: formData.telefono, p_email: formData.email, p_direccion: formData.direccion,
+                    p_telefono: formData.telefono, p_correo: formData.correo, p_direccion: formData.direccion,
                     p_avatar_url: avatarUrl
                 });
                 if (finalUpdateError) throw finalUpdateError;
@@ -119,6 +193,15 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
     };
 
     const title = isEditMode ? 'Editar Cliente' : 'Añadir Nuevo Cliente';
+    
+    let emailIndicator = null;
+    if (emailValidationStatus === 'checking') {
+        emailIndicator = html`<${Spinner} size="h-5 w-5" color="text-gray-400" />`;
+    } else if (emailValidationStatus === 'valid') {
+        emailIndicator = html`<div class="text-green-500">${ICONS.success}</div>`;
+    } else if (emailValidationStatus === 'invalid') {
+        emailIndicator = html`<div class="text-red-500">${ICONS.error}</div>`;
+    }
 
     return html`
         <${ConfirmationModal}
@@ -144,7 +227,17 @@ export function ClienteFormModal({ isOpen, onClose, onSave, clienteToEdit, user 
                         <${FormInput} label="Teléfono" name="telefono" type="tel" value=${formData.telefono} onInput=${handleInput} required=${true} />
                         <${FormInput} label="NIT o CI (Opcional)" name="nit_ci" type="text" value=${formData.nit_ci} onInput=${handleInput} required=${false} />
                     </div>
-                    <${FormInput} label="Correo Electrónico (Opcional)" name="email" type="email" value=${formData.email} onInput=${handleInput} required=${false} />
+                    <${FormInput} 
+                        label="Correo Electrónico (Opcional)" 
+                        name="correo" 
+                        type="email" 
+                        value=${formData.correo} 
+                        onInput=${handleInput} 
+                        onBlur=${handleEmailBlur}
+                        required=${false}
+                        error=${emailError}
+                        rightElement=${emailIndicator}
+                    />
                     <${FormInput} label="Dirección (Opcional)" name="direccion" type="text" value=${formData.direccion} onInput=${handleInput} required=${false} />
                 </div>
             </div>

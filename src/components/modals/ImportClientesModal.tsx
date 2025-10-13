@@ -9,7 +9,7 @@ import { Spinner } from '../Spinner.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { useToast } from '../../hooks/useToast.js';
 
-const REQUIRED_HEADERS = ['nombre', 'nit_ci', 'telefono', 'email', 'direccion'];
+const REQUIRED_HEADERS = ['nombre', 'nit_ci', 'telefono', 'correo', 'direccion'];
 
 const StatusIndicator = ({ status }) => {
     if (status === 'loading') {
@@ -53,7 +53,7 @@ export function ImportClientesModal({ isOpen, onClose, onImportSuccess }) {
     };
 
     const handleDownloadTemplate = () => {
-        const headers = "nombre,nit_ci,telefono,email,direccion";
+        const headers = "nombre,nit_ci,telefono,correo,direccion";
         const example1 = "Juan Perez,1234567,77712345,juan.perez@email.com,Av. Principal #123";
         const example2 = "Maria Lopez,7654321,66698765,maria.lopez@email.com,Calle Falsa 456";
         const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers, example1, example2].join("\n");

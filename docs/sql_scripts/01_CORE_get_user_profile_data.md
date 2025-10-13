@@ -1,27 +1,24 @@
 -- =============================================================================
--- DATABASE UPDATE SCRIPT (v6 - Timezone & Currency)
+-- DATABASE CORE SCRIPT (v7 - Fully Featured)
 -- =============================================================================
--- Este script actualiza la función principal que carga los datos del perfil
--- de usuario para que devuelva la zona horaria y la moneda de la empresa,
--- datos cruciales para el nuevo sistema de localización.
+-- This script defines the most up-to-date and complete version of the crucial
+-- `get_user_profile_data` function. It includes all necessary fields for a
+-- complete user session initialization, such as `modo_caja` and `slug`.
 --
--- **INSTRUCCIONES:**
--- Por favor, ejecuta este script completo en el Editor SQL de tu proyecto de
--- Supabase para aplicar la corrección.
+-- This file should be considered the canonical source for this function.
+--
+-- INSTRUCTIONS:
+-- Execute this script in your Supabase SQL Editor to apply the latest version.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- Paso 1: Eliminar la función antigua
+-- Step 1: Drop the old function to ensure a clean update
 -- -----------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.get_user_profile_data();
 
 
 -- -----------------------------------------------------------------------------
--- Paso 2: Crear la nueva función `get_user_profile_data` (v6)
--- -----------------------------------------------------------------------------
--- Descripción:
--- Se añaden `empresa_timezone` y `empresa_moneda` a la definición de la
--- tabla de retorno y a la sentencia SELECT principal.
+-- Step 2: Create the new, fully-featured `get_user_profile_data` function (v7)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_user_profile_data()
 RETURNS table (
@@ -29,8 +26,10 @@ RETURNS table (
     empresa_nombre text,
     empresa_logo text,
     empresa_nit text,
-    empresa_timezone text, -- **NUEVO CAMPO**
-    empresa_moneda text,   -- **NUEVO CAMPO**
+    empresa_timezone text,
+    empresa_moneda text,
+    empresa_modo_caja text,
+    empresa_slug text,
     plan_actual text,
     estado_licencia text,
     fecha_fin_licencia date,
@@ -71,8 +70,10 @@ BEGIN
         e.nombre AS empresa_nombre,
         e.logo AS empresa_logo,
         e.nit AS empresa_nit,
-        e.timezone AS empresa_timezone, -- **SE AÑADE LA ZONA HORARIA**
-        e.moneda AS empresa_moneda,     -- **SE AÑADE LA MONEDA**
+        e.timezone AS empresa_timezone,
+        e.moneda AS empresa_moneda,
+        e.modo_caja AS empresa_modo_caja,
+        e.slug AS empresa_slug,
         l.tipo_licencia AS plan_actual,
         l.estado AS estado_licencia,
         l.fecha_fin AS fecha_fin_licencia,
@@ -97,7 +98,6 @@ BEGIN
 END;
 $$;
 
-
 -- =============================================================================
--- Fin del script.
+-- End of script.
 -- =============================================================================

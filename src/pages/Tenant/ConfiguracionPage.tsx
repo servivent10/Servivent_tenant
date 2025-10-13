@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { html } from 'htm/preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'preact/hooks';
 import { DashboardLayout } from '../../components/DashboardLayout.js';
 import { ICONS } from '../../components/Icons.js';
 import { FormInput } from '../../components/FormComponents.js';
@@ -295,6 +295,14 @@ function PriceListsTab() {
     `;
 }
 
+const debounce = (func, delay) => {
+    let timeout;
+    return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func(...args), delay);
+    };
+};
+
 export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo, notifications, onCompanyInfoUpdate, navigate }) {
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
@@ -305,6 +313,7 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
         nombre: '',
         nit: '',
         modo_caja: 'por_sucursal',
+        slug: '',
     });
     const [logoFile, setLogoFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
@@ -312,6 +321,9 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
     const [dataError, setDataError] = useState(null);
     const [hasOpenSessions, setHasOpenSessions] = useState(false);
     const [isCheckingSessions, setIsCheckingSessions] = useState(true);
+
+    const [slugStatus, setSlugStatus] = useState('idle'); // idle, checking, available, unavailable
+    const [slugMessage, setSlugMessage] = useState('');
 
     const checkSessions = async () => {
         setIsCheckingSessions(true);
@@ -321,7 +333,7 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
             setHasOpenSessions(data);
         } catch (err) {
             addToast({ message: `Error al verificar cajas abiertas: ${err.message}`, type: 'error' });
-            setHasOpenSessions(false); // Assume it's safe if check fails, backend will block anyway
+            setHasOpenSessions(false);
         } finally {
             setIsCheckingSessions(false);
         }
@@ -339,8 +351,11 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                 nombre: companyInfo.name || '',
                 nit: companyInfo.nit || '',
                 modo_caja: companyInfo.modo_caja || 'por_sucursal',
+                slug: companyInfo.slug || '',
             });
             setPreviewUrl(companyInfo.logo);
+            setSlugStatus('idle');
+            setSlugMessage('');
         }
         
         if (user && !user.empresa_id) {
@@ -368,6 +383,46 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
         }
     };
     
+    const checkSlug = useCallback(
+        debounce(async (slugToCheck) => {
+            if (!slugToCheck || slugToCheck.length < 3) {
+                setSlugStatus('idle');
+                setSlugMessage('');
+                return;
+            }
+            if (slugToCheck === companyInfo.slug) {
+                setSlugStatus('available');
+                setSlugMessage('Esta es tu URL actual.');
+                return;
+            }
+
+            setSlugStatus('checking');
+            try {
+                const { data, error } = await supabase.rpc('check_slug_availability', { p_slug: slugToCheck });
+                if (error) throw error;
+
+                if (data) {
+                    setSlugStatus('available');
+                    setSlugMessage('Esta URL está disponible.');
+                } else {
+                    setSlugStatus('unavailable');
+                    setSlugMessage('Esta URL ya está en uso.');
+                }
+            } catch (err) {
+                setSlugStatus('error');
+                setSlugMessage('Error al verificar.');
+                addToast({ message: 'No se pudo verificar la URL.', type: 'error' });
+            }
+        }, 500),
+        [companyInfo.slug, addToast]
+    );
+
+    useEffect(() => {
+        if (activeTab === 'catalogo') {
+            checkSlug(formData.slug);
+        }
+    }, [formData.slug, activeTab, checkSlug]);
+
     const handleSave = async () => {
         if (dataError) {
             addToast({ message: 'No se puede guardar debido a un error de datos. Sigue las instrucciones en el mensaje de error.', type: 'error', duration: 8000 });
@@ -376,6 +431,11 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
 
         if (!formData.nombre.trim() || !formData.nit.trim()) {
             addToast({ message: 'El nombre de la empresa y el NIT son obligatorios.', type: 'error' });
+            return;
+        }
+
+        if (activeTab === 'catalogo' && slugStatus === 'unavailable') {
+            addToast({ message: 'La URL del catálogo no está disponible. Por favor, elige otra.', type: 'error' });
             return;
         }
 
@@ -410,6 +470,7 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                 p_nit: formData.nit,
                 p_logo: logoUrl,
                 p_modo_caja: formData.modo_caja,
+                p_slug: formData.slug || null,
             });
 
             if (rpcError) throw rpcError;
@@ -419,6 +480,7 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                 logo: logoUrl,
                 nit: formData.nit,
                 modo_caja: formData.modo_caja,
+                slug: formData.slug || null,
             });
 
             addToast({ message: 'Configuración guardada con éxito.', type: 'success' });
@@ -436,11 +498,20 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
         { name: 'Configuración', href: '#/configuracion' }
     ];
     
+    const planSupportsCatalog = useMemo(() => {
+        const planName = companyInfo?.plan || '';
+        return planName.includes('Profesional') || planName.includes('Corporativo');
+    }, [companyInfo]);
+    
     const tabs = [
         { id: 'empresa', label: 'Datos de la Empresa' },
         { id: 'precios', label: 'Listas de Precios' },
         { id: 'terminal', label: 'Terminal de Venta' },
     ];
+    
+    if (planSupportsCatalog) {
+        tabs.push({ id: 'catalogo', label: 'Catálogo Web' });
+    }
 
     const canEdit = user.role === 'Propietario';
 
@@ -455,7 +526,7 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
             notifications=${notifications}
         >
             <h1 class="text-2xl font-semibold text-gray-900">Configuración</h1>
-            <p class="mt-1 text-sm text-gray-600">Gestiona los datos de tu empresa y las políticas de precios.</p>
+            <p class="mt-1 text-sm text-gray-600">Gestiona los datos de tu empresa, políticas de precios y más.</p>
 
             <div class="mt-8">
                 <${Tabs} tabs=${tabs} activeTab=${activeTab} onTabClick=${setActiveTab} />
@@ -463,77 +534,79 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
 
             <div class="mt-6">
                 ${activeTab === 'empresa' && html`
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                        <div>
-                            <h2 class="text-xl font-semibold text-gray-800">Datos de la Empresa</h2>
-                            <p class="mt-1 text-sm text-gray-600">Actualiza la información y el logo de tu empresa.</p>
+                    <div class="animate-fade-in-down">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                            <div>
+                                <h2 class="text-xl font-semibold text-gray-800">Datos de la Empresa</h2>
+                                <p class="mt-1 text-sm text-gray-600">Actualiza la información y el logo de tu empresa.</p>
+                            </div>
+                            ${canEdit && html`
+                                <button 
+                                    onClick=${handleSave}
+                                    disabled=${isSaving || !!dataError}
+                                    class="flex-shrink-0 w-full sm:w-auto flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-400 min-w-[120px]"
+                                >
+                                    ${isSaving ? html`<${Spinner}/>` : 'Guardar Cambios'}
+                                </button>
+                            `}
                         </div>
-                         ${canEdit && html`
-                            <button 
-                                onClick=${handleSave}
-                                disabled=${isSaving || !!dataError}
-                                class="flex-shrink-0 w-full sm:w-auto flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-400 min-w-[120px]"
-                            >
-                                ${isSaving ? html`<${Spinner}/>` : 'Guardar Cambios'}
-                            </button>
-                         `}
-                    </div>
 
-                    ${dataError && html`
-                        <div class="mt-6 p-4 rounded-md bg-red-50 text-red-800 border border-red-200" role="alert">
-                            <h3 class="font-bold flex items-center gap-2">${ICONS.error} Error Crítico de Datos</h3>
-                            <p class="mt-2 text-sm">${dataError}</p>
-                        </div>
-                    `}
+                        ${dataError && html`
+                            <div class="mt-6 p-4 rounded-md bg-red-50 text-red-800 border border-red-200" role="alert">
+                                <h3 class="font-bold flex items-center gap-2">${ICONS.error} Error Crítico de Datos</h3>
+                                <p class="mt-2 text-sm">${dataError}</p>
+                            </div>
+                        `}
 
-                    <div class="mt-4 max-w-4xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-sm border">
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                            <div class="md:col-span-1">
-                                <h3 class="text-lg font-medium leading-6 text-gray-900">Logo</h3>
-                                <div class="mt-4 flex flex-col items-center">
-                                    ${previewUrl ? html`
-                                        <img src=${previewUrl} alt="Logo de la empresa" class="h-32 w-32 rounded-lg object-contain bg-slate-100 p-2 border" />
-                                    ` : html`
-                                        <div class="h-32 w-32 rounded-lg bg-slate-100 border flex items-center justify-center">
-                                            <div class="text-slate-400 text-5xl">${ICONS.business}</div>
+                        <div class="mt-4 max-w-4xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-sm border">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                <div class="md:col-span-1">
+                                    <h3 class="text-lg font-medium leading-6 text-gray-900">Logo</h3>
+                                    <div class="mt-4 flex flex-col items-center">
+                                        ${previewUrl ? html`
+                                            <img src=${previewUrl} alt="Logo de la empresa" class="h-32 w-32 rounded-lg object-contain bg-slate-100 p-2 border" />
+                                        ` : html`
+                                            <div class="h-32 w-32 rounded-lg bg-slate-100 border flex items-center justify-center">
+                                                <div class="text-slate-400 text-5xl">${ICONS.business}</div>
+                                            </div>
+                                        `}
+                                        <input
+                                            ref=${fileInputRef}
+                                            type="file"
+                                            class="hidden"
+                                            accept="image/png, image/jpeg, image/svg+xml"
+                                            onChange=${handleFileChange}
+                                            disabled=${!canEdit || !!dataError}
+                                        />
+                                        ${canEdit && html`
+                                            <button
+                                                onClick=${() => fileInputRef.current.click()}
+                                                type="button"
+                                                disabled=${!!dataError}
+                                                class="mt-4 w-full flex items-center justify-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                ${ICONS.upload_file}
+                                                Cambiar Logo
+                                            </button>
+                                        `}
+                                    </div>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <h3 class="text-lg font-medium leading-6 text-gray-900">Información General</h3>
+                                    <div class="mt-4 grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-6">
+                                        <div class="sm:col-span-2">
+                                            <${FormInput} label="Nombre de la Empresa" name="nombre" type="text" value=${formData.nombre} onInput=${handleInput} disabled=${!canEdit || !!dataError} />
+                                        </div>
+                                        <div class="sm:col-span-2">
+                                            <${FormInput} label="NIT" name="nit" type="text" value=${formData.nit} onInput=${handleInput} disabled=${!canEdit || !!dataError} />
+                                        </div>
+                                    </div>
+                                    ${!canEdit && !dataError && html`
+                                        <div class="mt-6 p-4 rounded-md bg-blue-50 text-blue-700 text-sm" role="alert">
+                                            <p>Solo el rol de <strong>Propietario</strong> puede editar esta información.</p>
                                         </div>
                                     `}
-                                    <input
-                                        ref=${fileInputRef}
-                                        type="file"
-                                        class="hidden"
-                                        accept="image/png, image/jpeg, image/svg+xml"
-                                        onChange=${handleFileChange}
-                                        disabled=${!canEdit || !!dataError}
-                                    />
-                                    ${canEdit && html`
-                                        <button
-                                            onClick=${() => fileInputRef.current.click()}
-                                            type="button"
-                                            disabled=${!!dataError}
-                                            class="mt-4 w-full flex items-center justify-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            ${ICONS.upload_file}
-                                            Cambiar Logo
-                                        </button>
-                                    `}
                                 </div>
-                            </div>
-                            <div class="md:col-span-2">
-                                <h3 class="text-lg font-medium leading-6 text-gray-900">Información General</h3>
-                                <div class="mt-4 grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-6">
-                                    <div class="sm:col-span-2">
-                                        <${FormInput} label="Nombre de la Empresa" name="nombre" type="text" value=${formData.nombre} onInput=${handleInput} disabled=${!canEdit || !!dataError} />
-                                    </div>
-                                    <div class="sm:col-span-2">
-                                        <${FormInput} label="NIT" name="nit" type="text" value=${formData.nit} onInput=${handleInput} disabled=${!canEdit || !!dataError} />
-                                    </div>
-                                </div>
-                                ${!canEdit && !dataError && html`
-                                    <div class="mt-6 p-4 rounded-md bg-blue-50 text-blue-700 text-sm" role="alert">
-                                        <p>Solo el rol de <strong>Propietario</strong> puede editar esta información.</p>
-                                    </div>
-                                `}
                             </div>
                         </div>
                     </div>
@@ -544,7 +617,7 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                 `}
 
                 ${activeTab === 'terminal' && html`
-                    <div>
+                    <div class="animate-fade-in-down">
                         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                             <div>
                                 <h2 class="text-xl font-semibold text-gray-800">Configuración del Terminal de Venta</h2>
@@ -592,6 +665,66 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                                     <p>Solo el rol de <strong>Propietario</strong> puede editar esta información.</p>
                                 </div>
                             `}
+                        </div>
+                    </div>
+                `}
+                ${activeTab === 'catalogo' && html`
+                    <div class="animate-fade-in-down">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                            <div>
+                                <h2 class="text-xl font-semibold text-gray-800">Tu Catálogo Web Público</h2>
+                                <p class="mt-1 text-sm text-gray-600">Configura una URL única para que tus clientes puedan ver tus productos en línea.</p>
+                            </div>
+                            ${canEdit && html`
+                                <button 
+                                    onClick=${handleSave}
+                                    disabled=${isSaving || !!dataError || slugStatus === 'checking' || slugStatus === 'unavailable'}
+                                    class="flex-shrink-0 w-full sm:w-auto flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-400 min-w-[120px]"
+                                >
+                                    ${isSaving ? html`<${Spinner}/>` : 'Guardar Cambios'}
+                                </button>
+                            `}
+                        </div>
+
+                        <div class="mt-4 max-w-2xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-sm border">
+                            <p class="text-sm text-gray-600">Define una dirección web corta y fácil de recordar para tu catálogo. Solo se permiten letras minúsculas, números y guiones.</p>
+
+                            <div class="mt-4">
+                                <${FormInput}
+                                    label="URL Única (slug)"
+                                    name="slug"
+                                    type="text"
+                                    value=${formData.slug}
+                                    onInput=${(e) => {
+                                        const formattedSlug = e.target.value
+                                            .toLowerCase()
+                                            .replace(/\s+/g, '-')
+                                            .replace(/[^\w\-]+/g, '')
+                                            .replace(/\-\-+/g, '-');
+                                        handleInput({ target: { name: 'slug', value: formattedSlug } });
+                                    }}
+                                    disabled=${!canEdit || !!dataError}
+                                />
+
+                                <div class="mt-2 text-sm text-gray-500 bg-slate-50 p-3 rounded-md flex items-center gap-2">
+                                    <span class="font-semibold">URL final:</span>
+                                    <code class="text-primary-dark">servivent.app/#/catalogo/<span class="font-bold">${formData.slug || 'tu-url'}</span></code>
+                                </div>
+
+                                ${slugStatus !== 'idle' && html`
+                                    <div class="mt-2 flex items-center gap-2 text-sm">
+                                        ${slugStatus === 'checking' && html`<${Spinner} size="h-4 w-4" color="text-gray-500" />`}
+                                        ${slugStatus === 'available' && html`<div class="text-green-500">${ICONS.success}</div>`}
+                                        ${slugStatus === 'unavailable' && html`<div class="text-red-500">${ICONS.error}</div>`}
+                                        ${slugStatus === 'error' && html`<div class="text-red-500">${ICONS.error}</div>`}
+                                        <span class=${`
+                                            ${slugStatus === 'available' ? 'text-green-600' : ''}
+                                            ${slugStatus === 'unavailable' ? 'text-red-600' : ''}
+                                            ${slugStatus === 'error' ? 'text-red-600' : ''}
+                                        `}>${slugMessage}</span>
+                                    </div>
+                                `}
+                            </div>
                         </div>
                     </div>
                 `}

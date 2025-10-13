@@ -130,7 +130,20 @@ const ProfileDropdownPanel = ({ user, companyInfo, onEditProfile, onLogoutReques
             <div class="py-1">
                 <div class="px-4 py-3 border-b">
                     <p class="text-sm font-semibold text-gray-900 truncate">${user.name}</p>
-                    <p class="text-xs text-gray-500 truncate">${user.role} en ${user.sucursal}</p>
+                    <div class="mt-2 space-y-1 text-xs">
+                        <div class="flex">
+                            <span class="w-16 flex-shrink-0 font-medium text-gray-500">Rol:</span>
+                            <span class="truncate text-gray-800">${user.role}</span>
+                        </div>
+                        <div class="flex">
+                            <span class="w-16 flex-shrink-0 font-medium text-gray-500">Empresa:</span>
+                            <span class="truncate text-gray-800">${companyInfo.name}</span>
+                        </div>
+                        <div class="flex">
+                            <span class="w-16 flex-shrink-0 font-medium text-gray-500">Sucursal:</span>
+                            <span class="truncate text-gray-800">${user.sucursal}</span>
+                        </div>
+                    </div>
                 </div>
                 
                 ${(user.role === 'Propietario' || user.role === 'Administrador') && html`
