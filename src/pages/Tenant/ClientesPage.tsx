@@ -115,7 +115,7 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
             addToast({ message: 'No hay clientes para exportar.', type: 'info' });
             return;
         }
-        const headers = ['codigo_cliente', 'nombre', 'nit_ci', 'telefono', 'correo', 'direccion', 'saldo_pendiente'];
+        const headers = ['nombre', 'nit_ci', 'telefono', 'correo', 'direccion', 'saldo_pendiente'];
         const csvRows = [
             headers.join(','),
             ...clientes.map(c => headers.map(h => escapeCsvCell(c[h])).join(','))
@@ -150,8 +150,10 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
                     <div class="flex items-center space-x-4">
                         <${Avatar} name=${c.nombre} avatarUrl=${c.avatar_url} size="h-12 w-12" />
                         <div class="flex-1 min-w-0">
-                            <div class="font-bold text-gray-800 truncate">${c.nombre}</div>
-                            <p class="text-sm text-gray-400 font-mono">${c.codigo_cliente}</p>
+                            <div class="font-bold text-gray-800 truncate flex items-center gap-2">
+                                <span>${c.nombre}</span>
+                                ${c.auth_user_id && html`<span title="Cliente con cuenta web" class="text-primary">${ICONS.bolt}</span>`}
+                            </div>
                             <div class="text-sm text-gray-500 truncate mt-1">${c.telefono || c.correo || 'Sin contacto'}</div>
                         </div>
                         <div class="flex-shrink-0">
@@ -173,7 +175,6 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
                 <thead class="bg-gray-50">
                     <tr>
                         <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Cliente</th>
-                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Código Cliente</th>
                         <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Contacto</th>
                         <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Saldo Pendiente</th>
                         <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6"><span class="sr-only">Acciones</span></th>
@@ -188,12 +189,14 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
                                         <${Avatar} name=${c.nombre} avatarUrl=${c.avatar_url} />
                                     </div>
                                     <div class="ml-4">
-                                        <div class="font-medium text-gray-900">${c.nombre}</div>
+                                        <div class="font-medium text-gray-900 flex items-center gap-2">
+                                            <span>${c.nombre}</span>
+                                            ${c.auth_user_id && html`<span title="Cliente con cuenta web" class="text-primary">${ICONS.bolt}</span>`}
+                                        </div>
                                         <div class="text-gray-500">NIT/CI: ${c.nit_ci || 'N/A'}</div>
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-3 py-4 text-sm text-gray-500 font-mono">${c.codigo_cliente}</td>
                             <td class="px-3 py-4 text-sm text-gray-500">
                                 <div>${c.telefono || 'N/A'}</div>
                                 <div class="text-gray-400">${c.correo}</div>

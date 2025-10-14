@@ -16,8 +16,7 @@ import { CatalogProductsPage } from './CatalogProductsPage.js';
 import { CatalogCartPage } from './CatalogCartPage.js';
 import { ProductDetailView } from './ProductDetailView.js';
 import { FormInput } from '../../components/FormComponents.js';
-import { ClienteLoginPage } from './ClienteLoginPage.js';
-import { ClienteRegistroPage } from './ClienteRegistroPage.js';
+import { ClienteIdentificacionPage } from './ClienteIdentificacionPage.js';
 import { ClienteRecuperarClavePage } from './ClienteRecuperarClavePage.js';
 import { ClientePedidoDetailPage } from './ClientePedidoDetailPage.js';
 
@@ -162,7 +161,7 @@ function PublicHeader({ company, cartItemCount, onCartClick, onSearch, searchTer
 
 
 // --- Main App Component ---
-export function CatalogApp({ path, navigate, session, customerProfile }) {
+export function CatalogApp({ path, navigate, customerProfile }) {
     const slug = path.split('/')[2];
     const { addToast } = useToast();
     const [isLoading, setIsLoading] = useState(true);
@@ -181,8 +180,7 @@ export function CatalogApp({ path, navigate, session, customerProfile }) {
     const isAccountPage = subPath.startsWith('/cuenta') && !activePedidoId;
     const isCartPage = subPath.startsWith('/carrito');
     const isProductsPage = subPath.startsWith('/productos');
-    const isLoginPage = subPath.startsWith('/login');
-    const isRegistroPage = subPath.startsWith('/registro');
+    const isIdentificacionPage = subPath.startsWith('/login') || subPath.startsWith('/registro');
     const isRecuperarPage = subPath.startsWith('/recuperar-clave');
 
     useEffect(() => {
@@ -236,7 +234,6 @@ export function CatalogApp({ path, navigate, session, customerProfile }) {
         } else {
             addToast({ message: 'Has cerrado sesión.', type: 'success' });
         }
-        // onAuthStateChange will handle state cleanup. Navigate to a safe page.
         navigate(`/catalogo/${slug}`);
     };
 
@@ -328,10 +325,8 @@ export function CatalogApp({ path, navigate, session, customerProfile }) {
         pageContent = html`<${ClientePedidoDetailPage} pedidoId=${activePedidoId} slug=${slug} navigate=${navigate} company=${catalogData.company} />`;
     } else if (isAccountPage) {
         pageContent = html`<${CuentaClientePage} customerProfile=${customerProfile} slug=${slug} navigate=${navigate} company=${catalogData.company} />`;
-    } else if (isLoginPage) {
-        pageContent = html`<${ClienteLoginPage} navigate=${navigate} slug=${slug} />`;
-    } else if (isRegistroPage) {
-        pageContent = html`<${ClienteRegistroPage} navigate=${navigate} slug=${slug} />`;
+    } else if (isIdentificacionPage) {
+        pageContent = html`<${ClienteIdentificacionPage} navigate=${navigate} slug=${slug} />`;
     } else if (isRecuperarPage) {
         pageContent = html`<${ClienteRecuperarClavePage} navigate=${navigate} slug=${slug} />`;
     } else if (activeProduct) {

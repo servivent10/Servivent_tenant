@@ -16,8 +16,8 @@ Este documento define la arquitectura y funcionalidad del módulo de **Clientes*
     -   **Añadir Cliente:** Abre el modal `ClienteFormModal` para registrar un nuevo cliente.
     -   **Importar/Exportar:** Permite la importación masiva desde un archivo CSV (usando `ImportClientesModal`) y la exportación de la base de datos actual a CSV.
 -   **Visualización Responsiva:**
-    -   **Escritorio:** Una tabla muestra la información clave de cada cliente, incluyendo su avatar, nombre, código, contacto y saldo pendiente.
-    -   **Móvil/Tablet:** Se utilizan tarjetas que resumen la información de cada cliente para una mejor legibilidad.
+    -   **Escritorio:** Una tabla muestra la información clave de cada cliente, incluyendo su avatar, nombre, contacto, saldo pendiente y un **indicador visual (`⚡`)** si el cliente ha activado su cuenta en el catálogo web.
+    -   **Móvil/Tablet:** Se utilizan tarjetas que resumen la información de cada cliente para una mejor legibilidad, incluyendo también el indicador de cuenta web.
 -   **Acciones por Fila:** Permite editar y eliminar clientes individuales.
 
 ## 3. Componentes y Modales
@@ -30,8 +30,8 @@ Este documento define la arquitectura y funcionalidad del módulo de **Clientes*
 
 ## 4. Lógica de Backend (Funciones RPC)
 
--   **`get_company_clients()`:** Obtiene la lista completa de clientes de la empresa, incluyendo su saldo pendiente calculado.
--   **`upsert_client()`:** Función para crear un nuevo cliente o actualizar uno existente. Al crear, genera un `codigo_cliente` único y aleatorio.
+-   **`get_company_clients()`:** Obtiene la lista completa de clientes de la empresa, incluyendo su saldo pendiente calculado y el `auth_user_id` para el indicador de cuenta web.
+-   **`upsert_client()`:** Función para crear un nuevo cliente o actualizar uno existente.
 -   **`validate_client_email()`:** Valida un correo electrónico en el backend. Verifica que el formato sea correcto, que el dominio pertenezca a un proveedor común (ej. gmail, hotmail) y que no esté ya en uso por otro cliente de la misma empresa, devolviendo la razón específica del fallo.
--   **`delete_client()`:** Elimina un cliente. Las ventas asociadas no se eliminan, sino que se desvinculan (el campo `cliente_id` en la venta pasa a ser `NULL`).
+-   **`delete-client-with-auth` (Edge Function):** Elimina un cliente de forma segura. Primero verifica si el cliente tiene una cuenta de autenticación (`auth_user_id`) y, de ser así, la elimina del sistema de `auth` de Supabase antes de borrar el registro de la tabla `clientes`, manteniendo la integridad de los datos.
 -   **`import_clients_in_bulk()`:** Procesa un array de datos de clientes desde el frontend. Itera sobre los registros, actualizando los existentes (basado en `nit_ci`) y creando los nuevos, y devuelve un resumen de la operación.

@@ -153,8 +153,7 @@ function AppContent() {
             setCustomerProfile(data);
         } catch (err) {
             console.error("Customer profile fetch failed:", err);
-            addToast({ message: 'No se pudo cargar tu perfil de cliente.', type: 'error' });
-            // Don't block the UI, just show an error. The user might still be able to browse.
+            // Don't show an error toast here, it's normal not to have a profile if not logged in.
         } finally {
             setLoading(false);
         }
@@ -165,20 +164,24 @@ function AppContent() {
         window.addEventListener('hashchange', handleHashChange);
         
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+            const path = window.location.hash.substring(1);
+            
             if (newSession && newSession.access_token !== session?.access_token) {
                 setSession(newSession);
-                const path = window.location.hash.substring(1);
                 if (path.startsWith('/catalogo/')) {
                     const slug = path.split('/')[2];
-                    if (slug) loadCustomerData(slug);
+                    if (slug) await loadCustomerData(slug);
                 } else if (!path.startsWith('/registro')) {
-                    loadTenantData(newSession);
+                    await loadTenantData(newSession);
                 }
             } else if (!newSession) {
+                const wasOnCatalog = path.startsWith('/catalogo/');
                 resetAppState();
-                const path = window.location.hash.substring(1);
-                if (!path.startsWith('/catalogo/')) {
+                if (!wasOnCatalog) {
                     navigate('/login');
+                } else {
+                    // Stay on catalog but with no session
+                    setLoading(false);
                 }
             }
         });
@@ -187,8 +190,8 @@ function AppContent() {
             const { data: { session: initialSession } } = await supabase.auth.getSession();
             setSession(initialSession);
             
+            const path = window.location.hash.substring(1);
             if (initialSession) {
-                const path = window.location.hash.substring(1);
                 if (path.startsWith('/catalogo/')) {
                     const slug = path.split('/')[2];
                     if (slug) {
@@ -203,7 +206,9 @@ function AppContent() {
                 }
             } else {
                 setLoading(false);
-                if (!window.location.hash) navigate('/login');
+                if (!path.startsWith('/catalogo/') && !path.startsWith('/registro') && !path.startsWith('/admin-delete-tool')) {
+                    navigate('/login');
+                }
             }
         };
 
@@ -326,7 +331,7 @@ function AppContent() {
     } else {
         if (isRegistrationRoute) content = html`<${RegistrationFlow} navigate=${navigate} />`;
         else if (isAdminToolRoute) content = html`<${AdminToolPage} navigate=${navigate} />`;
-        else content = html`<${LoginPage} onLogin=${handleLogin} navigate=${navigate} />`;
+        else if (!isCatalogRoute) content = html`<${LoginPage} onLogin=${handleLogin} navigate=${navigate} />`;
     }
 
     return html`
