@@ -237,7 +237,7 @@ export function CatalogApp({ path, navigate, customerProfile }) {
         navigate(`/catalogo/${slug}`);
     };
 
-    const handlePlaceOrder = async () => {
+    const handlePlaceOrder = async (deliveryDetails) => {
         if (!customerProfile) {
             addToast({ message: 'Debes iniciar sesión para finalizar tu pedido.', type: 'info' });
             navigate(`/catalogo/${slug}/login`);
@@ -255,7 +255,8 @@ export function CatalogApp({ path, navigate, customerProfile }) {
                 p_items: orderItems,
                 p_cliente_email: customerProfile.correo,
                 p_cliente_nombre: customerProfile.nombre,
-                p_cliente_telefono: customerProfile.telefono
+                p_cliente_telefono: customerProfile.telefono,
+                p_direccion_id: deliveryDetails.addressId // NEW
             });
 
             if (rpcError) throw rpcError;
@@ -320,7 +321,7 @@ export function CatalogApp({ path, navigate, customerProfile }) {
     
     let pageContent;
     if (isCartPage) {
-        pageContent = html`<${CatalogCartPage} cart=${cart} onUpdateQuantity=${handleUpdateQuantity} onPlaceOrder=${handlePlaceOrder} company=${catalogData.company} navigate=${navigate} slug=${slug} />`;
+        pageContent = html`<${CatalogCartPage} cart=${cart} onUpdateQuantity=${handleUpdateQuantity} onPlaceOrder=${handlePlaceOrder} company=${catalogData.company} navigate=${navigate} slug=${slug} customerProfile=${customerProfile} />`;
     } else if (activePedidoId) {
         pageContent = html`<${ClientePedidoDetailPage} pedidoId=${activePedidoId} slug=${slug} navigate=${navigate} company=${catalogData.company} />`;
     } else if (isAccountPage) {

@@ -130,7 +130,7 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
     
     const renderContent = () => {
         if (isLoading && !venta) {
-            return html`<div class="py-20"></div>`; // Placeholder to prevent layout jump
+            return html`<div class="py-20"></div>`; // Placeholder to prevent layout jump while loading
         }
 
         if (!venta) {
@@ -177,12 +177,28 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                         <h3 class="text-lg font-semibold text-gray-800 mb-2">Detalles Generales</h3>
                         <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                             <div><dt class="text-gray-500">Fecha de Venta</dt><dd class="font-medium text-gray-800">${new Date(venta.fecha).toLocaleString()}</dd></div>
-                            <div><dt class="text-gray-500">Vendedor</dt><dd class="font-medium text-gray-800">${venta.usuario_nombre || 'N/A'}</dd></div>
+                             <div><dt class="text-gray-500">Vendedor</dt><dd class="font-medium text-gray-800">${venta.usuario_nombre || 'N/A'}</dd></div>
                             <div><dt class="text-gray-500">Tipo de Venta</dt><dd class="font-medium text-gray-800">${venta.tipo_venta}</dd></div>
                             <div><dt class="text-gray-500">Método de Pago</dt><dd class="font-medium text-gray-800">${venta.metodo_pago}</dd></div>
                             ${venta.fecha_vencimiento && html`<div><dt class="text-gray-500">Vencimiento</dt><dd class="font-medium text-red-600">${new Date(venta.fecha_vencimiento).toLocaleDateString()}</dd></div>`}
                         </dl>
                     </div>
+
+                    ${venta.direccion_entrega && html`
+                        <div class="bg-white p-6 rounded-lg shadow-md border">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-2">Dirección de Envío</h3>
+                            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                <div><dt class="text-gray-500">Lugar</dt><dd class="font-medium text-gray-800">${venta.direccion_entrega.nombre}</dd></div>
+                                <div><dt class="text-gray-500">Detalles</dt><dd class="font-medium text-gray-800">${venta.direccion_entrega.direccion_texto}</dd></div>
+                            </dl>
+                             <div class="mt-4 pt-4 border-t">
+                                <a href=${`https://maps.google.com/?q=${venta.direccion_entrega.latitud},${venta.direccion_entrega.longitud}`} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-md bg-blue-100 px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-200">
+                                    ${ICONS.suppliers} Ver en Google Maps
+                                </a>
+                            </div>
+                        </div>
+                    `}
+                    
                     <div class="bg-white rounded-lg shadow-md border">
                         <h3 class="text-lg font-semibold text-gray-800 p-6 pb-2">Productos Vendidos</h3>
                         <div class="overflow-x-auto">

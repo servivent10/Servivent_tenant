@@ -5,6 +5,11 @@
 import { html } from 'htm/preact';
 import { ICONS } from '../../components/Icons.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
+import { useState, useEffect, useMemo, useCallback } from 'preact/hooks';
+import { supabase } from '../../lib/supabaseClient.js';
+import { useToast } from '../../hooks/useToast.js';
+import { DireccionFormModal } from '../../components/modals/DireccionFormModal.js';
+import { Spinner } from '../../components/Spinner.js';
 
 const formatCurrency = (value, currencySymbol = 'Bs') => {
     const number = Number(value || 0);
@@ -33,7 +38,48 @@ const QuantityControl = ({ quantity, onUpdate }) => {
     `;
 };
 
-export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company, navigate, slug }) {
+export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company, navigate, slug, customerProfile }) {
+    const [deliveryMethod, setDeliveryMethod] = useState('domicilio');
+    const [addresses, setAddresses] = useState([]);
+    const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
+    const [selectedAddressId, setSelectedAddressId] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const { addToast } = useToast();
+
+    const fetchAddresses = useCallback(async () => {
+        if (!customerProfile) return;
+        setIsLoadingAddresses(true);
+        try {
+            const { data, error } = await supabase.rpc('get_my_direcciones');
+            if (error) throw error;
+            setAddresses(data);
+            const principal = data.find(d => d.es_principal);
+            if (principal) {
+                setSelectedAddressId(principal.id);
+            } else if (data.length > 0) {
+                setSelectedAddressId(data[0].id);
+            }
+        } catch (err) {
+            addToast({ message: 'Error al cargar tus direcciones.', type: 'error' });
+        } finally {
+            setIsLoadingAddresses(false);
+        }
+    }, [customerProfile, addToast]);
+
+    useEffect(() => {
+        if (deliveryMethod === 'domicilio') {
+            fetchAddresses();
+        }
+    }, [deliveryMethod, fetchAddresses]);
+
+    const handleConfirmOrder = () => {
+        if (deliveryMethod === 'domicilio' && !selectedAddressId) {
+            addToast({ message: 'Por favor, selecciona o añade una dirección de envío.', type: 'warning' });
+            return;
+        }
+        onPlaceOrder({ addressId: selectedAddressId });
+    };
+    
     const subtotal = cart.reduce((sum, item) => sum + (item.precio_oferta > 0 && item.precio_oferta < item.precio_base ? item.precio_oferta : item.precio_base) * item.quantity, 0);
 
     if (cart.length === 0) {
@@ -69,7 +115,7 @@ export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company,
                                         <div class="relative pr-9 sm:grid sm:grid-cols-2 sm:gap-x-6 sm:pr-0">
                                             <div>
                                                 <div class="flex justify-between">
-                                                    <h3 class="text-sm"><a href="#" class="font-medium text-gray-700 hover:text-gray-800">${item.nombre}</a></h3>
+                                                    <h3 class="text-sm"><a href=${`/#/catalogo/${slug}/producto/${item.id}`} onClick=${(e) => {e.preventDefault(); navigate(`/catalogo/${slug}/producto/${item.id}`)}} class="font-medium text-gray-700 hover:text-gray-800">${item.nombre}</a></h3>
                                                 </div>
                                                 <p class="mt-1 text-sm font-medium text-gray-900">${formatCurrency(displayPrice, company.moneda_simbolo)}</p>
                                             </div>
@@ -92,26 +138,64 @@ export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company,
 
                 <section aria-labelledby="summary-heading" class="mt-16 rounded-lg bg-gray-50 px-4 py-6 sm:p-6 lg:col-span-5 lg:mt-0 lg:p-8 sticky top-24">
                     <h2 id="summary-heading" class="text-lg font-medium text-gray-900">Resumen del Pedido</h2>
-                    <dl class="mt-6 space-y-4">
-                        <div class="flex items-center justify-between">
-                            <dt class="text-sm text-gray-600">Subtotal</dt>
-                            <dd class="text-sm font-medium text-gray-900">${formatCurrency(subtotal, company.moneda_simbolo)}</dd>
+                    
+                    <div class="mt-6">
+                        <h3 class="text-base font-medium text-gray-800">Método de Entrega</h3>
+                        <div class="mt-2 grid grid-cols-2 gap-2">
+                            <button onClick=${() => setDeliveryMethod('domicilio')} class=${`flex flex-col items-center justify-center p-3 rounded-md border text-sm ${deliveryMethod === 'domicilio' ? 'bg-primary-light border-primary ring-2 ring-primary' : 'bg-white'}`}>
+                                ${ICONS.suppliers} <span class="font-semibold">Envío a Domicilio</span>
+                            </button>
+                            <button onClick=${() => setDeliveryMethod('retiro')} class=${`flex flex-col items-center justify-center p-3 rounded-md border text-sm ${deliveryMethod === 'retiro' ? 'bg-primary-light border-primary ring-2 ring-primary' : 'bg-white'}`}>
+                                ${ICONS.storefront} <span class="font-semibold">Retiro en Sucursal</span>
+                            </button>
                         </div>
-                        <div class="flex items-center justify-between border-t border-gray-200 pt-4">
-                            <dt class="text-base font-medium text-gray-900">Total del Pedido</dt>
-                            <dd class="text-base font-medium text-gray-900">${formatCurrency(subtotal, company.moneda_simbolo)}</dd>
+                    </div>
+
+                    ${deliveryMethod === 'domicilio' && html`
+                        <div class="mt-6 animate-fade-in-down">
+                            <h3 class="text-base font-medium text-gray-800">Dirección de Envío</h3>
+                            ${isLoadingAddresses ? html`<div class="flex justify-center p-4"><${Spinner} color="text-primary"/></div>` :
+                                addresses.length === 0 ? html`
+                                    <div class="mt-2 text-center p-4 bg-white rounded-md border">
+                                        <p class="text-sm text-gray-600">No tienes direcciones guardadas.</p>
+                                        <button onClick=${() => setIsModalOpen(true)} class="mt-2 text-sm font-semibold text-primary hover:underline">Añadir una dirección</button>
+                                    </div>
+                                ` : html`
+                                    <div class="mt-2 space-y-2">
+                                        ${addresses.map(addr => html`
+                                            <div onClick=${() => setSelectedAddressId(addr.id)} class=${`p-3 rounded-md border cursor-pointer ${selectedAddressId === addr.id ? 'bg-blue-100 border-blue-300 ring-2 ring-blue-500' : 'bg-white'}`}>
+                                                <p class="font-semibold text-sm">${addr.nombre} ${addr.es_principal ? '(Principal)' : ''}</p>
+                                                <p class="text-xs text-gray-600">${addr.direccion_texto}</p>
+                                            </div>
+                                        `)}
+                                        <button onClick=${() => setIsModalOpen(true)} class="text-sm font-semibold text-primary hover:underline">+ Añadir otra dirección</button>
+                                    </div>
+                                `
+                            }
                         </div>
+                    `}
+                     ${deliveryMethod === 'retiro' && html`
+                        <div class="mt-6 animate-fade-in-down">
+                            <p class="text-sm text-center p-4 bg-white rounded-md border text-gray-600">La selección de sucursal para retiro se realizará al confirmar el pedido.</p>
+                        </div>
+                    `}
+
+                    <dl class="mt-6 space-y-4 border-t pt-4">
+                        <div class="flex items-center justify-between"><dt class="text-sm text-gray-600">Subtotal</dt><dd class="text-sm font-medium text-gray-900">${formatCurrency(subtotal, company.moneda_simbolo)}</dd></div>
+                        <div class="flex items-center justify-between border-t border-gray-200 pt-4"><dt class="text-base font-medium text-gray-900">Total del Pedido</dt><dd class="text-base font-medium text-gray-900">${formatCurrency(subtotal, company.moneda_simbolo)}</dd></div>
                     </dl>
                     <div class="mt-6">
-                        <button onClick=${onPlaceOrder} class="w-full rounded-md border border-transparent bg-primary px-4 py-3 text-base font-medium text-white shadow-sm hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-gray-50">
+                        <button onClick=${handleConfirmOrder} class="w-full rounded-md border border-transparent bg-primary px-4 py-3 text-base font-medium text-white shadow-sm hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-gray-50">
                             Finalizar Pedido
                         </button>
-                    </div>
-                    <div class="mt-6 text-center text-sm">
-                        <p>o <a href=${`/#/catalogo/${slug}/productos`} onClick=${(e) => { e.preventDefault(); navigate(`/catalogo/${slug}/productos`); }} class="font-medium text-primary hover:text-primary-hover">Continuar Comprando<span aria-hidden="true"> &rarr;</span></a></p>
                     </div>
                 </section>
             </div>
         </div>
+        <${DireccionFormModal} 
+            isOpen=${isModalOpen}
+            onClose=${() => setIsModalOpen(false)}
+            onSave=${() => { setIsModalOpen(false); fetchAddresses(); }}
+        />
     `;
 }

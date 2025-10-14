@@ -10,6 +10,8 @@ import { Spinner } from '../../components/Spinner.js';
 import { useToast } from '../../hooks/useToast.js';
 import { Tabs } from '../../components/Tabs.js';
 import { Avatar } from '../../components/Avatar.js';
+import { DireccionFormModal } from '../../components/modals/DireccionFormModal.js';
+import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 
 const formatCurrency = (value, currencySymbol = 'Bs') => {
     const number = Number(value || 0);
@@ -111,11 +113,117 @@ const MisDatosTab = ({ profile }) => {
 };
 
 const MisDireccionesTab = () => {
-     return html`
-        <div class="text-center py-12 rounded-lg border-2 border-dashed border-gray-200 bg-white">
-            <div class="text-5xl text-gray-400">${ICONS.storefront}</div>
-            <h3 class="mt-2 text-lg font-medium text-gray-900">No tienes direcciones guardadas</h3>
-            <p class="mt-1 text-sm text-gray-500">Próximamente podrás añadir y gestionar tus direcciones de envío aquí.</p>
+    const [addresses, setAddresses] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [addressToEdit, setAddressToEdit] = useState(null);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [addressToDelete, setAddressToDelete] = useState(null);
+    const { addToast } = useToast();
+
+    const fetchAddresses = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const { data, error } = await supabase.rpc('get_my_direcciones');
+            if (error) throw error;
+            setAddresses(data);
+        } catch (err) {
+            addToast({ message: `Error al cargar direcciones: ${err.message}`, type: 'error' });
+        } finally {
+            setIsLoading(false);
+        }
+    }, [addToast]);
+
+    useEffect(() => {
+        fetchAddresses();
+    }, [fetchAddresses]);
+
+    const handleAdd = () => {
+        setAddressToEdit(null);
+        setIsModalOpen(true);
+    };
+
+    const handleEdit = (address) => {
+        setAddressToEdit(address);
+        setIsModalOpen(true);
+    };
+
+    const handleDelete = (address) => {
+        setAddressToDelete(address);
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        try {
+            const { error } = await supabase.rpc('delete_direccion', { p_direccion_id: addressToDelete.id });
+            if (error) throw error;
+            addToast({ message: 'Dirección eliminada.', type: 'success' });
+            fetchAddresses();
+        } catch (err) {
+            addToast({ message: `Error al eliminar: ${err.message}`, type: 'error' });
+        } finally {
+            setIsDeleteModalOpen(false);
+        }
+    };
+    
+    if (isLoading) {
+        return html`<div class="flex justify-center items-center h-64"><${Spinner} color="text-primary" /></div>`;
+    }
+
+    return html`
+        <div>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-800">Mis Direcciones de Envío</h2>
+                <button onClick=${handleAdd} class="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover">${ICONS.add} Añadir</button>
+            </div>
+            ${addresses.length === 0 ? html`
+                <div class="text-center py-12 rounded-lg border-2 border-dashed border-gray-200 bg-white">
+                    <div class="text-5xl text-gray-400">${ICONS.storefront}</div>
+                    <h3 class="mt-2 text-lg font-medium text-gray-900">No tienes direcciones guardadas</h3>
+                    <p class="mt-1 text-sm text-gray-500">Añade tu primera dirección para agilizar tus futuras compras.</p>
+                </div>
+            ` : html`
+                <div class="space-y-4">
+                    ${addresses.map(addr => html`
+                        <div key=${addr.id} class="bg-white p-4 rounded-lg shadow-sm border">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <p class="font-bold text-gray-800">${addr.nombre}</p>
+                                        ${addr.es_principal && html`<span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">Principal</span>`}
+                                    </div>
+                                    <p class="text-sm text-gray-600 mt-1">${addr.direccion_texto}</p>
+                                </div>
+                                <div class="flex items-center">
+                                    <button onClick=${() => handleEdit(addr)} class="p-2 text-gray-500 hover:text-primary rounded-full hover:bg-gray-100">${ICONS.edit}</button>
+                                    <button onClick=${() => handleDelete(addr)} class="p-2 text-gray-500 hover:text-red-600 rounded-full hover:bg-gray-100">${ICONS.delete}</button>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-3 border-t">
+                                <a href=${`https://maps.google.com/?q=${addr.latitud},${addr.longitud}`} target="_blank" rel="noopener noreferrer" class="text-sm font-semibold text-primary hover:underline flex items-center gap-1">
+                                    Ver en Google Maps ${ICONS.chevron_right}
+                                </a>
+                            </div>
+                        </div>
+                    `)}
+                </div>
+            `}
+            <${DireccionFormModal} 
+                isOpen=${isModalOpen} 
+                onClose=${() => setIsModalOpen(false)} 
+                onSave=${() => { setIsModalOpen(false); fetchAddresses(); }}
+                addressToEdit=${addressToEdit}
+            />
+             <${ConfirmationModal}
+                isOpen=${isDeleteModalOpen}
+                onClose=${() => setIsDeleteModalOpen(false)}
+                onConfirm=${handleConfirmDelete}
+                title="Confirmar Eliminación"
+                confirmText="Sí, eliminar"
+                confirmVariant="danger"
+            >
+                <p class="text-sm text-gray-600">¿Estás seguro de que quieres eliminar la dirección "${addressToDelete?.nombre}"?</p>
+            <//>
         </div>
     `;
 };

@@ -23,36 +23,81 @@ Este documento es la guía de implementación definitiva para el **Catálogo Web
 -   **Ofertas Web:** Se creará automáticamente una lista de precios **"Ofertas Web"**. Si un producto tiene precio en esta lista, se mostrará como una oferta con el precio "General" tachado.
 -   **Stock Consolidado:** La disponibilidad se mostrará como un estado textual (`Disponible`, `Pocas Unidades`, `Agotado`) basado en la **suma del stock de todas las sucursales**.
 
-### Fase 3: Flujo de Acceso de Clientes (Email y Contraseña) y Portal de Cliente
+### Fase 3: Flujo de Acceso Unificado y Portal de Cliente (Implementación Inteligente)
 
-Esta fase implementa un sistema de autenticación robusto y familiar, basado en el método clásico de correo y contraseña, pero con una lógica inteligente para integrar a los clientes ya existentes en ServiVENT.
+Esta fase implementa un sistema de autenticación robusto y sin fricciones que unifica el inicio de sesión y el registro en una sola página inteligente, además de proporcionar un portal completo para el cliente una vez autenticado.
 
-1.  **Activación del Flujo:** El cliente inicia el proceso haciendo clic en "Identifícate" o "Crear Cuenta", lo que le dirigirá a las nuevas páginas de `login` y `registro` del catálogo.
+1.  **Página de Identificación Unificada (`ClienteIdentificacionPage.tsx`):**
+    *   **Punto de Entrada Único:** Tanto "Login" como "Registro" dirigen a la misma página, que inicialmente solo muestra un campo: "Ingresa tu correo electrónico para continuar".
+    *   **Verificación Inteligente en Tiempo Real:** Mientras el usuario escribe su correo, el sistema invoca la función `validate_client_email_status` en el backend, que devuelve uno de tres estados:
+        *   **`exists_linked`:** El correo ya tiene una cuenta web activa. La interfaz se transforma en un formulario de **inicio de sesión**, mostrando únicamente el campo de "Contraseña".
+        *   **`exists_unlinked`:** El correo pertenece a un cliente registrado en ServiVENT pero sin cuenta web. La interfaz muestra un mensaje de bienvenida personalizado (ej. "¡Hola de nuevo, Juan!") y le pide **crear una contraseña para activar su cuenta**.
+        *   **`new`:** El correo es completamente nuevo. La interfaz se expande para mostrar un formulario de **registro completo** con campos para "Nombre Completo", "Teléfono" y "Contraseña".
+    *   **Vinculación por Número de Teléfono:** En el flujo de registro `new`, mientras el usuario introduce su número de teléfono, el sistema realiza una segunda verificación en tiempo real con `find_client_by_phone`.
+        *   Si se encuentra un perfil de cliente existente (sin cuenta web) asociado a ese número, la interfaz cambia y pregunta: "¿Deseas vincular este nuevo correo a tu perfil existente a nombre de [Nombre del Cliente]?".
+        *   Si el cliente confirma, el proceso de registro no crea un cliente duplicado, sino que **actualiza el perfil existente** con el nuevo correo y lo vincula a la nueva cuenta de autenticación.
 
-2.  **Página de Registro (`/registro`):**
-    *   El cliente introduce su correo electrónico.
-    *   **Verificación Inteligente en Backend:** El sistema comprueba el estado del correo:
-        *   **Cliente Nuevo:** Si el correo no existe, se muestran los campos para "Nombre Completo", "telefono" y "Contraseña". Al enviar, se llama a `supabase.auth.signUp()`. Un trigger en la base de datos creará automáticamente el perfil correspondiente en la tabla `public.clientes`.
-        *   **Cliente Existente de ServiVENT:** Si el correo ya existe en `public.clientes` pero nunca ha accedido al catálogo web (no tiene cuenta en `auth.users`), la interfaz mostrará un mensaje de bienvenida (ej. "¡Hola de nuevo, Juan!") y solicitará **únicamente la creación de una contraseña** para activar su cuenta web. Al enviar, una Edge Function se encargará de crear el usuario en `auth.users` y vincularlo de forma segura al perfil de cliente ya existente.
-    *   El cliente inicia sesión automáticamente tras el registro/activación.
+2.  **Lógica de Backend:**
+    *   **`link-existing-client` (Edge Function):** Gestiona la activación de cuentas para clientes ya existentes, creando el usuario en `auth.users` y vinculándolo al `cliente_id` correspondiente.
+    *   **`create_client_profile_for_new_user` (Trigger):** Orquesta la creación y vinculación de perfiles. Fue mejorado para manejar el `existingClientId` (pasado desde el frontend en caso de vinculación por teléfono) y para **insertar manualmente una notificación** cuando se realiza una vinculación, ya que esta operación es un `UPDATE` y no dispara el trigger de `INSERT`.
 
-3.  **Página de Inicio de Sesión (`/login`):**
-    *   Un formulario estándar de "Correo Electrónico" y "Contraseña".
-    *   Al enviar, se llama a `supabase.auth.signInWithPassword()`.
+3.  **Portal de Cliente (`CuentaClientePage.tsx`):**
+    *   Una vez autenticado (sea por login, registro o activación), el cliente puede acceder a su portal personal (`/cuenta`).
+    *   Esta página protegida contiene pestañas para:
+        *   **"Mis Pedidos":** Historial de compras con acceso al detalle de cada una (`ClientePedidoDetailPage.tsx`).
+        *   **"Mis Datos":** Para ver su información de perfil.
+        *   **"Mis Direcciones":** Donde podrá gestionar sus direcciones de envío.
 
-4.  **Gestión de Sesión Segura:**
-    *   Tras un inicio de sesión o registro exitoso, Supabase genera un JWT (JSON Web Token) que mantiene la sesión del cliente segura y activa mientras navega por el catálogo.
+4.  **Seguridad y Sesión:**
+    *   El sistema utiliza JWT para la gestión de sesiones.
+    *   Las políticas RLS garantizan que un cliente solo pueda ver y gestionar sus propios datos (perfil y pedidos).
 
-5.  **Portal de Cliente (`CuentaClientePage.tsx`):**
-    *   Una vez autenticado, el cliente puede acceder a su portal personal (`/cuenta`).
-    *   Esta página protegida contendrá pestañas para:
-        *   **"Mis Pedidos":** Historial de compras y estado de los pedidos.
-        *   **"Mis Datos":** Para actualizar su información de perfil.
-        *   **"Mis Direcciones":** Para gestionar direcciones de envío (funcionalidad futura).
+### Fase 4: Gestión de Direcciones de Cliente con Mapas
 
-6.  **Seguridad:** Nuevas políticas RLS garantizarán que un cliente autenticado pueda acceder y modificar **únicamente sus propios datos**, manteniendo la privacidad y la integridad de la información.
+Esta fase mejorará drásticamente la experiencia del cliente y la logística de la empresa al permitir a los clientes guardar y gestionar múltiples direcciones de envío con ubicaciones precisas en un mapa.
 
-### Fase 4: Logística de Entrega y Despacho (Flujo Unificado)
+#### 4.1. Backend (Base de Datos)
+
+-   **Nueva Tabla `direcciones_clientes`:**
+    -   `id` (uuid, PK), `cliente_id` (uuid, FK a `clientes`), `empresa_id` (uuid, FK a `empresas`).
+    -   `nombre` (text): Etiqueta amigable, ej. "Hogar", "Oficina".
+    -   `direccion_texto` (text): Detalles adicionales, ej. "Edificio Azul, Apto 5B".
+    -   `latitud` (numeric), `longitud` (numeric): Coordenadas para el mapa.
+    -   `es_principal` (boolean): `true` si es la dirección por defecto.
+-   **Seguridad RLS:** Políticas para asegurar que un cliente solo pueda acceder y gestionar sus propias direcciones.
+-   **Funciones RPC:**
+    -   `get_my_direcciones()`: Devuelve todas las direcciones del cliente autenticado.
+    -   `upsert_direccion(...)`: Crea o actualiza una dirección, gestionando el flag `es_principal` para asegurar que solo una pueda serlo.
+    -   `delete_direccion(p_direccion_id)`: Elimina una dirección de forma segura.
+
+#### 4.2. Frontend (Portal de Cliente - "Mis Direcciones")
+
+-   **Actualización de `CuentaClientePage.tsx`:**
+    -   **Vista Vacía:** Mensaje "Añadir mi primera dirección".
+    -   **Lista de Direcciones:** Tarjetas mostrando nombre, detalles y un indicador de "Principal".
+    -   **Acciones por Tarjeta:** "Editar", "Eliminar" y un botón destacado **"Ver en Google Maps"** que abrirá `https://maps.google.com/?q=<latitud>,<longitud>`.
+    -   **Botón "Añadir Dirección"**: Abrirá el modal de creación/edición.
+
+#### 4.3. Frontend (Modal Interactivo con Mapa - `DireccionFormModal.tsx`)
+
+-   **Integración con Google Maps API:** Utilizará las APIs "Maps JavaScript API" y "Places API".
+-   **Formulario:** Campos para "Nombre del Lugar", "Detalles" y "Es Principal".
+-   **Mapa Interactivo:**
+    -   Un mapa de Google con una barra de búsqueda de direcciones (usando Places API).
+    -   Un marcador (pin) en el centro que el usuario puede posicionar arrastrando el mapa.
+    -   La posición del pin actualizará los campos `latitud` y `longitud` del formulario en tiempo real.
+    -   el mapa mostrar la ubicacion actual del cliente.
+
+#### 4.4. Integración en el Flujo de Compra
+
+-   **Modificación Tabla `ventas`:** Se añadirá una columna `direccion_entrega_id` (uuid, nullable).
+-   **Actualización del Checkout:**
+    -   Al elegir "Envío a Domicilio", se mostrará la lista de direcciones guardadas en lugar de un campo de texto.
+    -   Habrá una opción para "Añadir otra dirección", que abrirá el `DireccionFormModal`.
+    -   Al confirmar el pedido, se guardará el `id` de la dirección seleccionada.
+-   **Visibilidad para la Empresa:** En `VentaDetailPage.tsx`, el personal verá los detalles de la dirección de entrega, incluyendo un enlace a Google Maps para facilitar la logística.
+
+### Fase 5: Logística de Entrega y Despacho (Flujo Unificado)
 
 Este paso ocurre durante el checkout, después de que el cliente ya ha iniciado sesión.
 
@@ -68,13 +113,13 @@ Este paso ocurre durante el checkout, después de que el cliente ya ha iniciado 
     -   **Selección de Dirección:** Se le muestra al cliente su lista de direcciones guardadas (gestionadas desde el Portal de Cliente) para que seleccione una. El `id` de la dirección se guardará en la `venta`.
     -   **Selección de Sucursal de Despacho (Lógica Crítica):** Se le pide al cliente que seleccione de qué sucursal se deben despachar los productos. Esto es fundamental para saber de qué inventario descontar el stock.
 
-### Fase 5: Gestión de Ubicaciones con Mapas
+### Fase 6: Gestión de Ubicaciones con Mapas
 
 -   **Backend:** Se añadirán columnas `latitud` y `longitud` a la tabla `sucursales`.
 -   **UI (Propietario):** El modal `SucursalFormModal` incluirá un mapa interactivo para que el propietario establezca la ubicación exacta de sus sucursales.
 -   **UI (Público):** El modal "Nuestra Empresa" usará estas coordenadas para mostrar un mapa por cada sucursal.
 
-### Fase 6: Procesamiento de Pedidos (Interfaz de Empresa)
+### Fase 7: Procesamiento de Pedidos (Interfaz de Empresa)
 
 Este es el flujo que sigue el personal de la empresa después de que un cliente realiza un pedido desde el catálogo web.
 
@@ -88,6 +133,6 @@ Este es el flujo que sigue el personal de la empresa después de que un cliente 
     -   **Si el stock es correcto:** El personal usará un botón para **"Confirmar y Despachar"**. Esta acción cambiará el estado de la venta (ej. a "Pagada" o "En Preparación") y **finalmente descontará el stock** del inventario.
     -   **Si hay inconsistencias de stock:** Se mostrarán alertas visuales. El personal podrá contactar al cliente o ajustar el pedido.
 
-### Fase 7: Notificaciones y Aislamiento
+### Fase 8: Notificaciones y Aislamiento
 
 -   **Aislamiento de Pedidos:** Gracias a las políticas RLS, solo los usuarios de la sucursal de destino (para "Retiro") o de la sucursal de despacho (para "Envío") verán el pedido y la notificación correspondiente. El Propietario tendrá visibilidad total.

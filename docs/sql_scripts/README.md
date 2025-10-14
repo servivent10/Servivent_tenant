@@ -63,6 +63,7 @@ Esta carpeta contiene todos los scripts SQL para configurar y mantener la base d
 | `50_FEATURE_web_client_indicator.md`| Clientes / Catálogo Web | `[ACTIVO]` | Próximamente | Añade un indicador para clientes con cuenta web y elimina el `codigo_cliente`. |
 | `51_FEATURE_CUSTOMER_PHONE_LINKING.md`| Catálogo Web | `[ACTIVO]` | Próximamente | Implementa la vinculación de cuentas por teléfono en el registro. |
 | `52_FIX_phone_linking_notification.md`| Catálogo Web | `[ACTIVO]` | Próximamente | Corrige la falta de notificación al vincular una cuenta por teléfono. |
+| `53_FEATURE_customer_addresses.md`| Catálogo Web | `[ACTIVO]` | Próximamente | Implementa el módulo completo de gestión de direcciones de cliente con mapas. |
 | `FIX_remove_registration_trigger.md`| Core | `[REPARACIÓN]` | N/A | Elimina un trigger obsoleto del proceso de registro. Recomendado ejecutar siempre en proyectos nuevos. |
 | `FIX_assign_owners_to_branch.md`| Sucursales y Usuarios | `[REPARACIÓN]` | N/A | Corrige perfiles de Propietarios que no están asignados a una sucursal. |
 | `FIX_link_owner_to_company.md`| Core | `[REPARACIÓN]` | N/A | Repara la vinculación entre un usuario Propietario y su empresa en casos de registro fallidos. |
