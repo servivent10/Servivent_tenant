@@ -185,7 +185,8 @@ BEGIN
             mensaje,
             tipo_evento,
             entidad_id,
-            sucursales_destino_ids
+            sucursales_destino_ids,
+            created_at
         ) VALUES (
             NEW.empresa_id,
             NULL, -- No specific user, it's a system event
@@ -193,7 +194,8 @@ BEGIN
             'Un cliente nuevo <b>' || NEW.nombre || '</b> (' || NEW.telefono || ') se registró desde el catálogo web.',
             'NUEVO_CLIENTE',
             NEW.id, -- The ID of the new client record
-            NULL -- Global notification for the owner/admins
+            NULL, -- Global notification for the owner/admins
+            now()
         );
     END IF;
     RETURN NEW;

@@ -16,6 +16,7 @@ import { ProveedorFormModal } from '../../components/modals/ProveedorFormModal.j
 import { ProductFormModal } from '../../components/modals/ProductFormModal.js';
 import { Tabs } from '../../components/Tabs.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
+import { useNuevaCompra } from '../../contexts/StatePersistence.js';
 
 
 const SearchableSelect = ({ label, name, placeholder, options, value, onChange, onAddNew, showAddNew = true, required = true }) => {
@@ -94,6 +95,145 @@ const SearchableSelect = ({ label, name, placeholder, options, value, onChange, 
 
 
 // --- NEW PURCHASE WIZARD PAGE COMPONENTS ---
+// FIX: Define Step1 component for the purchase wizard.
+function Step1({ formData, handleInput, setFormData, proveedores, setIsProveedorFormOpen }) {
+  return html`
+    <div class="max-w-xl mx-auto space-y-6 animate-fade-in-down">
+      <h3 class="text-lg font-semibold text-gray-900">1. Información de la Compra</h3>
+      <${SearchableSelect}
+        label="Proveedor"
+        name="proveedor_id"
+        placeholder="Buscar proveedor..."
+        options=${proveedores}
+        value=${formData.proveedor_id}
+        onChange=${(id, name) => setFormData(prev => ({ ...prev, proveedor_id: id, proveedor_nombre: name }))}
+        onAddNew=${() => setIsProveedorFormOpen(true)}
+      />
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <${FormInput} label="N° Factura/Nota" name="n_factura" type="text" value=${formData.n_factura} onInput=${handleInput} required=${false} />
+        <${FormInput} label="Fecha de Compra" name="fecha" type="datetime-local" value=${formData.fecha} onInput=${handleInput} />
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+              <label for="moneda" class="block text-sm font-medium text-gray-900">Moneda</label>
+              <select id="moneda" name="moneda" value=${formData.moneda} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
+                  <option value="BOB">BOB (Boliviano)</option>
+                  <option value="USD">USD (Dólar Americano)</option>
+              </select>
+          </div>
+          ${formData.moneda === 'USD' && html`
+              <${FormInput} label="Tasa de Cambio (a BOB)" name="tasa_cambio" type="number" value=${formData.tasa_cambio} onInput=${handleInput} />
+          `}
+      </div>
+    </div>
+  `;
+}
+
+// FIX: Define Step2 component for the purchase wizard.
+function Step2({ formData, handleEditItem, handleRemoveItem, total, productos, handleProductSelected, setIsProductFormOpen, addedProductIds }) {
+    const [searchTerm, setSearchTerm] = useState('');
+    const availableProducts = useMemo(() => {
+        const lowerCaseSearch = searchTerm.toLowerCase();
+        return productos
+            .filter(p => !addedProductIds.has(p.id))
+            .filter(p => p.nombre.toLowerCase().includes(lowerCaseSearch) || (p.modelo && p.modelo.toLowerCase().includes(lowerCaseSearch)));
+    }, [productos, addedProductIds, searchTerm]);
+
+    return html`
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in-down">
+            <div>
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-semibold text-gray-900">2. Productos a Comprar</h3>
+                    <button onClick=${() => setIsProductFormOpen(true)} class="text-sm font-medium text-primary hover:underline flex items-center gap-1">${ICONS.add} Producto Nuevo</button>
+                </div>
+                <div class="mt-4 p-4 bg-gray-50 rounded-lg border max-h-[25rem] overflow-y-auto">
+                    ${formData.items.length === 0 ? html`<p class="text-center text-gray-500 py-10">Añade productos del catálogo.</p>` :
+                    html`<ul class="divide-y divide-gray-200">
+                        ${formData.items.map((item, index) => html`
+                            <li key=${item.producto_id} class="py-3 flex items-center gap-3">
+                                <img src=${item.imagen_principal || NO_IMAGE_ICON_URL} class="h-12 w-12 rounded-md object-cover flex-shrink-0 bg-white" />
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-medium text-gray-800 truncate">${item.producto_nombre}</p>
+                                    <p class="text-sm text-gray-500">${item.cantidad} x ${formData.moneda === 'BOB' ? 'Bs' : '$'} ${Number(item.costo_unitario).toFixed(2)} = ${formData.moneda === 'BOB' ? 'Bs' : '$'} ${(item.cantidad * item.costo_unitario).toFixed(2)}</p>
+                                </div>
+                                <div class="flex-shrink-0 flex items-center gap-1">
+                                    <button onClick=${() => handleEditItem(item)} class="p-2 text-gray-400 hover:text-primary rounded-full">${ICONS.edit}</button>
+                                    <button onClick=${() => handleRemoveItem(index)} class="p-2 text-gray-400 hover:text-red-600 rounded-full">${ICONS.delete}</button>
+                                </div>
+                            </li>
+                        `)}
+                    </ul>`}
+                </div>
+                <div class="mt-4 text-right">
+                    <span class="text-gray-600">Total: </span>
+                    <span class="font-bold text-xl text-primary">${formData.moneda === 'BOB' ? 'Bs' : '$'} ${total.toFixed(2)}</span>
+                </div>
+            </div>
+             <div>
+                <h3 class="text-lg font-semibold text-gray-900">Catálogo de Productos</h3>
+                <div class="mt-4"><input type="text" value=${searchTerm} onInput=${e => setSearchTerm(e.target.value)} placeholder="Buscar producto..." class="block w-full rounded-md border border-gray-300 p-2 bg-white text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm" /></div>
+                <div class="mt-2 p-2 bg-gray-50 border rounded-lg max-h-[25rem] overflow-y-auto">
+                    <ul class="divide-y divide-gray-200">
+                        ${availableProducts.map(p => html`
+                            <li onClick=${() => handleProductSelected(p)} class="p-3 flex items-center gap-3 cursor-pointer hover:bg-slate-100 rounded-md">
+                                <img src=${p.imagen_principal || NO_IMAGE_ICON_URL} class="h-10 w-10 rounded-md object-cover flex-shrink-0 bg-white" />
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-medium text-gray-800 truncate">${p.nombre}</p>
+                                    <p class="text-xs text-gray-500 truncate" title=${p.modelo || ''}>${p.modelo || 'Sin modelo'}</p>
+                                    <p class="text-xs text-gray-500">Stock actual: <span class="font-bold text-emerald-600">${p.stock_total || 0}</span></p>
+                                </div>
+                                <div class="text-primary">${ICONS.add_circle}</div>
+                            </li>
+                        `)}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// FIX: Define Step3 component for the purchase wizard.
+function Step3({ formData, handleInput, total }) {
+  return html`
+    <div class="max-w-xl mx-auto space-y-6 animate-fade-in-down">
+        <h3 class="text-lg font-semibold text-gray-900">3. Detalles de Pago</h3>
+        <div class="p-4 bg-slate-50 border rounded-lg text-center">
+            <p class="text-sm text-gray-600">Total de la Compra</p>
+            <p class="text-4xl font-bold text-primary">${formData.moneda === 'BOB' ? 'Bs' : '$'} ${total.toFixed(2)}</p>
+        </div>
+        
+        <div>
+            <label class="block text-sm font-medium text-gray-900">Tipo de Pago</label>
+            <div class="mt-1 flex rounded-md shadow-sm">
+                <button type="button" onClick=${() => handleInput({ target: { name: 'tipo_pago', value: 'Contado' }})} class="relative inline-flex items-center space-x-2 rounded-l-md px-4 py-2 text-sm font-medium ${formData.tipo_pago === 'Contado' ? 'bg-primary text-white' : 'bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'}">
+                    Contado
+                </button>
+                <button type="button" onClick=${() => handleInput({ target: { name: 'tipo_pago', value: 'Crédito' }})} class="relative -ml-px inline-flex items-center space-x-2 rounded-r-md px-4 py-2 text-sm font-medium ${formData.tipo_pago === 'Crédito' ? 'bg-primary text-white' : 'bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'}">
+                    Crédito
+                </button>
+            </div>
+        </div>
+
+        ${formData.tipo_pago === 'Crédito' && html`
+            <div class="space-y-4 p-4 border rounded-lg animate-fade-in-down">
+                <${FormInput} label="Fecha de Vencimiento" name="fecha_vencimiento" type="date" value=${formData.fecha_vencimiento} onInput=${handleInput} required=${true} />
+                <div class="grid grid-cols-2 gap-4">
+                    <${FormInput} label="Abono Inicial (Opcional)" name="abono_inicial" type="number" value=${formData.abono_inicial} onInput=${handleInput} required=${false} />
+                    <div>
+                        <label for="metodo_abono_inicial" class="block text-sm font-medium text-gray-900">Método de Abono</label>
+                        <select id="metodo_abono_inicial" name="metodo_abono_inicial" value=${formData.metodo_abono_inicial} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
+                            <option>Efectivo</option>
+                            <option>QR</option>
+                            <option>Transferencia Bancaria</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `}
+    </div>
+  `;
+}
+
 
 function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exchangeRate, user, addToast }) {
     if (!isOpen || !item) return null;
@@ -396,167 +536,7 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
     `;
 }
 
-function Step1({ formData, handleInput, setFormData, proveedores, setIsProveedorFormOpen }) {
-    const handleProveedorChange = (id, nombre) => {
-        setFormData(prev => ({ ...prev, proveedor_id: id, proveedor_nombre: nombre }));
-    };
-    
-    return html`
-        <div class="max-w-xl mx-auto space-y-6 animate-fade-in-down">
-            <h3 class="text-lg font-semibold text-gray-900">1. Información General de la Compra</h3>
-            
-            <${SearchableSelect}
-                label="Proveedor"
-                name="proveedor_id"
-                placeholder="-- Selecciona o busca un proveedor --"
-                options=${proveedores.map(p => ({ id: p.id, nombre: p.nombre }))}
-                value=${formData.proveedor_id}
-                onChange=${handleProveedorChange}
-                onAddNew=${() => setIsProveedorFormOpen(true)}
-            />
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <${FormInput} label="Fecha y Hora de Compra" name="fecha" type="datetime-local" value=${formData.fecha} onInput=${handleInput} />
-                <${FormInput} label="N° Factura o Nota (Opcional)" name="n_factura" type="text" value=${formData.n_factura} onInput=${handleInput} required=${false} />
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 <${SearchableSelect}
-                    label="Moneda"
-                    name="moneda"
-                    placeholder="Selecciona una moneda"
-                    options=${[
-                        { id: 'BOB', nombre: 'Bolivianos (BOB)' },
-                        { id: 'USD', nombre: 'Dólares (USD)' }
-                    ]}
-                    value=${formData.moneda}
-                    onChange=${(id) => handleInput({ target: { name: 'moneda', value: id } })}
-                    showAddNew=${false}
-                />
-                ${formData.moneda === 'USD' && html`
-                    <div class="animate-fade-in-down">
-                        <${FormInput} label="Tasa de Cambio a BOB" name="tasa_cambio" type="number" value=${formData.tasa_cambio} onInput=${handleInput} />
-                    </div>
-                `}
-            </div>
-        </div>
-    `;
-}
-
-function Step2({ formData, handleEditItem, handleRemoveItem, total, productos, handleProductSelected, handleAddedProductClick, setIsProductFormOpen, addedProductIds }) {
-    const [searchTerm, setSearchTerm] = useState('');
-    const availableProducts = useMemo(() => {
-        const lowerCaseSearchTerm = searchTerm.toLowerCase();
-        return productos
-            .filter(p => 
-                !addedProductIds.has(p.id) && (
-                    p.nombre.toLowerCase().includes(lowerCaseSearchTerm) ||
-                    (p.modelo && p.modelo.toLowerCase().includes(lowerCaseSearchTerm)) ||
-                    (p.sku && p.sku.toLowerCase().includes(lowerCaseSearchTerm))
-                )
-            )
-            .sort((a, b) => a.nombre.localeCompare(b.nombre));
-    }, [productos, addedProductIds, searchTerm]);
-
-    return html`
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in-down">
-            <div>
-                <h3 class="text-lg font-semibold text-gray-900">2. Productos en la Compra</h3>
-                <div class="mt-4 p-4 bg-gray-50 rounded-lg border max-h-[25rem] overflow-y-auto">
-                    ${formData.items.length === 0 ? html`
-                        <p class="text-center text-gray-500 py-10">Añade productos desde el catálogo de la derecha.</p>
-                    ` : html`
-                        <ul class="divide-y divide-gray-200">
-                            ${formData.items.map((item, index) => html`
-                                <li key=${item.producto_id} class="py-3 flex items-center justify-between gap-2">
-                                    <div class="flex-1 min-w-0 cursor-pointer group" onClick=${() => handleAddedProductClick(item.producto_id)}>
-                                        <p class="font-medium text-gray-800 group-hover:text-primary truncate">${item.producto_nombre}</p>
-                                        <p class="text-sm text-gray-500">${item.cantidad} x ${Number(item.costo_unitario).toFixed(2)} ${formData.moneda} = ${(item.cantidad * item.costo_unitario).toFixed(2)} ${formData.moneda}</p>
-                                    </div>
-                                    <div class="flex-shrink-0">
-                                        <button onClick=${(e) => { e.stopPropagation(); handleRemoveItem(index); }} class="p-2 text-gray-400 hover:text-red-600 rounded-full">${ICONS.delete}</button>
-                                    </div>
-                                </li>
-                            `)}
-                        </ul>
-                    `}
-                </div>
-                <div class="mt-4 text-right">
-                    <p class="text-sm text-gray-500">Total Parcial</p>
-                    <p class="text-2xl font-bold text-primary">${total.toFixed(2)} ${formData.moneda}</p>
-                </div>
-            </div>
-            <div>
-                <h3 class="text-lg font-semibold text-gray-900">Catálogo de Productos</h3>
-                <div class="mt-4">
-                    <${FormInput}
-                        label=""
-                        name="productSearch"
-                        type="text"
-                        placeholder="Buscar por nombre, modelo o SKU..."
-                        value=${searchTerm}
-                        onInput=${e => setSearchTerm(e.target.value)}
-                        icon=${ICONS.search}
-                        required=${false}
-                    />
-                </div>
-                <div class="mt-2 p-2 bg-gray-50 border rounded-lg max-h-[25rem] overflow-y-auto">
-                    <ul class="divide-y divide-gray-200">
-                        <li onClick=${() => setIsProductFormOpen(true)} class="p-3 flex items-center gap-3 cursor-pointer hover:bg-slate-100 rounded-md text-primary font-semibold">
-                            ${ICONS.add}
-                            <span>Crear nuevo producto</span>
-                        </li>
-                        ${availableProducts.map(p => html`
-                            <li key=${p.id} onClick=${() => handleProductSelected(p)} class="p-3 flex items-center gap-3 cursor-pointer hover:bg-slate-100 rounded-md">
-                                <img src=${p.imagen_principal || NO_IMAGE_ICON_URL} class="h-10 w-10 rounded-md object-cover flex-shrink-0 bg-white" />
-                                <div class="flex-1 min-w-0">
-                                    <p class="font-medium text-gray-800 truncate">${p.nombre}</p>
-                                    <p class="text-xs text-gray-500">Stock total actual: ${p.stock_total}</p>
-                                </div>
-                            </li>
-                        `)}
-                    </ul>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-function Step3({ formData, handleInput, total }) {
-    return html`
-        <div class="max-w-xl mx-auto space-y-6 animate-fade-in-down">
-            <h3 class="text-lg font-semibold text-gray-900">3. Detalles del Pago</h3>
-            <div class="text-center bg-slate-50 p-4 rounded-lg border">
-                <p class="text-sm text-gray-600">Total a Pagar</p>
-                <p class="text-4xl font-bold text-primary">${total.toFixed(2)} <span class="text-lg">${formData.moneda}</span></p>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Tipo de Pago</label>
-                <div class="mt-1 flex rounded-md shadow-sm">
-                    <button type="button" onClick=${() => handleInput({ target: { name: 'tipo_pago', value: 'Contado' } })} class=${`relative inline-flex items-center justify-center w-1/2 rounded-l-md px-3 py-2 text-sm font-semibold ${formData.tipo_pago === 'Contado' ? 'bg-primary text-white' : 'bg-white text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'}`}>Contado</button>
-                    <button type="button" onClick=${() => handleInput({ target: { name: 'tipo_pago', value: 'Crédito' } })} class=${`-ml-px relative inline-flex items-center justify-center w-1/2 rounded-r-md px-3 py-2 text-sm font-semibold ${formData.tipo_pago === 'Crédito' ? 'bg-primary text-white' : 'bg-white text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'}`}>Crédito</button>
-                </div>
-            </div>
-            ${formData.tipo_pago === 'Crédito' && html`
-                <div class="p-4 border rounded-lg space-y-4 animate-fade-in-down">
-                    <${FormInput} label="Fecha de Vencimiento" name="fecha_vencimiento" type="date" value=${formData.fecha_vencimiento || ''} onInput=${handleInput} />
-                    <${FormInput} label="Abono Inicial (${formData.moneda})" name="abono_inicial" type="number" value=${formData.abono_inicial} onInput=${handleInput} required=${false} />
-                    ${Number(formData.abono_inicial) > 0 && html`
-                        <div class="animate-fade-in-down">
-                            <label for="metodo_abono_inicial" class="block text-sm font-medium text-gray-700">Método del Abono</label>
-                            <select id="metodo_abono_inicial" name="metodo_abono_inicial" value=${formData.metodo_abono_inicial} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm">
-                                <option>Efectivo</option>
-                                <option>QR</option>
-                                <option>Transferencia Bancaria</option>
-                            </select>
-                        </div>
-                    `}
-                </div>
-            `}
-        </div>
-    `;
-}
-
-export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
+export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, navigate }) {
     const { addToast } = useToast();
     const [step, setStep] = useState(1);
     const [proveedores, setProveedores] = useState([]);
@@ -566,20 +546,15 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
     const [isProductFormOpen, setIsProductFormOpen] = useState(false);
     const [itemDetail, setItemDetail] = useState(null);
 
-    const [formData, setFormData] = useState({
-        proveedor_id: '',
-        proveedor_nombre: '',
-        sucursal_id: user.sucursal_id,
-        fecha: new Date().toISOString(),
-        n_factura: '',
-        moneda: 'BOB',
-        tasa_cambio: '6.96',
-        items: [],
-        tipo_pago: 'Contado',
-        fecha_vencimiento: '',
-        abono_inicial: '0',
-        metodo_abono_inicial: 'Efectivo',
-    });
+    const { formData, setFormData } = useNuevaCompra();
+    
+    // Effect to initialize sucursal_id from user prop if it's not set in the context
+    useEffect(() => {
+        if (user && user.sucursal_id && !formData.sucursal_id) {
+            setFormData(prev => ({ ...prev, sucursal_id: user.sucursal_id }));
+        }
+    }, [user, formData.sucursal_id, setFormData]);
+
 
     const fetchInitialData = async () => {
         try {
@@ -736,6 +711,13 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
             if (compraError) throw compraError;
 
             addToast({ message: 'Compra registrada con éxito.', type: 'success' });
+            // Clear form data from context after successful save
+            setFormData({
+                proveedor_id: '', proveedor_nombre: '', sucursal_id: user.sucursal_id,
+                fecha: new Date().toISOString(), n_factura: '', moneda: 'BOB',
+                tasa_cambio: '6.96', items: [], tipo_pago: 'Contado',
+                fecha_vencimiento: '', abono_inicial: '0', metodo_abono_inicial: 'Efectivo',
+            });
             navigate('/compras');
         } catch(err) {
             addToast({ message: `Error al registrar la compra: ${err.message}`, type: 'error' });
@@ -763,7 +745,6 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
             activeLink="Compras"
             breadcrumbs=${breadcrumbs}
             companyInfo=${companyInfo}
-            notifications=${notifications}
         >
             <div class="flex items-center gap-4 mb-6">
                 <button onClick=${() => navigate('/compras')} class="p-2 rounded-full hover:bg-gray-100" aria-label="Volver a Compras">
@@ -790,7 +771,7 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
                 <div class="min-h-[30rem]">
                     ${step === 1 && html`<${Step1} formData=${formData} handleInput=${handleInput} setFormData=${setFormData} proveedores=${proveedores} setIsProveedorFormOpen=${setIsProveedorFormOpen} />`}
                     ${step === 2 && html`<${Step2} formData=${formData} handleEditItem=${handleEditItem} handleRemoveItem=${handleRemoveItem} total=${total} productos=${productos} handleProductSelected=${handleProductSelected} handleAddedProductClick=${handleAddedProductClick} setIsProductFormOpen=${setIsProductFormOpen} addedProductIds=${addedProductIds} />`}
-                    ${step === 3 && html`<${Step3} formData=${formData} handleInput=${handleInput} setFormData=${setFormData} total=${total} />`}
+                    ${step === 3 && html`<${Step3} formData=${formData} handleInput=${handleInput} total=${total} />`}
                 </div>
             </div>
 

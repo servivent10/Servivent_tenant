@@ -21,6 +21,7 @@ import { CameraScanner } from '../../components/CameraScanner.js';
 import { AperturaCajaModal } from '../../components/modals/AperturaCajaModal.js';
 import { CierreCajaModal } from '../../components/modals/CierreCajaModal.js';
 import { Spinner } from '../../components/Spinner.js';
+import { useTerminalVenta } from '../../contexts/StatePersistence.js';
 
 const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -477,7 +478,9 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
     `;
 };
 
-function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, taxRate, setTaxRate, discountValue, onDiscountChange, onFinalizeSale, onOpenPricePopover, customPrices, defaultPriceListId, isPriceRuleActive, selectedClientId, setSelectedClientId, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user }) {
+function CartPanel({ posData, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, onDiscountChange, onFinalizeSale, onOpenPricePopover, isPriceRuleActive, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user,
+    cart, customPrices, selectedClientId, setSelectedClientId, activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue
+}) {
     const activePriceListName = useMemo(() => {
         return posData.price_lists.find(pl => pl.id === activePriceListId)?.nombre || '';
     }, [activePriceListId, posData.price_lists]);
@@ -544,7 +547,7 @@ function CartPanel({ cart, posData, activePriceListId, setActivePriceListId, han
                 let priceSource = 'default';
                 const activePriceInfo = product.prices?.[activePriceListId];
 
-                if (activePriceListId !== defaultPriceListId && isPriceRuleActive(activePriceInfo)) {
+                if (activePriceListId !== posData.price_lists.find(pl => pl.es_predeterminada)?.id && isPriceRuleActive(activePriceInfo)) {
                     priceSource = 'specific';
                 }
 
@@ -650,41 +653,33 @@ const posStatusOptions = [
     { value: 'new_arrival', label: 'Nuevos Productos' },
 ];
 
-export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo, notifications, navigate }) {
+export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo, navigate }) {
     const breadcrumbs = [ { name: 'Punto de Venta', href: '#/terminal-venta' } ];
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
     
+    // State from Context
+    const {
+        cart, setCart, customPrices, setCustomPrices, selectedClientId, setSelectedClientId,
+        activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue, setDiscountValue
+    } = useTerminalVenta();
+
+    // Local UI State
     const [posData, setPosData] = useState({ products: [], price_lists: [], clients: [] });
-    const [cart, setCart] = useState([]);
     const [filters, setFilters] = useState(initialFilters);
     const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
     const [filterOptions, setFilterOptions] = useState({ categories: [], brands: [] });
-    
-    const [defaultPriceListId, setDefaultPriceListId] = useState(null);
-    const [activePriceListId, setActivePriceListId] = useState(null);
-    
     const [isDetailModalOpen, setDetailModalOpen] = useState(false);
     const [productForDetailView, setProductForDetailView] = useState(null);
-
     const [isCartSidebarOpen, setCartSidebarOpen] = useState(false);
-
-    const [taxRate, setTaxRate] = useState('');
-    const [discountValue, setDiscountValue] = useState('');
-    
-    const [customPrices, setCustomPrices] = useState<{ [key: string]: { newPrice: number } }>({});
     const [pricePopover, setPricePopover] = useState({ isOpen: false, item: null, target: null });
-    
     const [isClienteFormOpen, setIsClienteFormOpen] = useState(false);
     const [clienteToEdit, setClienteToEdit] = useState(null);
-    const [selectedClientId, setSelectedClientId] = useState(null);
-
     const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
     const [skuInput, setSkuInput] = useState('');
     const [isScannerOpen, setIsScannerOpen] = useState(false);
-
     const [activeSession, setActiveSession] = useState(null);
-    const [sessionState, setSessionState] = useState('checking'); // 'checking', 'open', 'closed'
+    const [sessionState, setSessionState] = useState('checking');
     const [isCierreModalOpen, setIsCierreModalOpen] = useState(false);
     const [sessionSummary, setSessionSummary] = useState(null);
     const [currentModoCaja, setCurrentModoCaja] = useState(companyInfo.modo_caja);
@@ -700,13 +695,11 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             const { data, error } = await supabase.rpc('get_sesion_activa');
             if (error) throw error;
             setActiveSession(data?.session || null);
-            if (data?.modo_caja) {
-                setCurrentModoCaja(data.modo_caja);
-            }
+            if (data?.modo_caja) setCurrentModoCaja(data.modo_caja);
             setSessionState(data?.session ? 'open' : 'closed');
         } catch (err) {
             addToast({ message: `Error al verificar sesión: ${err.message}`, type: 'error' });
-            setSessionState('closed'); // Default to closed on error
+            setSessionState('closed');
         }
     }, [addToast]);
     
@@ -715,12 +708,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         try {
             const { data, error } = await supabase.rpc('get_resumen_sesion_activa');
             if (error) throw error;
-            
-            const summaryWithTheoretical = {
-                ...data,
-                saldo_final_teorico_efectivo: data.saldo_inicial + data.total_ventas_efectivo - data.total_gastos_efectivo
-            };
-            
+            const summaryWithTheoretical = { ...data, saldo_final_teorico_efectivo: data.saldo_inicial + data.total_ventas_efectivo - data.total_gastos_efectivo };
             setSessionSummary(summaryWithTheoretical);
             setIsCierreModalOpen(true);
         } catch (err) {
@@ -733,11 +721,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const handleConfirmCierre = async (saldoReal, totales) => {
         startLoading();
         try {
-            const { error } = await supabase.rpc('cerrar_caja', {
-                p_sesion_id: sessionSummary.id,
-                p_saldo_final_real_efectivo: saldoReal,
-                p_totales: totales
-            });
+            const { error } = await supabase.rpc('cerrar_caja', { p_sesion_id: sessionSummary.id, p_saldo_final_real_efectivo: saldoReal, p_totales: totales });
             if (error) throw error;
             addToast({ message: 'Caja cerrada exitosamente.', type: 'success' });
             setIsCierreModalOpen(false);
@@ -753,11 +737,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
 
     const fetchData = useCallback(async () => {
         try {
-             const [posDataRes, optionsRes] = await Promise.all([
-                supabase.rpc('get_pos_data'),
-                supabase.rpc('get_inventory_filter_data')
-            ]);
-
+             const [posDataRes, optionsRes] = await Promise.all([ supabase.rpc('get_pos_data'), supabase.rpc('get_inventory_filter_data') ]);
             if (posDataRes.error) throw posDataRes.error;
             if (optionsRes.error) throw optionsRes.error;
 
@@ -765,48 +745,30 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             setFilterOptions(optionsRes.data || { categories: [], brands: [] });
             
             const defaultList = posDataRes.data.price_lists.find(pl => pl.es_predeterminada);
-            if (defaultList) {
-                setDefaultPriceListId(defaultList.id);
-            } else if (posDataRes.data.price_lists.length > 0) {
-                setDefaultPriceListId(posDataRes.data.price_lists[0].id);
+            if (activePriceListId === null) {
+                if (defaultList) setActivePriceListId(defaultList.id);
+                else if (posDataRes.data.price_lists.length > 0) setActivePriceListId(posDataRes.data.price_lists[0].id);
             }
-
-            setActivePriceListId(currentId => {
-                if (currentId) return currentId; 
-                if (defaultList) return defaultList.id;
-                if (posDataRes.data.price_lists.length > 0) return posDataRes.data.price_lists[0].id;
-                return null;
-            });
         } catch (err) {
             addToast({ message: `Error crítico al cargar datos: ${err.message}`, type: 'error', duration: 10000 });
         }
-    }, [addToast]);
+    }, [addToast, activePriceListId, setActivePriceListId]);
     
     const internalFetch = useCallback(async () => {
         startLoading();
         try {
-            await Promise.all([
-                checkActiveSession(),
-                fetchData()
-            ]);
+            await Promise.all([ checkActiveSession(), fetchData() ]);
         } finally {
             stopLoading();
         }
     }, [checkActiveSession, fetchData, startLoading, stopLoading]);
 
-
-    useEffect(() => {
-        internalFetch();
-    }, [internalFetch]);
-
+    useEffect(() => { internalFetch(); }, [internalFetch]);
     useRealtimeListener(internalFetch);
 
     useEffect(() => {
-        if (isCartSidebarOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'auto';
-        }
+        if (isCartSidebarOpen) document.body.style.overflow = 'hidden';
+        else document.body.style.overflow = 'auto';
         return () => { document.body.style.overflow = 'auto'; };
     }, [isCartSidebarOpen]);
 
@@ -820,6 +782,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
 
         const baseFiltered = posData.products.filter(p => {
             let matchesStatus = true;
+            const defaultPriceListId = posData.price_lists.find(pl => pl.es_predeterminada)?.id;
             if (filters.status === 'in_stock') matchesStatus = p.stock_sucursal > 0;
             else if (filters.status === 'on_sale') matchesStatus = p.prices && Object.keys(p.prices).some(priceListId => priceListId !== defaultPriceListId && p.prices[priceListId]?.precio > 0);
             else if (filters.status === 'new_arrival') matchesStatus = p.created_at && new Date(p.created_at) > thirtyDaysAgo;
@@ -841,7 +804,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         }
 
         return baseFiltered;
-    }, [posData.products, filters, defaultPriceListId]);
+    }, [posData.products, filters, posData.price_lists]);
 
     const quickAccessProducts = useMemo(() => {
         return [...posData.products]
@@ -862,27 +825,29 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
 
     const isPriceRuleActive = (priceInfo) => priceInfo && Number(priceInfo.ganancia_maxima) > 0;
 
-    const getDefaultPriceForProduct = (product) => product.prices?.[defaultPriceListId]?.precio ?? 0;
+    const getDefaultPriceForProduct = (product) => {
+        const defaultListId = posData.price_lists.find(pl => pl.es_predeterminada)?.id;
+        return product.prices?.[defaultListId]?.precio ?? 0;
+    };
 
     const getActivePriceForProduct = (product) => {
         const activePriceInfo = product.prices?.[activePriceListId];
         if (isPriceRuleActive(activePriceInfo)) return activePriceInfo.precio;
-        return product.prices?.[defaultPriceListId]?.precio ?? 0;
+        return getDefaultPriceForProduct(product);
     };
     
     const getPriceInfoForProduct = (product) => {
         const activePriceInfo = product.prices?.[activePriceListId];
         if (isPriceRuleActive(activePriceInfo)) return activePriceInfo;
-        return product.prices?.[defaultPriceListId] || { precio: 0, ganancia_maxima: 0, ganancia_minima: 0 };
+        const defaultListId = posData.price_lists.find(pl => pl.es_predeterminada)?.id;
+        return product.prices?.[defaultListId] || { precio: 0, ganancia_maxima: 0, ganancia_minima: 0 };
     };
     
-    const handleShowDetails = (product) => {
-        setProductForDetailView(product);
-        setDetailModalOpen(true);
-    };
+    const handleShowDetails = (product) => { setProductForDetailView(product); setDetailModalOpen(true); };
 
     const handleAddToCart = (product) => {
-        setCart(currentCart => {
+// FIX: Explicitly type `currentCart` to resolve TypeScript inference issue.
+        setCart((currentCart: {product: any, quantity: number}[]) => {
             const existingItem = currentCart.find(item => item.product.id === product.id);
             if (existingItem) {
                 if (existingItem.quantity < product.stock_sucursal) {
@@ -897,11 +862,9 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     };
 
     const handleProductAction = (product, isAvailable) => {
-        if (isAvailable) {
-            handleAddToCart(product);
-        } else {
-            const price = getDefaultPriceForProduct(product);
-            if (price <= 0) addToast({ message: 'Este producto no tiene un precio asignado.', type: 'warning' });
+        if (isAvailable) handleAddToCart(product);
+        else {
+            if (getDefaultPriceForProduct(product) <= 0) addToast({ message: 'Este producto no tiene un precio asignado.', type: 'warning' });
             else handleShowDetails(product);
         }
     };
@@ -909,7 +872,6 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const handleScanSuccess = (scannedSku) => {
         setIsScannerOpen(false);
         const product = posData.products.find(p => p.sku === scannedSku);
-        
         if (product) {
             addToast({ message: `Producto "${product.nombre}" añadido.`, type: 'success' });
             handleProductAction(product, product.stock_sucursal > 0 && getDefaultPriceForProduct(product) > 0);
@@ -927,7 +889,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             const product = posData.products.find(p => p.sku === term);
             if (product) {
                 handleProductAction(product, product.stock_sucursal > 0 && getDefaultPriceForProduct(product) > 0);
-                setSkuInput(''); // Clear input on success
+                setSkuInput('');
             } else {
                 addToast({ message: `Producto con SKU "${term}" no encontrado.`, type: 'error' });
             }
@@ -936,63 +898,33 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
 
     const handleUpdateQuantity = (productId, newQuantity) => {
         if (isNaN(newQuantity)) return;
-
-        if (newQuantity <= 0) {
-            handleRemoveFromCart(productId);
-            return;
-        }
-        setCart(currentCart => {
+        if (newQuantity <= 0) { handleRemoveFromCart(productId); return; }
+// FIX: Explicitly type `currentCart` to resolve TypeScript inference issue.
+        setCart((currentCart: {product: any, quantity: number}[]) => {
             const itemToUpdate = currentCart.find(item => item.product.id === productId);
             if (!itemToUpdate) return currentCart;
-
-            let finalQuantity = newQuantity;
-            if (newQuantity > itemToUpdate.product.stock_sucursal) {
-                addToast({ message: `Stock máximo (${itemToUpdate.product.stock_sucursal}) alcanzado.`, type: 'warning' });
-                finalQuantity = itemToUpdate.product.stock_sucursal;
-            }
-            
+            let finalQuantity = newQuantity > itemToUpdate.product.stock_sucursal ? itemToUpdate.product.stock_sucursal : newQuantity;
+            if (newQuantity > itemToUpdate.product.stock_sucursal) addToast({ message: `Stock máximo (${itemToUpdate.product.stock_sucursal}) alcanzado.`, type: 'warning' });
             return currentCart.map(item => item.product.id === productId ? { ...item, quantity: finalQuantity } : item);
         });
     };
 
     const handleRemoveFromCart = (productId) => {
-        setCart(currentCart => currentCart.filter(item => item.product.id !== productId));
-        setCustomPrices(prev => {
-            const newPrices = { ...prev };
-            delete newPrices[productId];
-            return newPrices;
-        });
+// FIX: Explicitly type `currentCart` to resolve TypeScript inference issue.
+        setCart((currentCart: {product: any, quantity: number}[]) => currentCart.filter(item => item.product.id !== productId));
+        setCustomPrices(prev => { const newPrices = { ...prev }; delete newPrices[productId]; return newPrices; });
     };
 
-    const handleClearCart = () => {
-        setCart([]);
-        setTaxRate('');
-        setDiscountValue('');
-        setCustomPrices({});
-        setSelectedClientId(null);
-    };
-
-    const handleOpenPricePopover = (e, item) => {
-        e.stopPropagation();
-        setPricePopover({ isOpen: true, item, target: e.currentTarget });
-    };
-
+    const handleClearCart = () => { setCart([]); setTaxRate(''); setDiscountValue(''); setCustomPrices({}); setSelectedClientId(null); };
+    const handleOpenPricePopover = (e, item) => { e.stopPropagation(); setPricePopover({ isOpen: true, item, target: e.currentTarget }); };
     const handleClosePricePopover = () => setPricePopover({ isOpen: false, item: null, target: null });
 
     const handleApplyCustomPrice = (productId, newPrice) => {
         const product = cart.find(item => item.product.id === productId)?.product;
         if (!product) return;
         const originalPrice = getActivePriceForProduct(product);
-
-        if (newPrice === originalPrice) {
-            setCustomPrices(prev => {
-                const newPrices = { ...prev };
-                delete newPrices[productId];
-                return newPrices;
-            });
-        } else {
-            setCustomPrices(prev => ({ ...prev, [productId]: { newPrice } }));
-        }
+        if (newPrice === originalPrice) setCustomPrices(prev => { const newPrices = { ...prev }; delete newPrices[productId]; return newPrices; });
+        else setCustomPrices(prev => ({ ...prev, [productId]: { newPrice } }));
         handleClosePricePopover();
     };
 
@@ -1008,28 +940,23 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             const effectivePrice = customPrices[item.product.id]?.newPrice ?? originalPrice;
             return total + (effectivePrice * item.quantity);
         }, 0);
-
         const tax = Number(taxRate) || 0;
         let taxAmount = 0;
         if (tax > 0 && tax < 100) taxAmount = (subtotal / (1 - tax / 100)) - subtotal;
-        
         const implicitDiscountTotal = cart.reduce((total, item) => {
             const originalPrice = getActivePriceForProduct(item.product);
             const customPrice = customPrices[item.product.id]?.newPrice;
             if (customPrice !== undefined) total += (originalPrice - customPrice) * item.quantity;
             return total;
         }, 0);
-
         const totalAvailableMargin = cart.reduce((margin, item) => {
             const priceInfo = getPriceInfoForProduct(item.product);
             return margin + ((Number(priceInfo.ganancia_maxima || 0) - Number(priceInfo.ganancia_minima || 0)) * item.quantity);
         }, 0);
-        
         const maxGlobalDiscount = Math.max(0, totalAvailableMargin - implicitDiscountTotal);
         const globalDiscountAmount = Math.max(0, Math.min(Number(discountValue) || 0, maxGlobalDiscount));
         const totalDiscount = globalDiscountAmount;
         const finalTotal = subtotal + taxAmount - totalDiscount;
-
         return { subtotal, taxAmount, totalDiscount, maxGlobalDiscount, finalTotal: Math.max(0, finalTotal) };
     }, [cart, activePriceListId, taxRate, discountValue, customPrices, getActivePriceForProduct, getPriceInfoForProduct]);
     
@@ -1040,20 +967,19 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         if (numericValue > totals.maxGlobalDiscount) {
             setDiscountValue(totals.maxGlobalDiscount.toFixed(2));
             addToast({ message: `Descuento ajustado al máximo: ${formatCurrency(totals.maxGlobalDiscount)}`, type: 'warning' });
-        } else {
-            setDiscountValue(rawValue);
-        }
+        } else setDiscountValue(rawValue);
     };
 
     const handleConfirmSale = async (saleDetails) => {
         startLoading();
         setIsCheckoutModalOpen(false);
         try {
+            const defaultListId = posData.price_lists.find(pl => pl.es_predeterminada)?.id;
             const saleItems = cart.map(item => {
                 const originalPrice = getActivePriceForProduct(item.product);
                 const effectivePrice = customPrices[item.product.id]?.newPrice ?? originalPrice;
                 const fullProduct = posData.products.find(p => p.id === item.product.id);
-                const defaultPriceInfo = fullProduct?.prices?.[defaultPriceListId];
+                const defaultPriceInfo = fullProduct?.prices?.[defaultListId];
                 return {
                     producto_id: item.product.id,
                     cantidad: item.quantity,
@@ -1061,7 +987,6 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                     costo_unitario_en_venta: defaultPriceInfo ? (defaultPriceInfo.precio - defaultPriceInfo.ganancia_maxima) : 0,
                 };
             });
-
             const { error } = await supabase.rpc('registrar_venta', {
                 p_venta: {
                     cliente_id: selectedClientId, sucursal_id: user.sucursal_id, total: totals.finalTotal,
@@ -1071,7 +996,6 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                 },
                 p_items: saleItems
             });
-
             if (error) throw error;
             addToast({ message: 'Venta registrada con éxito.', type: 'success' });
             handleClearCart();
@@ -1084,43 +1008,25 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     };
 
     if (sessionState === 'checking') {
-        return html`
-            <${DashboardLayout} 
-                user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate}
-                activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo}
-                notifications=${notifications} disablePadding=${true}
-            >
-                <div class="h-full"></div>
-            <//>
-        `;
+        return html`<${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo} disablePadding=${true}><div class="h-full"></div><//>`;
     }
 
     if (sessionState === 'closed') {
-        return html`
-            <${DashboardLayout} 
-                user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate}
-                activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo}
-                notifications=${notifications} disablePadding=${true}
-            >
-                 <${AperturaCajaModal} onSessionOpen=${internalFetch} companyInfo=${companyInfo} user=${user} navigate=${navigate} modoCaja=${currentModoCaja} />
-            <//>
-        `;
+        return html`<${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo} disablePadding=${true}><${AperturaCajaModal} onSessionOpen=${internalFetch} companyInfo=${companyInfo} user=${user} navigate=${navigate} modoCaja=${currentModoCaja} /><//>`;
     }
 
     const cartPanelProps = {
-        cart, posData, activePriceListId, setActivePriceListId,
-        handleClearCart, getPriceForProduct: getActivePriceForProduct,
-        handleUpdateQuantity, handleRemoveFromCart, totals, taxRate, setTaxRate, discountValue,
-        onDiscountChange: handleDiscountChange, onFinalizeSale: () => setIsCheckoutModalOpen(true),
-        onOpenPricePopover: handleOpenPricePopover, customPrices, defaultPriceListId,
-        isPriceRuleActive, selectedClientId, setSelectedClientId, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user
+        posData, handleClearCart, getPriceForProduct: getActivePriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals,
+        onDiscountChange: handleDiscountChange, onFinalizeSale: () => setIsCheckoutModalOpen(true), onOpenPricePopover: handleOpenPricePopover,
+        isPriceRuleActive, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user,
+        cart, customPrices, selectedClientId, setSelectedClientId, activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue
     };
 
     return html`
         <${DashboardLayout} 
             user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate}
             activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo}
-            notifications=${notifications} disablePadding=${true}
+            disablePadding=${true}
         >
             <div class="h-full lg:grid lg:grid-cols-[1fr_450px] lg:gap-6 lg:p-6">
                 <div class="bg-white rounded-lg border shadow-sm h-full flex flex-col lg:h-auto overflow-hidden">
@@ -1128,22 +1034,11 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                         <div class="flex gap-2">
                             <div class="relative flex-grow">
                                 <${FormInput}
-                                    name="sku_input"
-                                    type="text"
-                                    label=""
-                                    value=${skuInput}
-                                    onInput=${e => setSkuInput(e.target.value)}
-                                    onKeyDown=${handleSkuSubmit}
-                                    placeholder="Ingresar SKU y presionar Enter"
-                                    required=${false}
-                                    icon=${ICONS.search}
+                                    name="sku_input" type="text" label="" value=${skuInput} onInput=${e => setSkuInput(e.target.value)} onKeyDown=${handleSkuSubmit}
+                                    placeholder="Ingresar SKU y presionar Enter" required=${false} icon=${ICONS.search}
                                 />
                             </div>
-                            <button
-                                onClick=${() => setIsScannerOpen(true)}
-                                class="flex-shrink-0 flex items-center justify-center p-2.5 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors"
-                                title="Escanear código de barras con la cámara"
-                            >
+                            <button onClick=${() => setIsScannerOpen(true)} class="flex-shrink-0 flex items-center justify-center p-2.5 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors" title="Escanear código de barras con la cámara">
                                 ${ICONS.qr_code_scanner}
                             </button>
                         </div>
@@ -1152,8 +1047,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                             onToggleAdvanced=${() => setIsAdvancedSearchOpen(p => !p)} isAdvancedOpen=${isAdvancedSearchOpen}
                             statusOptions=${posStatusOptions}
                         />
-                        <${AdvancedFilterPanel} isOpen=${isAdvancedSearchOpen} filters=${filters}
-                            onFilterChange=${handleFilterChange} filterOptions=${filterOptions} />
+                        <${AdvancedFilterPanel} isOpen=${isAdvancedSearchOpen} filters=${filters} onFilterChange=${handleFilterChange} filterOptions=${filterOptions} />
                     </div>
 
                     <div class="p-4 flex-grow overflow-y-auto">
@@ -1162,11 +1056,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                                 <h3 class="text-sm font-semibold text-gray-600 mb-2">Acceso Rápido</h3>
                                 <div class="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
                                     ${quickAccessProducts.map(p => html`
-                                        <${QuickAccessButton} 
-                                            product=${p}
-                                            onClick=${() => handleProductAction(p, true)}
-                                            formatCurrency=${formatCurrency}
-                                        />
+                                        <${QuickAccessButton} product=${p} onClick=${() => handleProductAction(p, true)} formatCurrency=${formatCurrency}/>
                                     `)}
                                 </div>
                             </div>
@@ -1192,17 +1082,9 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                 </div>
 
                 <div class="lg:hidden fixed bottom-4 right-4 z-30">
-                    <button 
-                        onClick=${() => setCartSidebarOpen(true)}
-                        class="relative flex items-center justify-center bg-primary text-white rounded-full h-16 w-16 shadow-lg hover:bg-primary-hover transition-transform duration-200 hover:scale-105"
-                        aria-label="Ver carrito"
-                    >
+                    <button onClick=${() => setCartSidebarOpen(true)} class="relative flex items-center justify-center bg-primary text-white rounded-full h-16 w-16 shadow-lg hover:bg-primary-hover transition-transform duration-200 hover:scale-105" aria-label="Ver carrito">
                         <span class="text-3xl">${ICONS.shopping_cart}</span>
-                        ${totalItemsInCart > 0 && html`
-                            <div class="absolute -top-1 -right-1 flex flex-col items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full w-8 h-8 border-2 border-white">
-                                <span>${totalItemsInCart}</span>
-                            </div>
-                        `}
+                        ${totalItemsInCart > 0 && html`<div class="absolute -top-1 -right-1 flex flex-col items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full w-8 h-8 border-2 border-white"><span>${totalItemsInCart}</span></div>`}
                     </button>
                 </div>
                 
@@ -1227,15 +1109,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             <${ProductDetailModal} isOpen=${isDetailModalOpen} onClose=${() => setDetailModalOpen(false)} product=${productForDetailView} currentUserSucursal=${user.sucursal} />
             <${CheckoutModal} isOpen=${isCheckoutModalOpen} onClose=${() => setIsCheckoutModalOpen(false)} onConfirm=${handleConfirmSale} total=${totals.finalTotal} clienteId=${selectedClientId} companyInfo=${companyInfo} />
             <${CameraScanner} isOpen=${isScannerOpen} onClose=${() => setIsScannerOpen(false)} onScanSuccess=${handleScanSuccess} />
-            <${CierreCajaModal} 
-                isOpen=${isCierreModalOpen} 
-                onClose=${() => setIsCierreModalOpen(false)} 
-                onConfirm=${handleConfirmCierre} 
-                sessionSummary=${sessionSummary} 
-                companyInfo=${companyInfo} 
-                user=${user}
-                modoCaja=${currentModoCaja}
-            />
+            <${CierreCajaModal} isOpen=${isCierreModalOpen} onClose=${() => setIsCierreModalOpen(false)} onConfirm=${handleConfirmCierre} sessionSummary=${sessionSummary} companyInfo=${companyInfo} user=${user} modoCaja=${currentModoCaja} />
         <//>
     `;
 }

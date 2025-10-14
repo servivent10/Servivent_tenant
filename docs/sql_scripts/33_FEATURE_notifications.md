@@ -1,32 +1,31 @@
 -- =============================================================================
--- INTELLIGENT NOTIFICATIONS SYSTEM (V4 - Sucursal Scoping & Formatting Fix)
+-- INTELLIGENT NOTIFICATIONS SYSTEM (V5 - Definitive Fix)
 -- =============================================================================
--- Este script implementa un sistema de notificaciones mucho más inteligente,
--- permitiendo que se dirijan a sucursales específicas y corrigiendo bugs
--- de formato de moneda.
+-- Este script es la versión definitiva y corregida para el sistema de notificaciones.
 --
 -- ¿QUÉ HACE ESTE SCRIPT?
--- 1.  Modifica la tabla `notificaciones` para incluir un array de IDs de
---     sucursales de destino.
--- 2.  Actualiza las funciones de lectura de notificaciones para que los
---     Propietarios vean todo, pero los demás roles solo vean las notificaciones
---     dirigidas a su sucursal.
--- 3.  Modifica la función `notificar_cambio` para aceptar el array de sucursales.
--- 4.  Actualiza TODAS las funciones de negocio (`registrar_venta`, etc.) para:
---     a) Pasar las sucursales de destino correctas (para traspasos, son 2).
---     b) Formatear correctamente los montos de dinero a 2 decimales.
+-- 1.  Elimina explícitamente cualquier versión sobrecargada y antigua de las
+--     funciones de notificación para prevenir conflictos de firma.
+-- 2.  Recrea la tabla `notificaciones` y todas las funciones relacionadas con
+--     la arquitectura correcta (`sucursales_destino_ids`).
+-- 3.  Actualiza todas las funciones de negocio (`registrar_venta`, etc.) para
+--     que llamen a la función de notificación con la firma correcta.
 --
 -- **INSTRUCCIONES:**
 -- Ejecuta este script completo en tu Editor SQL. Es seguro ejecutarlo varias veces.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- Paso 1: Modificar la tabla `notificaciones` (Idempotente)
+-- Paso 1: Limpieza de Funciones Antiguas
 -- -----------------------------------------------------------------------------
-ALTER TABLE public.notificaciones DROP COLUMN IF EXISTS sucursal_nombre;
-ALTER TABLE public.notificaciones ADD COLUMN IF NOT EXISTS sucursales_destino_ids uuid[];
+-- Eliminar la versión de 3 parámetros si existe
+DROP FUNCTION IF EXISTS public.notificar_cambio(text, text, uuid);
+-- Eliminar la versión de 4 parámetros para recrearla
+DROP FUNCTION IF EXISTS public.notificar_cambio(text, text, uuid, uuid[]);
 
--- (El resto de la tabla y políticas se mantienen igual)
+-- -----------------------------------------------------------------------------
+-- Paso 2: Modificar la tabla `notificaciones` (Idempotente)
+-- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.notificaciones (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
     empresa_id uuid NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
@@ -38,6 +37,9 @@ CREATE TABLE IF NOT EXISTS public.notificaciones (
     leido_por uuid[] DEFAULT ARRAY[]::uuid[],
     created_at timestamptz DEFAULT now() NOT NULL
 );
+ALTER TABLE public.notificaciones DROP COLUMN IF EXISTS sucursal_nombre;
+ALTER TABLE public.notificaciones ADD COLUMN IF NOT EXISTS sucursales_destino_ids uuid[];
+
 ALTER TABLE public.notificaciones ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Enable all for own company" ON public.notificaciones;
 CREATE POLICY "Enable all for own company" ON public.notificaciones
@@ -46,13 +48,13 @@ FOR ALL USING (
 );
 
 -- -----------------------------------------------------------------------------
--- Paso 2: Función `notificar_cambio` (ACTUALIZADA)
+-- Paso 3: Función `notificar_cambio` (Versión Definitiva)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.notificar_cambio(
     p_tipo_evento text,
     p_mensaje text,
     p_entidad_id uuid,
-    p_sucursal_ids uuid[] -- NUEVO: Array de sucursales a notificar
+    p_sucursal_ids uuid[]
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -66,7 +68,12 @@ DECLARE
 BEGIN
     v_usuario_id := auth.uid();
     v_empresa_id := (auth.jwt() -> 'app_metadata' ->> 'empresa_id')::uuid;
-    v_usuario_nombre := (auth.jwt() -> 'app_metadata' ->> 'nombre_completo')::text;
+    -- FIX: Obtener nombre desde la tabla usuarios si no está en el JWT (contexto de trigger)
+    IF v_usuario_id IS NOT NULL THEN
+        SELECT nombre_completo INTO v_usuario_nombre FROM public.usuarios WHERE id = v_usuario_id;
+    ELSE
+        v_usuario_nombre := 'Sistema';
+    END IF;
 
     IF v_empresa_id IS NOT NULL THEN
         INSERT INTO public.notificaciones (
@@ -82,12 +89,9 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Paso 3: Funciones de lectura de notificaciones (CORREGIDAS)
+-- Paso 4: Funciones de lectura de notificaciones (CORREGIDAS)
 -- -----------------------------------------------------------------------------
-
--- **FIX**: Eliminar la función existente antes de recrearla con la nueva firma
 DROP FUNCTION IF EXISTS public.get_notificaciones();
-
 CREATE OR REPLACE FUNCTION public.get_notificaciones()
 RETURNS TABLE (
     id uuid, mensaje text, tipo_evento text, entidad_id uuid,
@@ -97,7 +101,6 @@ DECLARE
     v_user_rol text;
     v_user_sucursal_id uuid;
 BEGIN
-    -- FIX: Qualify 'id' with table alias 'u' to avoid ambiguity with output column 'id'
     SELECT u.rol, u.sucursal_id INTO v_user_rol, v_user_sucursal_id FROM public.usuarios u WHERE u.id = auth.uid();
     
     RETURN QUERY
@@ -105,15 +108,15 @@ BEGIN
     FROM public.notificaciones n
     WHERE n.empresa_id = public.get_empresa_id_from_jwt()
       AND (
-          v_user_rol = 'Propietario' OR -- El propietario ve todo
-          n.sucursales_destino_ids IS NULL OR -- Notificaciones globales (para Propietario)
-          v_user_sucursal_id = ANY(n.sucursales_destino_ids) -- La sucursal del usuario está en la lista de destino
+          v_user_rol = 'Propietario' OR
+          n.sucursales_destino_ids IS NULL OR
+          v_user_sucursal_id = ANY(n.sucursales_destino_ids)
       )
     ORDER BY n.created_at DESC LIMIT 20;
 END;
 $$;
 
-
+DROP FUNCTION IF EXISTS public.mark_notificaciones_as_read();
 CREATE OR REPLACE FUNCTION public.mark_notificaciones_as_read()
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
@@ -123,9 +126,7 @@ BEGIN
 END;
 $$;
 
--- **FIX**: Eliminar la función existente antes de recrearla con la nueva firma
 DROP FUNCTION IF EXISTS public.get_all_notificaciones_filtered(date, date, text[], uuid[], boolean);
-
 CREATE OR REPLACE FUNCTION public.get_all_notificaciones_filtered(
     p_start_date date DEFAULT NULL,
     p_end_date date DEFAULT NULL,
@@ -144,7 +145,6 @@ DECLARE
     v_user_rol text;
     v_user_sucursal_id uuid;
 BEGIN
-    -- FIX: Qualify 'id' with table alias 'u' to avoid ambiguity with output column 'id'
     SELECT u.rol, u.sucursal_id INTO v_user_rol, v_user_sucursal_id FROM public.usuarios u WHERE u.id = v_user_id;
 
     RETURN QUERY
@@ -153,13 +153,11 @@ BEGIN
         n.created_at, (v_user_id = ANY(n.leido_por)) as is_read
     FROM public.notificaciones n
     WHERE n.empresa_id = public.get_empresa_id_from_jwt()
-      -- Filtros de la UI
       AND (p_start_date IS NULL OR n.created_at::date >= p_start_date)
       AND (p_end_date IS NULL OR n.created_at::date <= p_end_date)
       AND (p_event_types IS NULL OR array_length(p_event_types, 1) IS NULL OR n.tipo_evento = ANY(p_event_types))
       AND (p_sucursal_ids IS NULL OR array_length(p_sucursal_ids, 1) IS NULL OR n.sucursales_destino_ids && p_sucursal_ids)
       AND (p_read_status IS NULL OR (v_user_id = ANY(n.leido_por)) = p_read_status)
-      -- Filtro de seguridad por rol
       AND (
           v_user_rol = 'Propietario' OR
           n.sucursales_destino_ids IS NULL OR
@@ -170,10 +168,9 @@ END;
 $$;
 
 -- -----------------------------------------------------------------------------
--- Paso 4: Actualizar funciones de negocio
+-- Paso 5: Actualizar funciones de negocio
 -- -----------------------------------------------------------------------------
-
--- registrar_venta (con formato de moneda)
+DROP FUNCTION IF EXISTS public.registrar_venta(venta_input, venta_item_input[]);
 CREATE OR REPLACE FUNCTION registrar_venta(p_venta venta_input, p_items venta_item_input[])
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -214,13 +211,12 @@ BEGIN
 END;
 $$;
 
--- registrar_compra (con formato de moneda)
+DROP FUNCTION IF EXISTS public.registrar_compra(compra_input, compra_item_input[]);
 CREATE OR REPLACE FUNCTION registrar_compra(p_compra compra_input, p_items compra_item_input[])
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
     new_compra_id uuid; v_folio text; v_proveedor_nombre text; v_sucursal_nombre text;
-    caller_empresa_id uuid := public.get_empresa_id_from_jwt();
-    caller_user_id uuid := auth.uid();
+    caller_empresa_id uuid := public.get_empresa_id_from_jwt(); caller_user_id uuid := auth.uid();
     item compra_item_input; dist_item distribucion_item_input; price_rule price_rule_input;
     total_compra numeric := 0; total_compra_bob numeric; saldo_final numeric; estado_final text;
     stock_total_actual numeric; capp_actual numeric; nuevo_capp numeric; costo_unitario_bob numeric;
@@ -250,52 +246,28 @@ BEGIN
 END;
 $$;
 
--- registrar_traspaso (notifica a ambas sucursales)
-CREATE OR REPLACE FUNCTION registrar_traspaso(p_origen_id uuid, p_destino_id uuid, p_fecha timestamptz, p_notas text, p_items traspaso_item_input[])
-RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DROP FUNCTION IF EXISTS public.upsert_gasto(uuid, text, numeric, date, uuid, text);
+CREATE OR REPLACE FUNCTION upsert_gasto(p_id uuid, p_concepto text, p_monto numeric, p_fecha date, p_categoria_id uuid, p_comprobante_url text)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-    new_traspaso_id uuid; v_folio text; v_origen_nombre text; v_destino_nombre text;
+    v_gasto_id uuid; v_sucursal_nombre text;
     caller_empresa_id uuid := public.get_empresa_id_from_jwt(); caller_user_id uuid := auth.uid();
-    caller_rol text := (SELECT u.rol FROM public.usuarios u WHERE u.id = caller_user_id);
-    item traspaso_item_input; next_folio_number integer; stock_origen_actual numeric;
+    caller_sucursal_id uuid := (SELECT u.sucursal_id FROM public.usuarios u WHERE u.id = caller_user_id);
 BEGIN
-    -- (lógica de negocio original)
-    IF caller_rol NOT IN ('Propietario', 'Administrador') THEN RAISE EXCEPTION 'Acceso denegado.'; END IF;
-    SELECT COALESCE(MAX(substring(folio from 7)::integer), 0) + 1 INTO next_folio_number FROM public.traspasos WHERE empresa_id = caller_empresa_id;
-    v_folio := 'TRASP-' || lpad(next_folio_number::text, 5, '0');
-    INSERT INTO public.traspasos (empresa_id, sucursal_origen_id, sucursal_destino_id, usuario_envio_id, folio, fecha, notas, estado, fecha_envio)
-    VALUES (caller_empresa_id, p_origen_id, p_destino_id, caller_user_id, v_folio, p_fecha, p_notas, 'En Camino', now()) RETURNING id INTO new_traspaso_id;
-    FOREACH item IN ARRAY p_items LOOP SELECT cantidad INTO stock_origen_actual FROM inventarios WHERE producto_id = item.producto_id AND sucursal_id = p_origen_id; stock_origen_actual := COALESCE(stock_origen_actual, 0); IF stock_origen_actual < item.cantidad THEN RAISE EXCEPTION 'Stock insuficiente.'; END IF; INSERT INTO public.traspaso_items (traspaso_id, producto_id, cantidad) VALUES (new_traspaso_id, item.producto_id, item.cantidad); UPDATE public.inventarios SET cantidad = cantidad - item.cantidad, updated_at = now() WHERE producto_id = item.producto_id AND sucursal_id = p_origen_id; INSERT INTO public.movimientos_inventario (producto_id, sucursal_id, usuario_id, tipo_movimiento, cantidad_ajustada, stock_anterior, stock_nuevo, referencia_id) VALUES (item.producto_id, p_origen_id, caller_user_id, 'Salida por Traspaso', -item.cantidad, stock_origen_actual, stock_origen_actual - item.cantidad, new_traspaso_id); END LOOP;
-    
-    SELECT nombre INTO v_origen_nombre FROM sucursales WHERE id = p_origen_id;
-    SELECT nombre INTO v_destino_nombre FROM sucursales WHERE id = p_destino_id;
-    PERFORM notificar_cambio('TRASPASO_ENVIADO', 'Traspaso <b>' || v_folio || '</b> enviado desde ' || v_origen_nombre || ' hacia <b>' || v_destino_nombre || '</b>.', new_traspaso_id, ARRAY[p_origen_id, p_destino_id]);
-    
-    RETURN new_traspaso_id;
+    IF p_id IS NULL THEN
+        INSERT INTO public.gastos(empresa_id, sucursal_id, usuario_id, concepto, monto, fecha, categoria_id, comprobante_url)
+        VALUES (caller_empresa_id, caller_sucursal_id, caller_user_id, p_concepto, p_monto, p_fecha, p_categoria_id, p_comprobante_url)
+        RETURNING id INTO v_gasto_id;
+        
+        SELECT nombre INTO v_sucursal_nombre FROM sucursales WHERE id = caller_sucursal_id;
+        PERFORM notificar_cambio('NUEVO_GASTO', 'Gasto por <b>' || p_concepto || '</b> de <b>Bs ' || to_char(p_monto, 'FM999G999D00') || '</b> en <b>' || v_sucursal_nombre || '</b>', v_gasto_id, ARRAY[caller_sucursal_id]);
+    ELSE
+        UPDATE public.gastos SET concepto = p_concepto, monto = p_monto, fecha = p_fecha, categoria_id = p_categoria_id, comprobante_url = p_comprobante_url
+        WHERE id = p_id AND empresa_id = caller_empresa_id;
+    END IF;
 END;
 $$;
 
--- confirmar_recepcion_traspaso (notifica a ambas sucursales)
-CREATE OR REPLACE FUNCTION confirmar_recepcion_traspaso(p_traspaso_id uuid)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-    traspaso_rec record; v_origen_nombre text; v_destino_nombre text;
-    caller_user_id uuid := auth.uid(); caller_sucursal_id uuid := (SELECT u.sucursal_id FROM public.usuarios u WHERE u.id = caller_user_id);
-    item_rec record; stock_destino_actual numeric;
-BEGIN
-    -- (lógica de negocio original)
-    SELECT * INTO traspaso_rec FROM public.traspasos WHERE id = p_traspaso_id;
-    IF traspaso_rec IS NULL THEN RAISE EXCEPTION 'Traspaso no encontrado.'; END IF;
-    IF traspaso_rec.sucursal_destino_id != caller_sucursal_id THEN RAISE EXCEPTION 'Acceso denegado.'; END IF;
-    IF traspaso_rec.estado != 'En Camino' THEN RAISE EXCEPTION 'Este traspaso no está "En Camino".'; END IF;
-    UPDATE public.traspasos SET estado = 'Recibido', usuario_recibio_id = caller_user_id, fecha_recibido = now() WHERE id = p_traspaso_id;
-    FOR item_rec IN SELECT * FROM public.traspaso_items WHERE traspaso_id = p_traspaso_id LOOP SELECT cantidad INTO stock_destino_actual FROM inventarios WHERE producto_id = item_rec.producto_id AND sucursal_id = traspaso_rec.sucursal_destino_id; stock_destino_actual := COALESCE(stock_destino_actual, 0); INSERT INTO public.inventarios (producto_id, sucursal_id, cantidad) VALUES (item_rec.producto_id, traspaso_rec.sucursal_destino_id, item_rec.cantidad) ON CONFLICT (producto_id, sucursal_id) DO UPDATE SET cantidad = inventarios.cantidad + item_rec.cantidad, updated_at = now(); INSERT INTO public.movimientos_inventario (producto_id, sucursal_id, usuario_id, tipo_movimiento, cantidad_ajustada, stock_anterior, stock_nuevo, referencia_id) VALUES (item_rec.producto_id, traspaso_rec.sucursal_destino_id, caller_user_id, 'Entrada por Traspaso', item_rec.cantidad, stock_destino_actual, stock_destino_actual + item_rec.cantidad, p_traspaso_id); END LOOP;
-    
-    SELECT nombre INTO v_origen_nombre FROM sucursales WHERE id = traspaso_rec.sucursal_origen_id;
-    SELECT nombre INTO v_destino_nombre FROM sucursales WHERE id = traspaso_rec.sucursal_destino_id;
-    PERFORM notificar_cambio('TRASPASO_RECIBIDO', 'El traspaso <b>' || traspaso_rec.folio || '</b> desde ' || v_origen_nombre || ' ha sido <b>recibido</b> en ' || v_destino_nombre || '.', p_traspaso_id, ARRAY[traspaso_rec.sucursal_origen_id, traspaso_rec.sucursal_destino_id]);
-END;
-$$;
 -- =============================================================================
 -- Fin del script.
 -- =============================================================================

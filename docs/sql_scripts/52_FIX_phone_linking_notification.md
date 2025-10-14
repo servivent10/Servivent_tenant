@@ -56,7 +56,8 @@ BEGIN
                     mensaje,
                     tipo_evento,
                     entidad_id,
-                    sucursales_destino_ids
+                    sucursales_destino_ids,
+                    created_at
                 ) VALUES (
                     v_empresa_id,
                     NULL, -- System event, no specific user
@@ -64,7 +65,8 @@ BEGIN
                     'El cliente existente <b>' || (NEW.raw_user_meta_data ->> 'nombre') || '</b> (' || (NEW.raw_user_meta_data ->> 'telefono') || ') vinculó su cuenta web.',
                     'NUEVO_CLIENTE', -- Using the same event type is fine for UI consistency
                     v_existing_client_id, -- Link to the client's profile
-                    NULL -- Global notification for the owner/admins
+                    NULL, -- Global notification for the owner/admins
+                    now()
                 );
             ELSE
                 -- Standard flow: create a new client profile if one doesn't exist for this email.

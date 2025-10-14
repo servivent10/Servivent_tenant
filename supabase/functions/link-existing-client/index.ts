@@ -99,7 +99,8 @@ Deno.serve(async (req) => {
         mensaje: notificationMessage,
         tipo_evento: 'NUEVO_CLIENTE',
         entidad_id: client.id,
-        sucursales_destino_ids: null // Global notification for the company
+        sucursales_destino_ids: null, // Global notification for the company
+        created_at: new Date().toISOString()
       });
 
     if (notificationError) {

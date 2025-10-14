@@ -18,6 +18,7 @@ import { FilterBar, AdvancedFilterPanel } from '../../components/shared/FilterCo
 import { CategoryFormModal } from '../../components/modals/CategoryFormModal.js';
 import { Spinner } from '../../components/Spinner.js';
 import { useRealtimeListener } from '../../hooks/useRealtime.js';
+import { useProductForm } from '../../contexts/StatePersistence.js';
 
 const CategoryManagerModal = ({ isOpen, onClose, onRefreshRequired }) => {
     const { addToast } = useToast();
@@ -290,6 +291,7 @@ const productStatusOptions = [
 export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
+    const { clearDraft } = useProductForm();
     const [products, setProducts] = useState([]);
     const [kpis, setKpis] = useState({ total_products: 0, total_stock_items: 0, products_without_stock: 0 });
     const [isFormModalOpen, setFormModalOpen] = useState(false);
@@ -351,6 +353,7 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     const handleAddProduct = () => {
         setIsFabOpen(false);
         setProductToEdit(null);
+        clearDraft(); // Clear any previous draft from context
         setFormModalOpen(true);
     };
     
@@ -463,7 +466,6 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
             activeLink="Productos"
             breadcrumbs=${breadcrumbs}
             companyInfo=${companyInfo}
-            notifications=${notifications}
         >
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>

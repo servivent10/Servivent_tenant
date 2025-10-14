@@ -19,6 +19,7 @@ import { FormInput } from '../../components/FormComponents.js';
 import { ClienteIdentificacionPage } from './ClienteIdentificacionPage.js';
 import { ClienteRecuperarClavePage } from './ClienteRecuperarClavePage.js';
 import { ClientePedidoDetailPage } from './ClientePedidoDetailPage.js';
+import { useCatalogCart } from '../../contexts/StatePersistence.js';
 
 // --- Mobile Menu Component ---
 function MobileMenu({ isOpen, onClose, company, customerProfile, onLoginClick, onAccountClick, onLogout, navigate, slug, onSearch, searchTerm }) {
@@ -167,7 +168,7 @@ export function CatalogApp({ path, navigate, customerProfile }) {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [catalogData, setCatalogData] = useState(null);
-    const [cart, setCart] = useState([]);
+    const { cart, setCart } = useCatalogCart(); // Use context for cart state
     const [isOrderSuccess, setIsOrderSuccess] = useState(false);
     const [filters, setFilters] = useState({ searchTerm: '', categories: null, brands: null });
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -216,7 +217,7 @@ export function CatalogApp({ path, navigate, customerProfile }) {
             return [...prevCart, { ...product, quantity }];
         });
         addToast({ message: `${product.nombre} añadido al carrito.`, type: 'success' });
-    }, [addToast]);
+    }, [addToast, setCart]);
 
     const handleUpdateQuantity = (productId, quantity) => {
         setCart(prevCart => {

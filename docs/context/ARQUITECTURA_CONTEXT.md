@@ -15,11 +15,22 @@ La aplicación está estructurada como una **Single Page Application (SPA)**. El
 
 ### `App.tsx`: El Orquestador Central
 
-Este componente es el corazón de la aplicación y gestiona:
+Este componente es el corazón de la aplicación y gestiona todo el ciclo de vida de la sesión y el estado global.
 
-1.  **Estado de Autenticación:** Mantiene el estado del `session`, `displayUser` y `companyInfo`. Utiliza `onAuthStateChange` para reaccionar a inicios y cierres de sesión.
-2.  **Carga de Datos Inicial:** Al detectar una sesión válida, invoca la función RPC `get_user_profile_data` para obtener de forma segura y eficiente toda la información necesaria para arrancar la sesión del usuario, incluyendo su perfil, datos de la empresa, licencia, **zona horaria y moneda**.
+1.  **Gestión de Sesión:**
+    -   Utiliza `supabase.auth.getSession()` en la carga inicial para una recuperación rápida de la sesión desde el `localStorage`.
+    -   Utiliza `supabase.auth.onAuthStateChange` para reaccionar a eventos de inicio y cierre de sesión en tiempo real.
+    -   Estos dos métodos actualizan una única variable de estado `session`, que actúa como el disparador principal para toda la lógica de la aplicación.
+
+2.  **Carga de Datos (Única Fuente de Verdad):**
+    -   Un `useEffect` principal, que se ejecuta **únicamente** cuando el estado `session` cambia, es el responsable de cargar el perfil del usuario.
+    -   Al detectar una sesión, invoca la función RPC `get_user_profile_data` para obtener de forma segura y eficiente toda la información del usuario del sistema (tenant), incluyendo su perfil, datos de la empresa, licencia, zona horaria y moneda.
+    -   **Lógica de Ramificación Inteligente:**
+        -   Si la carga del perfil de tenant **tiene éxito**, actualiza los estados `displayUser` y `companyInfo` y redirige al panel correspondiente.
+        -   Si la carga del perfil de tenant **falla**, comprueba la ruta: si es una ruta de catálogo (`/catalogo/...`), asume que es una sesión de cliente y procede a cargar su perfil; de lo contrario, lo trata como un **inicio de sesión de tenant fallido**, muestra un error y fuerza el cierre de sesión para evitar un estado inconsistente.
+
 3.  **Enrutamiento:** Implementa un sistema de enrutamiento basado en el hash de la URL (`window.location.hash`), renderizando la página correspondiente al rol del usuario y la ruta actual.
+
 4.  **Actualización de Estado en Vivo:** Pasa funciones de callback (`onProfileUpdate`, `onCompanyInfoUpdate`) a los componentes hijos para permitirles actualizar el estado global y que se refleje en toda la UI sin recargar.
 
 ### Lógica de Backend Centralizada

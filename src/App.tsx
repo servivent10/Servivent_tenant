@@ -44,7 +44,43 @@ import { LoadingProvider } from './hooks/useLoading.js';
 import { UPGRADE_PLANS, REGISTRATION_PLANS } from './lib/plansConfig.js';
 import { RealtimeProvider } from './hooks/useRealtime.js';
 import { CatalogApp } from './pages/Public/CatalogApp.js';
+import { TerminalVentaProvider, NuevaCompraProvider, ProductFormProvider, CatalogCartProvider } from './contexts/StatePersistence.js';
 
+function TenantRoutes({ currentPath, navigate, ...commonProps }) {
+    const sucursalDetailsMatch = currentPath.match(/^\/sucursales\/(.+)$/);
+    const productoDetailsMatch = currentPath.match(/^\/productos\/(.+)$/);
+    const compraDetailsMatch = currentPath.match(/^\/compras\/(.+)$/);
+    const ventaDetailsMatch = currentPath.match(/^\/ventas\/(.+)$/);
+    const traspasoDetailsMatch = currentPath.match(/^\/traspasos\/(.+)$/);
+    
+    if (currentPath === '/dashboard') return html`<${DashboardPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/terminal-venta') return html`<${TerminalVentaPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/productos') return html`<${ProductosPage} ...${commonProps} navigate=${navigate} />`;
+    if (productoDetailsMatch) return html`<${ProductoDetailPage} productoId=${productoDetailsMatch[1]} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/inventarios') return html`<${InventariosPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/historial-inventario') return html`<${HistorialInventarioPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/compras') return html`<${ComprasPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/compras/nueva') return html`<${NuevaCompraPage} ...${commonProps} navigate=${navigate} />`;
+    if (compraDetailsMatch) return html`<${CompraDetailPage} compraId=${compraDetailsMatch[1]} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/ventas') return html`<${VentasPage} ...${commonProps} navigate=${navigate} />`;
+    if (ventaDetailsMatch) return html`<${VentaDetailPage} ventaId=${ventaDetailsMatch[1]} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/historial-cajas') return html`<${HistorialCajasPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/sucursales') return html`<${SucursalesListPage} ...${commonProps} navigate=${navigate} />`;
+    if (sucursalDetailsMatch) return html`<${SucursalDetailPage} sucursalId=${sucursalDetailsMatch[1]} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/proveedores') return html`<${ProveedoresPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/clientes') return html`<${ClientesPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/traspasos') return html`<${TraspasosPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/traspasos/nuevo') return html`<${NuevoTraspasoPage} ...${commonProps} navigate=${navigate} />`;
+    if (traspasoDetailsMatch) return html`<${TraspasoDetailPage} traspasoId=${traspasoDetailsMatch[1]} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/gastos') return html`<${GastosPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/auditoria') return html`<${AuditoriaPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/licencia') return html`<${LicenciaPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/configuracion') return html`<${ConfiguracionPage} ...${commonProps} navigate=${navigate} />`;
+    if (currentPath === '/notificaciones') return html`<${NotificacionesPage} ...${commonProps} navigate=${navigate} />`;
+
+    navigate('/dashboard');
+    return html`<${DashboardPage} ...${commonProps} navigate=${navigate} />`;
+}
 
 function AppContent() {
     const [session, setSession] = useState(null);
@@ -58,9 +94,9 @@ function AppContent() {
     const [currentPath, setCurrentPath] = useState(() => window.location.hash.substring(1) || '/login');
     const { addToast } = useToast();
 
-    const navigate = (path) => {
+    const navigate = useCallback((path) => {
         window.location.hash = path;
-    };
+    }, []);
 
     const resetAppState = useCallback(() => {
         setSession(null);
@@ -73,160 +109,133 @@ function AppContent() {
         setHasLoadFailed(false);
     }, []);
 
-    const loadTenantData = useCallback(async (session) => {
-        if (hasLoadFailed || displayUser) return;
-        
-        setLoading(true);
-        setCustomerProfile(null);
-        
-        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-        const initialSteps = [
-            { key: 'profile', label: 'Cargando Perfil de Usuario', status: 'pending' },
-            { key: 'company', label: 'Verificando Información de la Empresa', status: 'pending' },
-            { key: 'branch', label: 'Obteniendo Datos de la Sucursal', status: 'pending' },
-        ];
-        
-        const updateStepStatus = (key, status) => setLoadingSteps(prev => prev.map(step => step.key === key ? { ...step, status } : step));
-        setLoadingSteps(initialSteps);
-        
-        try {
-            await delay(100); updateStepStatus('profile', 'loading');
-            
-            const { data: profile, error: profileError } = await supabase.rpc('get_user_profile_data').single();
-            if (profileError) throw profileError;
-            if (!profile) throw new Error("Error Crítico: Usuario autenticado pero no se encontraron datos de perfil.");
-
-            updateStepStatus('profile', 'success'); await delay(1000);
-            updateStepStatus('company', 'loading'); await delay(150);
-            updateStepStatus('company', 'success'); await delay(1000);
-            updateStepStatus('branch', 'loading'); await delay(150);
-            updateStepStatus('branch', 'success'); await delay(2000);
-
-            const getCurrencySymbol = (code) => ({'BOB': 'Bs', 'ARS': '$', 'BRL': 'R$', 'CLP': '$', 'COP': '$', 'USD': '$', 'GTQ': 'Q', 'HNL': 'L', 'MXN': '$', 'PAB': 'B/.', 'PYG': '₲', 'PEN': 'S/', 'DOP': 'RD$', 'UYU': '$U', 'EUR': '€'}[code] || code);
-
-            let companyData = null;
-            if (profile.empresa_id) {
-                const planName = profile.plan_actual || 'Sin Plan';
-                const basePlanName = planName.split('(')[0].trim();
-                const planDetails = [...REGISTRATION_PLANS, ...UPGRADE_PLANS].find(p => p.title === basePlanName);
-                companyData = {
-                    name: profile.empresa_nombre, nit: profile.empresa_nit, plan: planName, logo: profile.empresa_logo,
-                    planDetails, licenseStatus: profile.estado_licencia || 'Activa', licenseEndDate: profile.fecha_fin_licencia,
-                    paymentHistory: profile.historial_pagos || [], timezone: profile.empresa_timezone, moneda: profile.empresa_moneda,
-                    monedaSimbolo: getCurrencySymbol(profile.empresa_moneda), modo_caja: profile.empresa_modo_caja || 'por_sucursal',
-                    slug: profile.empresa_slug,
-                };
-            }
-            setCompanyInfo(companyData);
-
-            setDisplayUser({
-                id: session.user.id, empresa_id: profile.empresa_id, sucursal_id: profile.sucursal_id,
-                email: session.user.email, name: profile.nombre_completo, role: profile.rol,
-                avatar: profile.avatar, sucursal: profile.rol === 'SuperAdmin' ? 'Global' : (profile.sucursal_principal_nombre || 'Sucursal Principal'),
-            });
-
-            const current = window.location.hash.substring(1);
-            if (profile.rol === 'SuperAdmin' && !current.startsWith('/superadmin')) navigate('/superadmin');
-            else if (profile.rol !== 'SuperAdmin' && (current === '/login' || current === '/')) navigate('/dashboard');
-
-        } catch (error) {
-            console.error('Error during user data loading:', error);
-            setLoadingSteps(prev => {
-                const stepIndex = prev.findIndex(s => s.status === 'loading');
-                const newSteps = [...prev];
-                if (stepIndex > -1) newSteps[stepIndex] = { ...newSteps[stepIndex], status: 'error' };
-                return newSteps;
-            });
-            addToast({ message: `Error crítico al cargar datos: ${error.message}`, type: 'error', duration: Infinity });
-            setHasLoadFailed(true);
-        } finally {
-            setLoading(false);
-        }
-    }, [addToast, hasLoadFailed, displayUser]);
-    
-    const loadCustomerData = useCallback(async (slug) => {
-        if (customerProfile) { setLoading(false); return; }
-        
-        try {
-            const { data, error } = await supabase.rpc('get_my_client_profile', { p_slug: slug }).single();
-            if (error) throw error;
-            setCustomerProfile(data);
-        } catch (err) {
-            console.error("Customer profile fetch failed:", err);
-            // Don't show an error toast here, it's normal not to have a profile if not logged in.
-        } finally {
-            setLoading(false);
-        }
-    }, [addToast, customerProfile]);
-
+    // Effect for handling hash changes
     useEffect(() => {
         const handleHashChange = () => setCurrentPath(window.location.hash.substring(1) || '/login');
         window.addEventListener('hashchange', handleHashChange);
-        
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-            const path = window.location.hash.substring(1);
-            
-            if (newSession && newSession.access_token !== session?.access_token) {
-                setSession(newSession);
-                if (path.startsWith('/catalogo/')) {
-                    const slug = path.split('/')[2];
-                    if (slug) await loadCustomerData(slug);
-                } else if (!path.startsWith('/registro')) {
-                    await loadTenantData(newSession);
-                }
-            } else if (!newSession) {
-                const wasOnCatalog = path.startsWith('/catalogo/');
-                resetAppState();
-                if (!wasOnCatalog) {
-                    navigate('/login');
-                } else {
-                    // Stay on catalog but with no session
-                    setLoading(false);
-                }
-            }
+        return () => window.removeEventListener('hashchange', handleHashChange);
+    }, []);
+
+    // Effect for setting up the auth listener
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+            // Initial loading is complete after first session check
+            setLoading(false);
         });
 
-        const initializeSession = async () => {
-            const { data: { session: initialSession } } = await supabase.auth.getSession();
-            setSession(initialSession);
-            
-            const path = window.location.hash.substring(1);
-            if (initialSession) {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    // Main effect to react to session changes
+    useEffect(() => {
+        const handleSessionChange = async () => {
+            if (!session) {
+                // If there's no session, reset everything and potentially navigate to login
+                const path = window.location.hash.substring(1);
+                const wasOnCatalog = path.startsWith('/catalogo/');
+                resetAppState();
+                if (!wasOnCatalog && !path.startsWith('/registro') && !path.startsWith('/admin-delete-tool')) {
+                    navigate('/login');
+                }
+                return;
+            }
+
+            setLoading(true);
+            setHasLoadFailed(false);
+
+            // Attempt to fetch tenant user profile
+            const { data: profile, error: profileError } = await supabase.rpc('get_user_profile_data').single();
+
+            if (profile && !profileError) {
+                // This is a TENANT user session
+                setCustomerProfile(null); // Clean up any customer profile data
+                
+                const initialSteps = [
+                    { key: 'profile', label: 'Cargando Perfil de Usuario', status: 'loading' },
+                    { key: 'company', label: 'Verificando Información de la Empresa', status: 'loading' }
+                ];
+                setLoadingSteps(initialSteps);
+                
+                // Process tenant data
+                const getCurrencySymbol = (code) => ({'BOB': 'Bs', 'ARS': '$', 'BRL': 'R$', 'CLP': '$', 'COP': '$', 'USD': '$', 'GTQ': 'Q', 'HNL': 'L', 'MXN': '$', 'PAB': 'B/.', 'PYG': '₲', 'PEN': 'S/', 'DOP': 'RD$', 'UYU': '$U', 'EUR': '€'}[code] || code);
+
+                let companyData = null;
+                if (profile.empresa_id) {
+                    const planName = profile.plan_actual || 'Sin Plan';
+                    const basePlanName = planName.split('(')[0].trim();
+                    const planDetails = [...REGISTRATION_PLANS, ...UPGRADE_PLANS].find(p => p.title === basePlanName);
+                    companyData = {
+                        name: profile.empresa_nombre, nit: profile.empresa_nit, plan: planName, logo: profile.empresa_logo,
+                        planDetails, licenseStatus: profile.estado_licencia || 'Activa', licenseEndDate: profile.fecha_fin_licencia,
+                        paymentHistory: profile.historial_pagos || [], timezone: profile.empresa_timezone, moneda: profile.empresa_moneda,
+                        monedaSimbolo: getCurrencySymbol(profile.empresa_moneda), modo_caja: profile.empresa_modo_caja || 'por_sucursal',
+                        slug: profile.empresa_slug,
+                    };
+                }
+                setCompanyInfo(companyData);
+                setDisplayUser({
+                    id: session.user.id, empresa_id: profile.empresa_id, sucursal_id: profile.sucursal_id,
+                    email: session.user.email, name: profile.nombre_completo, role: profile.rol,
+                    avatar: profile.avatar, sucursal: profile.rol === 'SuperAdmin' ? 'Global' : (profile.sucursal_principal_nombre || 'Sucursal Principal'),
+                });
+
+                // Conflict resolution: If a tenant user is on a catalog page, redirect to their dashboard.
+                const path = window.location.hash.substring(1);
+                if (path.startsWith('/catalogo/')) {
+                    navigate('/dashboard');
+                } else if (profile.rol === 'SuperAdmin' && !path.startsWith('/superadmin')) {
+                    navigate('/superadmin');
+                } else if (profile.rol !== 'SuperAdmin' && (path === '/login' || path === '/')) {
+                    navigate('/dashboard');
+                }
+            } else {
+                // This is likely a CUSTOMER session OR A FAILED TENANT LOGIN
+                setDisplayUser(null);
+                setCompanyInfo(null);
+                const path = window.location.hash.substring(1);
+
                 if (path.startsWith('/catalogo/')) {
                     const slug = path.split('/')[2];
                     if (slug) {
-                       await loadCustomerData(slug);
-                    } else {
-                       setLoading(false);
+                        try {
+                            const { data: customer, error: customerError } = await supabase.rpc('get_my_client_profile', { p_slug: slug }).single();
+                            if (customerError) throw customerError;
+                            setCustomerProfile(customer);
+                        } catch (err) {
+                            console.error("Customer profile fetch failed:", err);
+                        }
                     }
                 } else if (!path.startsWith('/registro') && !path.startsWith('/admin-delete-tool')) {
-                    await loadTenantData(initialSession);
-                } else {
-                     setLoading(false);
-                }
-            } else {
-                setLoading(false);
-                if (!path.startsWith('/catalogo/') && !path.startsWith('/registro') && !path.startsWith('/admin-delete-tool')) {
-                    navigate('/login');
+                    // This is a FAILED TENANT LOGIN (like SuperAdmin).
+                    // The profile couldn't be loaded, but they are not in a customer area. This is an error state.
+                    addToast({ message: 'Error al cargar el perfil de usuario. La sesión puede estar corrupta. Cerrando sesión.', type: 'error' });
+                    await supabase.auth.signOut();
                 }
             }
+            setLoading(false);
         };
+        
+        handleSessionChange();
 
-        initializeSession();
-
-        return () => {
-            window.removeEventListener('hashchange', handleHashChange);
-            subscription.unsubscribe();
-        };
-    }, [loadTenantData, loadCustomerData, resetAppState]);
+    }, [session, addToast, navigate, resetAppState]);
 
 
     const handleLogin = async (email, pass) => {
         const trimmedEmail = email.trim();
         const trimmedPassword = pass.trim();
         if (!trimmedEmail || !trimmedPassword) throw new Error('El correo y la contraseña son obligatorios.');
-        const { error } = await supabase.auth.signInWithPassword({ email: trimmedEmail, password: trimmedPassword });
+
+        // 1. Sign in. This will trigger onAuthStateChange, which is the single source of truth.
+        const { data, error } = await supabase.auth.signInWithPassword({ email: trimmedEmail, password: trimmedPassword });
         if (error) throw error;
+
+        // 2. Manually set the session to ensure a prompt reaction from the main useEffect.
+        setSession(data.session);
     };
 
     const handleLogout = async () => {
@@ -253,7 +262,7 @@ function AppContent() {
         await new Promise(r => setTimeout(r, 1000));
         setLoadingSteps(prev => prev.map(s => s.key === 'cleanup' ? {...s, status: 'success'} : s));
         await new Promise(r => setTimeout(r, 500));
-        // onAuthStateChange will handle final cleanup
+        // onAuthStateChange will handle final cleanup by setting session to null
     };
 
     const handleForceLogout = () => {
@@ -270,10 +279,13 @@ function AppContent() {
     const isAdminToolRoute = currentPath === '/admin-delete-tool';
     const isCatalogRoute = currentPath.startsWith('/catalogo');
 
-    if (loading && !isLoggingOut && session && !isCatalogRoute) {
-        const shellUser = { name: ' ', email: session.user.email, role: '', sucursal: 'Cargando...', avatar: null };
-        const shellCompany = { name: ' ', licenseStatus: 'Activa' };
-        content = html`<${DashboardLayout} user=${shellUser} companyInfo=${shellCompany} onLogout=${handleLogout} onProfileUpdate=${handleProfileUpdate} disableNavigation=${true}><div /><//>`;
+    if (loading && !isLoggingOut) {
+        // Show a shell layout only if a session exists but data is loading
+        if (session && !isCatalogRoute) {
+            const shellUser = { name: ' ', email: session.user.email, role: '', sucursal: 'Cargando...', avatar: null };
+            const shellCompany = { name: ' ', licenseStatus: 'Activa' };
+            content = html`<${DashboardLayout} user=${shellUser} companyInfo=${shellCompany} onLogout=${handleLogout} onProfileUpdate=${handleProfileUpdate} disableNavigation=${true}><div /><//>`;
+        }
     } else if (isCatalogRoute) {
         content = html`<${CatalogApp} path=${currentPath} navigate=${navigate} session=${session} customerProfile=${customerProfile} />`;
     } else if (session && displayUser) {
@@ -287,44 +299,8 @@ function AppContent() {
                 ? html`<${CompanyDetailsPage} companyId=${companyDetailsMatch[1]} user=${displayUser} onLogout=${handleLogout} navigate=${navigate} onProfileUpdate=${handleProfileUpdate} />`
                 : html`<${SuperAdminPage} user=${displayUser} onLogout=${handleLogout} navigate=${navigate} onProfileUpdate=${handleProfileUpdate} />`;
         } else if (['Propietario', 'Administrador', 'Empleado'].includes(displayUser.role)) {
-            // FIX: Assign the correct handler functions to the props in 'commonProps'
-            const commonProps = { user: displayUser, onLogout: handleLogout, companyInfo, onProfileUpdate: handleProfileUpdate, onCompanyInfoUpdate: handleCompanyInfoUpdate, navigate };
-            const sucursalDetailsMatch = currentPath.match(/^\/sucursales\/(.+)$/);
-            const productoDetailsMatch = currentPath.match(/^\/productos\/(.+)$/);
-            const compraDetailsMatch = currentPath.match(/^\/compras\/(.+)$/);
-            const ventaDetailsMatch = currentPath.match(/^\/ventas\/(.+)$/);
-            const traspasoDetailsMatch = currentPath.match(/^\/traspasos\/(.+)$/);
-            
-            let tenantContent;
-            if (currentPath === '/dashboard') tenantContent = html`<${DashboardPage} ...${commonProps} />`;
-            else if (currentPath === '/terminal-venta') tenantContent = html`<${TerminalVentaPage} ...${commonProps} />`;
-            else if (currentPath === '/productos') tenantContent = html`<${ProductosPage} ...${commonProps} />`;
-            else if (productoDetailsMatch) tenantContent = html`<${ProductoDetailPage} productoId=${productoDetailsMatch[1]} ...${commonProps} />`;
-            else if (currentPath === '/inventarios') tenantContent = html`<${InventariosPage} ...${commonProps} />`;
-            else if (currentPath === '/historial-inventario') tenantContent = html`<${HistorialInventarioPage} ...${commonProps} />`;
-            else if (currentPath === '/compras') tenantContent = html`<${ComprasPage} ...${commonProps} />`;
-            else if (currentPath === '/compras/nueva') tenantContent = html`<${NuevaCompraPage} ...${commonProps} />`;
-            else if (compraDetailsMatch) tenantContent = html`<${CompraDetailPage} compraId=${compraDetailsMatch[1]} ...${commonProps} />`;
-            else if (currentPath === '/ventas') tenantContent = html`<${VentasPage} ...${commonProps} />`;
-            else if (ventaDetailsMatch) tenantContent = html`<${VentaDetailPage} ventaId=${ventaDetailsMatch[1]} ...${commonProps} />`;
-            else if (currentPath === '/historial-cajas') tenantContent = html`<${HistorialCajasPage} ...${commonProps} />`;
-            else if (currentPath === '/sucursales') tenantContent = html`<${SucursalesListPage} ...${commonProps} />`;
-            else if (sucursalDetailsMatch) tenantContent = html`<${SucursalDetailPage} sucursalId=${sucursalDetailsMatch[1]} ...${commonProps} />`;
-            else if (currentPath === '/proveedores') tenantContent = html`<${ProveedoresPage} ...${commonProps} />`;
-            else if (currentPath === '/clientes') tenantContent = html`<${ClientesPage} ...${commonProps} />`;
-            else if (currentPath === '/traspasos') tenantContent = html`<${TraspasosPage} ...${commonProps} />`;
-            else if (currentPath === '/traspasos/nuevo') tenantContent = html`<${NuevoTraspasoPage} ...${commonProps} />`;
-            else if (traspasoDetailsMatch) tenantContent = html`<${TraspasoDetailPage} traspasoId=${traspasoDetailsMatch[1]} ...${commonProps} />`;
-            else if (currentPath === '/gastos') tenantContent = html`<${GastosPage} ...${commonProps} />`;
-            else if (currentPath === '/auditoria') tenantContent = html`<${AuditoriaPage} ...${commonProps} />`;
-            else if (currentPath === '/licencia') tenantContent = html`<${LicenciaPage} ...${commonProps} />`;
-            else if (currentPath === '/configuracion') tenantContent = html`<${ConfiguracionPage} ...${commonProps} />`;
-            else if (currentPath === '/notificaciones') tenantContent = html`<${NotificacionesPage} ...${commonProps} />`;
-            else {
-                navigate('/dashboard');
-                tenantContent = html`<${DashboardPage} ...${commonProps} />`;
-            }
-            content = tenantContent;
+            const commonProps = { user: displayUser, onLogout: handleLogout, companyInfo, onProfileUpdate: handleProfileUpdate, onCompanyInfoUpdate: handleCompanyInfoUpdate };
+            content = html`<${TenantRoutes} currentPath=${currentPath} navigate=${navigate} ...${commonProps} />`;
         } else {
             handleLogout();
         }
@@ -347,7 +323,15 @@ export function App() {
         <${ToastProvider}>
             <${LoadingProvider}>
                 <${RealtimeProvider}>
-                    <${AppContent} />
+                    <${TerminalVentaProvider}>
+                        <${NuevaCompraProvider}>
+                            <${ProductFormProvider}>
+                                <${CatalogCartProvider}>
+                                    <${AppContent} />
+                                <//>
+                            <//>
+                        <//>
+                    <//>
                 <//>
             <//>
         <//>
