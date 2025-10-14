@@ -48,6 +48,8 @@ export const ICONS = {
     manage_history: html`<${Icon} name="manage_history" />`,
     savings: html`<${Icon} name="savings" />`,
     inventory_history: html`<${Icon} name="history_toggle_off" />`,
+    phone: html`<${Icon} name="call" />`,
+    account_circle: html`<${Icon} name="account_circle" />`,
 
 
     // Connectivity

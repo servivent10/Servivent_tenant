@@ -57,6 +57,7 @@ Esta carpeta contiene todos los scripts SQL para configurar y mantener la base d
 | `44_HOTFIX_cliente_correo_field.md`| Clientes | `[OBSOLETO]` | N/A | Reemplazado por el script `45`. |
 | `45_FIX_cliente_email_column.md`| Clientes | `[ACTIVO]` | Próximamente | Solución definitiva al problema de la doble columna de correo en `clientes`. |
 | `46_FEATURE_CUSTOMER_PORTAL.md` | Catálogo Web | `[ACTIVO]` | Próximamente | Implementa la lógica para el portal de clientes y el inicio de sesión sin contraseña. |
+| `47_FIX_catalog_sucursales.md` | Catálogo Web | `[ACTIVO]` | Próximamente | Añade la lista de sucursales a los datos públicos del catálogo. |
 | `FIX_remove_registration_trigger.md`| Core | `[REPARACIÓN]` | N/A | Elimina un trigger obsoleto del proceso de registro. Recomendado ejecutar siempre en proyectos nuevos. |
 | `FIX_assign_owners_to_branch.md`| Sucursales y Usuarios | `[REPARACIÓN]` | N/A | Corrige perfiles de Propietarios que no están asignados a una sucursal. |
 | `FIX_link_owner_to_company.md`| Core | `[REPARACIÓN]` | N/A | Repara la vinculación entre un usuario Propietario y su empresa en casos de registro fallidos. |

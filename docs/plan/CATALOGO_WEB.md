@@ -23,32 +23,36 @@ Este documento es la guía de implementación definitiva para el **Catálogo Web
 -   **Ofertas Web:** Se creará automáticamente una lista de precios **"Ofertas Web"**. Si un producto tiene precio en esta lista, se mostrará como una oferta con el precio "General" tachado.
 -   **Stock Consolidado:** La disponibilidad se mostrará como un estado textual (`Disponible`, `Pocas Unidades`, `Agotado`) basado en la **suma del stock de todas las sucursales**.
 
-### Fase 3: Flujo de Acceso de Clientes ("Passwordless") y Portal de Cliente (Post-Autenticación)
+### Fase 3: Flujo de Acceso de Clientes (Email y Contraseña) y Portal de Cliente
 
-Esta fase es crítica para ofrecer una experiencia de acceso segura y sin fricción antes de permitir la compra.
+Esta fase implementa un sistema de autenticación robusto y familiar, basado en el método clásico de correo y contraseña, pero con una lógica inteligente para integrar a los clientes ya existentes en ServiVENT.
 
-1.  **Activación del Flujo:** El proceso se inicia cuando un usuario no autenticado intenta realizar una acción que requiere una sesión, como **"Añadir al Carrito"** o acceder a **"Mi Cuenta"**.
-2.  **Modal de Identificación:** Se presenta un modal simple (`IdentificacionClienteModal`) que solo solicita una cosa: el **correo electrónico** del cliente.
-3.  **Verificación en Tiempo Real:** Mientras el cliente escribe su correo, el sistema verifica si el correo ya existe en la base de clientes de la empresa.
-    *   **Si el correo existe:** El formulario muestra un mensaje de bienvenida (ej. "¡Hola de nuevo!" mas su nombre completo).
-    *   **Si el correo no existe:** El formulario se expande para solicitar los campos adicionales "Nombre Completo" y "Teléfono".
-4.  **Envío de Enlace Mágico:** El cliente hace clic en "Enviar enlace de acceso".
-    *   El backend utiliza la función `signInWithOtp` de Supabase para enviar un **enlace mágico** de un solo uso al correo proporcionado.
-    *   Si es un cliente nuevo, primero se crea su registro en la tabla `clientes` si es exitoso se agrega a `historial_cambios` y `notificaciones` para el historia de auditoria y la notificacion en tiempo real en el sistema ServiVENT y luego se envía el enlace.
-5.  **Confirmación en la UI:** El modal se cierra y la interfaz muestra una notificación (`Toast`) o un mensaje indicando: **"¡Listo! Revisa tu correo para acceder a tu cuenta."**
-6.  **Acceso y Sesión Segura:**
-    *   El cliente abre su correo y hace clic en el enlace.
-    *   Es redirigido de vuelta al catálogo web, pero ahora ya tiene una **sesión segura y activa**.
-7.  **Continuación de la Compra:** Con la sesión activa, el cliente ya puede añadir productos al carrito, gestionar sus direcciones y finalizar sus pedidos con normalidad.
+1.  **Activación del Flujo:** El cliente inicia el proceso haciendo clic en "Identifícate" o "Crear Cuenta", lo que le dirigirá a las nuevas páginas de `login` y `registro` del catálogo.
 
--   **Acceso:** Un enlace "Identificate" en el header permitirá a los clientes iniciar sesión con el flujo de "enlace mágico".
--   **`CuentaClientePage.tsx`:** Una nueva página protegida con las siguientes pestañas:
-    -   **"Mis Pedidos":** Historial completo de compras y pedidos.
-    -   **"Mis Datos":** Para actualizar información personal.
-    -   **"Mis Direcciones":** Para gestionar direcciones de envío.
--   **Seguridad:** Nuevas políticas RLS permitirán que un cliente autenticado acceda **únicamente a sus propios datos**.
+2.  **Página de Registro (`/registro`):**
+    *   El cliente introduce su correo electrónico.
+    *   **Verificación Inteligente en Backend:** El sistema comprueba el estado del correo:
+        *   **Cliente Nuevo:** Si el correo no existe, se muestran los campos para "Nombre Completo", "telefono" y "Contraseña". Al enviar, se llama a `supabase.auth.signUp()`. Un trigger en la base de datos creará automáticamente el perfil correspondiente en la tabla `public.clientes`.
+        *   **Cliente Existente de ServiVENT:** Si el correo ya existe en `public.clientes` pero nunca ha accedido al catálogo web (no tiene cuenta en `auth.users`), la interfaz mostrará un mensaje de bienvenida (ej. "¡Hola de nuevo, Juan!") y solicitará **únicamente la creación de una contraseña** para activar su cuenta web. Al enviar, una Edge Function se encargará de crear el usuario en `auth.users` y vincularlo de forma segura al perfil de cliente ya existente.
+    *   El cliente inicia sesión automáticamente tras el registro/activación.
 
-### Fase 5: Logística de Entrega y Despacho (Flujo Unificado)
+3.  **Página de Inicio de Sesión (`/login`):**
+    *   Un formulario estándar de "Correo Electrónico" y "Contraseña".
+    *   Al enviar, se llama a `supabase.auth.signInWithPassword()`.
+
+4.  **Gestión de Sesión Segura:**
+    *   Tras un inicio de sesión o registro exitoso, Supabase genera un JWT (JSON Web Token) que mantiene la sesión del cliente segura y activa mientras navega por el catálogo.
+
+5.  **Portal de Cliente (`CuentaClientePage.tsx`):**
+    *   Una vez autenticado, el cliente puede acceder a su portal personal (`/cuenta`).
+    *   Esta página protegida contendrá pestañas para:
+        *   **"Mis Pedidos":** Historial de compras y estado de los pedidos.
+        *   **"Mis Datos":** Para actualizar su información de perfil.
+        *   **"Mis Direcciones":** Para gestionar direcciones de envío (funcionalidad futura).
+
+6.  **Seguridad:** Nuevas políticas RLS garantizarán que un cliente autenticado pueda acceder y modificar **únicamente sus propios datos**, manteniendo la privacidad y la integridad de la información.
+
+### Fase 4: Logística de Entrega y Despacho (Flujo Unificado)
 
 Este paso ocurre durante el checkout, después de que el cliente ya ha iniciado sesión.
 
@@ -64,13 +68,13 @@ Este paso ocurre durante el checkout, después de que el cliente ya ha iniciado 
     -   **Selección de Dirección:** Se le muestra al cliente su lista de direcciones guardadas (gestionadas desde el Portal de Cliente) para que seleccione una. El `id` de la dirección se guardará en la `venta`.
     -   **Selección de Sucursal de Despacho (Lógica Crítica):** Se le pide al cliente que seleccione de qué sucursal se deben despachar los productos. Esto es fundamental para saber de qué inventario descontar el stock.
 
-### Fase 6: Gestión de Ubicaciones con Mapas
+### Fase 5: Gestión de Ubicaciones con Mapas
 
 -   **Backend:** Se añadirán columnas `latitud` y `longitud` a la tabla `sucursales`.
 -   **UI (Propietario):** El modal `SucursalFormModal` incluirá un mapa interactivo para que el propietario establezca la ubicación exacta de sus sucursales.
 -   **UI (Público):** El modal "Nuestra Empresa" usará estas coordenadas para mostrar un mapa por cada sucursal.
 
-### Fase 7: Procesamiento de Pedidos (Interfaz de Empresa)
+### Fase 6: Procesamiento de Pedidos (Interfaz de Empresa)
 
 Este es el flujo que sigue el personal de la empresa después de que un cliente realiza un pedido desde el catálogo web.
 
@@ -84,6 +88,6 @@ Este es el flujo que sigue el personal de la empresa después de que un cliente 
     -   **Si el stock es correcto:** El personal usará un botón para **"Confirmar y Despachar"**. Esta acción cambiará el estado de la venta (ej. a "Pagada" o "En Preparación") y **finalmente descontará el stock** del inventario.
     -   **Si hay inconsistencias de stock:** Se mostrarán alertas visuales. El personal podrá contactar al cliente o ajustar el pedido.
 
-### Fase 8: Notificaciones y Aislamiento
+### Fase 7: Notificaciones y Aislamiento
 
 -   **Aislamiento de Pedidos:** Gracias a las políticas RLS, solo los usuarios de la sucursal de destino (para "Retiro") o de la sucursal de despacho (para "Envío") verán el pedido y la notificación correspondiente. El Propietario tendrá visibilidad total.

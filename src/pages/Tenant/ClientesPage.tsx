@@ -73,16 +73,26 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
     const handleConfirmDelete = async () => {
         if (!clienteToDelete) return;
         startLoading();
+        setDeleteModalOpen(false);
         try {
-            const { error } = await supabase.rpc('delete_client', { p_id: clienteToDelete.id });
-            if (error) throw error;
+            const { error } = await supabase.functions.invoke('delete-client-with-auth', {
+                body: { clientId: clienteToDelete.id }
+            });
+
+            if (error) {
+                if (error.context && typeof error.context.json === 'function') {
+                    const errorData = await error.context.json();
+                    throw new Error(errorData.error || error.message);
+                }
+                throw error;
+            }
             addToast({ message: `Cliente "${clienteToDelete.nombre}" eliminado.`, type: 'success' });
             fetchData();
         } catch(err) {
-             addToast({ message: `Error al eliminar: ${err.message}`, type: 'error' });
+             addToast({ message: `Error al eliminar: ${err.message}`, type: 'error', duration: 8000 });
         } finally {
             stopLoading();
-            setDeleteModalOpen(false);
+            setClienteToDelete(null);
         }
     };
 
@@ -262,7 +272,7 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
                 confirmVariant="danger"
                 icon=${ICONS.warning_amber}
             >
-                 <p class="text-sm text-gray-600">¿Estás seguro de que quieres eliminar a <span class="font-bold text-gray-800">${clienteToDelete?.nombre}</span>?</p>
+                 <p class="text-sm text-gray-600">¿Estás seguro de que quieres eliminar a <span class="font-bold text-gray-800">${clienteToDelete?.nombre}</span>? Si este cliente tiene una cuenta web, también será eliminada. Esta acción no se puede deshacer.</p>
             <//>
 
             <${ImportClientesModal}

@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS public.clientes (
     nombre text NOT NULL,
     nit_ci text,
     telefono text,
-    email text,
+    correo text,
     direccion text,
     avatar_url text,
     saldo_pendiente numeric(10, 2) DEFAULT 0 NOT NULL,
@@ -63,7 +63,7 @@ RETURNS TABLE (
     nombre text,
     nit_ci text,
     telefono text,
-    email text,
+    correo text,
     direccion text,
     avatar_url text,
     saldo_pendiente numeric,
@@ -78,7 +78,7 @@ DECLARE
 BEGIN
     RETURN QUERY
     SELECT
-        c.id, c.nombre, c.nit_ci, c.telefono, c.email, c.direccion, c.avatar_url, c.saldo_pendiente, c.codigo_cliente
+        c.id, c.nombre, c.nit_ci, c.telefono, c.correo, c.direccion, c.avatar_url, c.saldo_pendiente, c.codigo_cliente
     FROM
         public.clientes c
     WHERE
@@ -96,7 +96,7 @@ CREATE OR REPLACE FUNCTION upsert_client(
     p_nombre text,
     p_nit_ci text,
     p_telefono text,
-    p_email text,
+    p_correo text,
     p_direccion text,
     p_avatar_url text
 )
@@ -118,8 +118,8 @@ BEGIN
             
             BEGIN
                 -- Intentar insertar el nuevo cliente con el código generado
-                INSERT INTO public.clientes(empresa_id, nombre, nit_ci, telefono, email, direccion, avatar_url, codigo_cliente)
-                VALUES (caller_empresa_id, p_nombre, p_nit_ci, p_telefono, p_email, p_direccion, p_avatar_url, v_new_client_code)
+                INSERT INTO public.clientes(empresa_id, nombre, nit_ci, telefono, correo, direccion, avatar_url, codigo_cliente)
+                VALUES (caller_empresa_id, p_nombre, p_nit_ci, p_telefono, p_correo, p_direccion, p_avatar_url, v_new_client_code)
                 RETURNING id INTO v_cliente_id;
                 
                 -- Si la inserción es exitosa, salir del bucle
@@ -136,7 +136,7 @@ BEGIN
             nombre = p_nombre,
             nit_ci = p_nit_ci,
             telefono = p_telefono,
-            email = p_email,
+            correo = p_correo,
             direccion = p_direccion,
             avatar_url = p_avatar_url
         WHERE id = p_id AND empresa_id = caller_empresa_id;
@@ -147,22 +147,8 @@ BEGIN
 END;
 $$;
 
--- Función para eliminar un cliente (sin cambios)
-CREATE OR REPLACE FUNCTION delete_client(p_id uuid)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    caller_empresa_id uuid := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid());
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM public.clientes WHERE id = p_id AND empresa_id = caller_empresa_id) THEN
-        RAISE EXCEPTION 'Cliente no encontrado o no pertenece a tu empresa.';
-    END IF;
-    DELETE FROM public.clientes WHERE id = p_id;
-END;
-$$;
+-- ELIMINADO: La función delete_client ha sido reemplazada por la Edge Function 'delete-client-with-auth'
+DROP FUNCTION IF EXISTS public.delete_client(p_id uuid);
 
 
 -- -----------------------------------------------------------------------------
