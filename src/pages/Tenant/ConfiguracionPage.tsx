@@ -225,7 +225,7 @@ function PriceListsTab() {
                         <table class="min-w-full divide-y divide-gray-300">
                             <thead>
                                 <tr>
-                                    <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0 w-12"><span class="sr-only">Ordenar</span></th>
+                                    <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 w-12"><span class="sr-only">Ordenar</span></th>
                                     <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0">Nombre</th>
                                     <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Descripción</th>
                                     <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-0"><span class="sr-only">Acciones</span></th>
@@ -295,6 +295,23 @@ function PriceListsTab() {
     `;
 }
 
+const PremiumModuleMessage = ({ moduleName, featureDescription }) => {
+    return html`
+        <div class="text-center p-8 rounded-lg border-2 border-dashed border-gray-200 bg-white animate-fade-in-down">
+            <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                ${ICONS.bolt}
+            </div>
+            <h3 class="mt-4 text-lg font-bold text-gray-900">${moduleName} Deshabilitado</h3>
+            <p class="mt-2 text-sm text-gray-600">
+                ${featureDescription}
+            </p>
+            <p class="mt-1 text-sm text-gray-500">
+                Actualiza tu plan o contacta a Soporte ServiVENT para activar este módulo.
+            </p>
+        </div>
+    `;
+};
+
 const debounce = (func, delay) => {
     let timeout;
     return (...args) => {
@@ -325,6 +342,10 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
     const [slugStatus, setSlugStatus] = useState('idle'); // idle, checking, available, unavailable
     const [slugMessage, setSlugMessage] = useState('');
 
+    const canUseCashRegister = !!companyInfo?.planDetails?.features?.aperturar_cajas;
+    const planSupportsCatalog = !!companyInfo?.planDetails?.features?.catalogo_web;
+    const planSupportsPriceLists = !!companyInfo?.planDetails?.features?.listas_precios;
+
     const checkSessions = async () => {
         setIsCheckingSessions(true);
         try {
@@ -340,10 +361,10 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
     };
 
     useEffect(() => {
-        if (activeTab === 'terminal') {
+        if (activeTab === 'terminal' && canUseCashRegister) {
             checkSessions();
         }
-    }, [activeTab]);
+    }, [activeTab, canUseCashRegister]);
 
     useEffect(() => {
         if (companyInfo) {
@@ -498,20 +519,15 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
         { name: 'Configuración', href: '#/configuracion' }
     ];
     
-    const planSupportsCatalog = useMemo(() => {
-        const planName = companyInfo?.plan || '';
-        return planName.includes('Profesional') || planName.includes('Corporativo');
-    }, [companyInfo]);
-    
-    const tabs = [
-        { id: 'empresa', label: 'Datos de la Empresa' },
-        { id: 'precios', label: 'Listas de Precios' },
-        { id: 'terminal', label: 'Terminal de Venta' },
-    ];
-    
-    if (planSupportsCatalog) {
-        tabs.push({ id: 'catalogo', label: 'Catálogo Web' });
-    }
+    const tabs = useMemo(() => {
+        const baseTabs = [
+            { id: 'empresa', label: 'Datos de la Empresa' },
+            { id: 'precios', label: 'Listas de Precios' },
+            { id: 'terminal', label: 'Terminal de Venta' },
+            { id: 'catalogo', label: 'Catálogo Web' },
+        ];
+        return baseTabs;
+    }, []);
 
     const canEdit = user.role === 'Propietario';
 
@@ -613,7 +629,16 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                 `}
                 
                 ${activeTab === 'precios' && html`
-                    <${PriceListsTab} />
+                    <div class="animate-fade-in-down">
+                        ${planSupportsPriceLists ? html`
+                            <${PriceListsTab} />
+                        ` : html`
+                            <${PremiumModuleMessage}
+                                moduleName="Gestión de Listas de Precios"
+                                featureDescription="La gestión de múltiples listas de precios es una funcionalidad que no está activada para tu plan actual."
+                            />
+                        `}
+                    </div>
                 `}
 
                 ${activeTab === 'terminal' && html`
@@ -624,34 +649,41 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                                 <p class="mt-1 text-sm text-gray-600">Define cómo se gestionan las sesiones de caja en el Punto de Venta.</p>
                             </div>
                             ${canEdit && html`
-                                <button onClick=${handleSave} disabled=${isSaving || !!dataError || hasOpenSessions || isCheckingSessions} class="flex-shrink-0 w-full sm:w-auto flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-400 min-w-[120px]">
+                                <button onClick=${handleSave} disabled=${isSaving || !!dataError || (canUseCashRegister && (hasOpenSessions || isCheckingSessions))} class="flex-shrink-0 w-full sm:w-auto flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-400 min-w-[120px]">
                                     ${isSaving ? html`<${Spinner}/>` : 'Guardar Cambios'}
                                 </button>
                             `}
                         </div>
                         <div class="mt-4 max-w-4xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-sm border">
-                            <fieldset class="space-y-4" disabled=${!canEdit || !!dataError || hasOpenSessions || isCheckingSessions}>
-                                <legend class="text-base font-semibold leading-6 text-gray-900">Modo de Operación de Caja</legend>
-                                <div class="relative flex items-start p-4 border rounded-lg ${formData.modo_caja === 'por_sucursal' ? 'bg-blue-50 border-blue-200' : 'bg-white'}">
-                                    <div class="flex h-6 items-center">
-                                        <input id="modo_caja_sucursal" name="modo_caja" type="radio" value="por_sucursal" checked=${formData.modo_caja === 'por_sucursal'} onInput=${handleInput} class="h-4 w-4 border-gray-300 text-primary focus:ring-primary" />
+                            ${!canUseCashRegister ? html`
+                                <${PremiumModuleMessage}
+                                    moduleName="Gestión de Cajas"
+                                    featureDescription="El historial y la gestión de apertura/cierre de caja es una funcionalidad que no está activada para tu plan actual."
+                                />
+                            ` : html`
+                                <fieldset class="space-y-4" disabled=${!canEdit || !!dataError || hasOpenSessions || isCheckingSessions}>
+                                    <legend class="text-base font-semibold leading-6 text-gray-900">Modo de Operación de Caja</legend>
+                                    <div class="relative flex items-start p-4 border rounded-lg ${formData.modo_caja === 'por_sucursal' ? 'bg-blue-50 border-blue-200' : 'bg-white'}">
+                                        <div class="flex h-6 items-center">
+                                            <input id="modo_caja_sucursal" name="modo_caja" type="radio" value="por_sucursal" checked=${formData.modo_caja === 'por_sucursal'} onInput=${handleInput} class="h-4 w-4 border-gray-300 text-primary focus:ring-primary" />
+                                        </div>
+                                        <div class="ml-3 text-sm leading-6">
+                                            <label for="modo_caja_sucursal" class="font-medium text-gray-900">Caja por Sucursal (Recomendado)</label>
+                                            <p class="text-gray-500">Solo se puede abrir una sesión de caja a la vez por cada sucursal. Ideal para la mayoría de negocios.</p>
+                                        </div>
                                     </div>
-                                    <div class="ml-3 text-sm leading-6">
-                                        <label for="modo_caja_sucursal" class="font-medium text-gray-900">Caja por Sucursal (Recomendado)</label>
-                                        <p class="text-gray-500">Solo se puede abrir una sesión de caja a la vez por cada sucursal. Ideal para la mayoría de negocios.</p>
+                                    <div class="relative flex items-start p-4 border rounded-lg ${formData.modo_caja === 'por_usuario' ? 'bg-blue-50 border-blue-200' : 'bg-white'}">
+                                        <div class="flex h-6 items-center">
+                                            <input id="modo_caja_usuario" name="modo_caja" type="radio" value="por_usuario" checked=${formData.modo_caja === 'por_usuario'} onInput=${handleInput} class="h-4 w-4 border-gray-300 text-primary focus:ring-primary" />
+                                        </div>
+                                        <div class="ml-3 text-sm leading-6">
+                                            <label for="modo_caja_usuario" class="font-medium text-gray-900">Caja por Usuario</label>
+                                            <p class="text-gray-500">Cada usuario (vendedor) debe abrir y cerrar su propia caja individualmente al iniciar y finalizar su turno.</p>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="relative flex items-start p-4 border rounded-lg ${formData.modo_caja === 'por_usuario' ? 'bg-blue-50 border-blue-200' : 'bg-white'}">
-                                    <div class="flex h-6 items-center">
-                                        <input id="modo_caja_usuario" name="modo_caja" type="radio" value="por_usuario" checked=${formData.modo_caja === 'por_usuario'} onInput=${handleInput} class="h-4 w-4 border-gray-300 text-primary focus:ring-primary" />
-                                    </div>
-                                    <div class="ml-3 text-sm leading-6">
-                                        <label for="modo_caja_usuario" class="font-medium text-gray-900">Caja por Usuario</label>
-                                        <p class="text-gray-500">Cada usuario (vendedor) debe abrir y cerrar su propia caja individualmente al iniciar y finalizar su turno.</p>
-                                    </div>
-                                </div>
-                            </fieldset>
-                             ${(hasOpenSessions || isCheckingSessions) && html`
+                                </fieldset>
+                            `}
+                             ${(hasOpenSessions || isCheckingSessions) && canUseCashRegister && html`
                                 <div class="mt-4 p-3 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-sm flex items-start gap-2">
                                     <div class="text-xl text-amber-600 mt-0.5">${ICONS.warning}</div>
                                     <div>
@@ -660,7 +692,7 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                                     </div>
                                 </div>
                              `}
-                             ${!canEdit && !dataError && html`
+                             ${!canEdit && !dataError && canUseCashRegister && html`
                                 <div class="mt-6 p-4 rounded-md bg-blue-50 text-blue-700 text-sm" role="alert">
                                     <p>Solo el rol de <strong>Propietario</strong> puede editar esta información.</p>
                                 </div>
@@ -678,53 +710,61 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                             ${canEdit && html`
                                 <button 
                                     onClick=${handleSave}
-                                    disabled=${isSaving || !!dataError || slugStatus === 'checking' || slugStatus === 'unavailable'}
+                                    disabled=${isSaving || !!dataError || (planSupportsCatalog && (slugStatus === 'checking' || slugStatus === 'unavailable'))}
                                     class="flex-shrink-0 w-full sm:w-auto flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50 disabled:bg-gray-400 min-w-[120px]"
                                 >
                                     ${isSaving ? html`<${Spinner}/>` : 'Guardar Cambios'}
                                 </button>
                             `}
                         </div>
-
+    
                         <div class="mt-4 max-w-2xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-sm border">
-                            <p class="text-sm text-gray-600">Define una dirección web corta y fácil de recordar para tu catálogo. Solo se permiten letras minúsculas, números y guiones.</p>
-
-                            <div class="mt-4">
-                                <${FormInput}
-                                    label="URL Única (slug)"
-                                    name="slug"
-                                    type="text"
-                                    value=${formData.slug}
-                                    onInput=${(e) => {
-                                        const formattedSlug = e.target.value
-                                            .toLowerCase()
-                                            .replace(/\s+/g, '-')
-                                            .replace(/[^\w\-]+/g, '')
-                                            .replace(/\-\-+/g, '-');
-                                        handleInput({ target: { name: 'slug', value: formattedSlug } });
-                                    }}
-                                    disabled=${!canEdit || !!dataError}
+                            ${!planSupportsCatalog ? html`
+                                <${PremiumModuleMessage}
+                                    moduleName="Catálogo Web"
+                                    featureDescription="Publica un catálogo en línea para tus clientes. Esta es una funcionalidad que no está activada para tu plan actual."
                                 />
-
-                                <div class="mt-2 text-sm text-gray-500 bg-slate-50 p-3 rounded-md flex items-center gap-2">
-                                    <span class="font-semibold">URL final:</span>
-                                    <code class="text-primary-dark">servivent.app/#/catalogo/<span class="font-bold">${formData.slug || 'tu-url'}</span></code>
-                                </div>
-
-                                ${slugStatus !== 'idle' && html`
-                                    <div class="mt-2 flex items-center gap-2 text-sm">
-                                        ${slugStatus === 'checking' && html`<${Spinner} size="h-4 w-4" color="text-gray-500" />`}
-                                        ${slugStatus === 'available' && html`<div class="text-green-500">${ICONS.success}</div>`}
-                                        ${slugStatus === 'unavailable' && html`<div class="text-red-500">${ICONS.error}</div>`}
-                                        ${slugStatus === 'error' && html`<div class="text-red-500">${ICONS.error}</div>`}
-                                        <span class=${`
-                                            ${slugStatus === 'available' ? 'text-green-600' : ''}
-                                            ${slugStatus === 'unavailable' ? 'text-red-600' : ''}
-                                            ${slugStatus === 'error' ? 'text-red-600' : ''}
-                                        `}>${slugMessage}</span>
+                            ` : html`
+                                <div>
+                                    <p class="text-sm text-gray-600">Define una dirección web corta y fácil de recordar para tu catálogo. Solo se permiten letras minúsculas, números y guiones.</p>
+                                    <div class="mt-4">
+                                        <${FormInput}
+                                            label="URL Única (slug)"
+                                            name="slug"
+                                            type="text"
+                                            value=${formData.slug}
+                                            onInput=${(e) => {
+                                                const formattedSlug = e.target.value
+                                                    .toLowerCase()
+                                                    .replace(/\s+/g, '-')
+                                                    .replace(/[^\w\-]+/g, '')
+                                                    .replace(/\-\-+/g, '-');
+                                                handleInput({ target: { name: 'slug', value: formattedSlug } });
+                                            }}
+                                            disabled=${!canEdit || !!dataError}
+                                        />
+        
+                                        <div class="mt-2 text-sm text-gray-500 bg-slate-50 p-3 rounded-md flex items-center gap-2">
+                                            <span class="font-semibold">URL final:</span>
+                                            <code class="text-primary-dark">servivent.app/#/catalogo/<span class="font-bold">${formData.slug || 'tu-url'}</span></code>
+                                        </div>
+        
+                                        ${slugStatus !== 'idle' && html`
+                                            <div class="mt-2 flex items-center gap-2 text-sm">
+                                                ${slugStatus === 'checking' && html`<${Spinner} size="h-4 w-4" color="text-gray-500" />`}
+                                                ${slugStatus === 'available' && html`<div class="text-green-500">${ICONS.success}</div>`}
+                                                ${slugStatus === 'unavailable' && html`<div class="text-red-500">${ICONS.error}</div>`}
+                                                ${slugStatus === 'error' && html`<div class="text-red-500">${ICONS.error}</div>`}
+                                                <span class=${`
+                                                    ${slugStatus === 'available' ? 'text-green-600' : ''}
+                                                    ${slugStatus === 'unavailable' ? 'text-red-600' : ''}
+                                                    ${slugStatus === 'error' ? 'text-red-600' : ''}
+                                                `}>${slugMessage}</span>
+                                            </div>
+                                        `}
                                     </div>
-                                `}
-                            </div>
+                                </div>
+                            `}
                         </div>
                     </div>
                 `}

@@ -14,12 +14,13 @@ interface UserPayload {
   password?: string;
   rol: 'Propietario' | 'Administrador' | 'Empleado';
   sucursal_id?: string;
+  // --- Registration-specific fields ---
   empresa_nombre?: string;
   empresa_nit?: string;
   sucursal_nombre?: string;
   sucursal_direccion?: string;
   sucursal_telefono?: string;
-  plan_tipo?: string;
+  plan_tipo?: string; // This is now a descriptive string like "Profesional (Mensual)"
   timezone?: string;
   moneda?: string;
 }
@@ -54,6 +55,7 @@ Deno.serve(async (req) => {
     let final_sucursal_id: string;
 
     if (rol === 'Propietario') {
+      // --- REGISTRATION FLOW FOR A NEW COMPANY ---
       if (!empresa_nombre || !empresa_nit || !sucursal_nombre || !plan_tipo || !timezone || !moneda) {
         throw new Error('Faltan campos obligatorios para el registro de una nueva empresa.');
       }
@@ -64,6 +66,16 @@ Deno.serve(async (req) => {
       if (existingCompany) {
         throw new Error(`El NIT "${empresa_nit}" ya ha sido registrado por otra empresa.`);
       }
+
+      // Find the plan ID from the descriptive name
+      const planNameMatch = plan_tipo.match(/^([a-zA-Z\s]+)/);
+      const planName = planNameMatch ? planNameMatch[1].trim() : null;
+      if (!planName) throw new Error('No se pudo determinar el plan desde el tipo de licencia.');
+
+      const { data: planData, error: planError } = await supabaseAdmin
+        .from('planes').select('id').eq('nombre', planName).single();
+      if (planError || !planData) throw new Error(`El plan "${planName}" no es válido.`);
+
 
       const { data: empresaData, error: empresaError } = await supabaseAdmin
         .from('empresas').insert({ 
@@ -81,10 +93,11 @@ Deno.serve(async (req) => {
       final_sucursal_id = sucursalData.id;
       
       const fecha_fin = new Date();
-      fecha_fin.setDate(fecha_fin.getDate() + 30);
+      fecha_fin.setDate(fecha_fin.getDate() + 30); // 30-day trial
 
       const { error: licenciaError } = await supabaseAdmin.from('licencias').insert({
           empresa_id: final_empresa_id,
+          plan_id: planData.id,
           tipo_licencia: plan_tipo,
           fecha_inicio: new Date().toISOString(),
           fecha_fin: fecha_fin.toISOString(),
@@ -93,6 +106,7 @@ Deno.serve(async (req) => {
        if (licenciaError) throw new Error(`Error al crear la licencia: ${licenciaError.message}`);
 
     } else {
+      // --- CREATING A NEW USER FOR AN EXISTING COMPANY ---
       const authHeader = req.headers.get('Authorization');
       if (!authHeader) throw new Error('Missing authorization header');
       const jwt = authHeader.replace('Bearer ', '');
@@ -102,20 +116,21 @@ Deno.serve(async (req) => {
         { global: { headers: { Authorization: `Bearer ${jwt}` } } }
       );
       
+      // get_caller_profile_safely now returns planLimits
       const { data: callerProfile, error: callerError } = await supabaseClient.rpc('get_caller_profile_safely').single();
       if (callerError || !callerProfile) throw new Error('No se pudo verificar al usuario que realiza la llamada.');
       if (callerProfile.rol !== 'Propietario' && callerProfile.rol !== 'Administrador') throw new Error('Acceso denegado: Se requiere rol de Propietario o Administrador.');
       
-      const { data: licenseData, error: licenseError } = await supabaseAdmin.from('licencias').select('tipo_licencia').eq('empresa_id', callerProfile.empresa_id).single();
-      if (licenseError) throw new Error(`No se pudo verificar la licencia: ${licenseError.message}`);
-      const { count: userCount, error: countError } = await supabaseAdmin.from('usuarios').select('*', { count: 'exact', head: true }).eq('empresa_id', callerProfile.empresa_id);
-      if (countError) throw new Error(`No se pudo contar usuarios: ${countError.message}`);
+      // **ENFORCEMENT LOGIC**
+      const { count: userCount, error: countError } = await supabaseAdmin
+        .from('usuarios')
+        .select('*', { count: 'exact', head: true })
+        .eq('empresa_id', callerProfile.empresa_id);
 
-      const planType = licenseData.tipo_licencia || '';
-      let maxUsers = 1;
-      if (planType.includes('Emprendedor')) maxUsers = 3;
-      else if (planType.includes('Profesional') || planType.includes('Prueba Gratuita')) maxUsers = 10;
-      else if (planType.includes('Corporativo')) maxUsers = Infinity;
+      if (countError) throw new Error(`No se pudo contar usuarios: ${countError.message}`);
+      
+      const maxUsers = callerProfile.planLimits?.maxUsers ?? 1;
+
       if (userCount !== null && userCount >= maxUsers) {
         throw new Error('Límite de usuarios alcanzado para el plan actual.');
       }
@@ -124,10 +139,15 @@ Deno.serve(async (req) => {
       final_sucursal_id = sucursal_id;
     }
 
+    // --- COMMON USER CREATION LOGIC ---
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: correo,
       password: password,
       email_confirm: true,
+      app_metadata: {
+        nombre_completo: nombre_completo, // Store name in app_metadata for notifications
+        empresa_id: final_empresa_id
+      }
     });
     if (authError) {
         if (authError.message.includes('User already registered')) throw new Error('Este correo electrónico ya está en uso.');

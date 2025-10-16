@@ -175,10 +175,10 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
     const [userToDelete, setUserToDelete] = useState(null);
     const [isProfileModalOpen, setProfileModalOpen] = useState(false);
 
-    const [branchDetails, setBranchDetails] = useState({ nombre: '', direccion: '', telefono: '' });
+    const [branchDetails, setBranchDetails] = useState({ nombre: '', direccion: '', telefono: '', latitud: null, longitud: null });
     
     const planLimits = companyInfo?.planDetails?.limits;
-    const maxUsers = planLimits?.maxUsers ?? 1;
+    const maxUsers = planLimits?.max_users ?? 1;
     const totalCompanyUsers = data?.kpis?.total_company_users ?? 0;
     const atUserLimit = totalCompanyUsers >= maxUsers;
 
@@ -216,7 +216,9 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
                 p_sucursal_id: sucursalId,
                 p_nombre: branchDetails.nombre,
                 p_direccion: branchDetails.direccion,
-                p_telefono: branchDetails.telefono
+                p_telefono: branchDetails.telefono,
+                p_latitud: branchDetails.latitud,
+                p_longitud: branchDetails.longitud,
             });
             if (error) throw error;
             addToast({ message: 'Detalles de la sucursal actualizados.', type: 'success' });
@@ -355,7 +357,7 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
                                 />
                                 <${KPI_Card} 
                                     title="Uso Total de Usuarios"
-                                    value=${`${totalCompanyUsers} de ${maxUsers === Infinity ? '∞' : maxUsers}`}
+                                    value=${`${totalCompanyUsers} de ${maxUsers >= 99999 ? '∞' : maxUsers}`}
                                     icon=${ICONS.building}
                                     color=${atUserLimit ? 'amber' : 'green'}
                                     subtext="Límite total del plan de la empresa."
@@ -374,7 +376,8 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
                             <button 
                                 onClick=${handleAddUser}
                                 disabled=${atUserLimit}
-                                class="hidden sm:inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400"
+                                title=${atUserLimit ? 'Has alcanzado el límite de usuarios de tu plan.' : 'Añadir nuevo usuario'}
+                                class="hidden sm:inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400 disabled:cursor-not-allowed"
                             >
                                 ${ICONS.add} Añadir Usuario
                             </button>
@@ -384,17 +387,41 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
                     </div>
                 `}
                 ${activeTab === 'detalles' && html`
-                    <div class="max-w-xl">
-                        <h2 class="text-xl font-semibold text-gray-800">Información de la Sucursal</h2>
-                        <div class="mt-4 p-6 bg-white rounded-lg shadow border space-y-4">
-                            <${FormInput} label="Nombre" name="nombre" type="text" value=${branchDetails.nombre} onInput=${handleDetailsInput} />
-                            <${FormInput} label="Dirección" name="direccion" type="text" value=${branchDetails.direccion} onInput=${handleDetailsInput} required=${false} />
-                            <${FormInput} label="Teléfono" name="telefono" type="tel" value=${branchDetails.telefono} onInput=${handleDetailsInput} required=${false} />
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div class="max-w-xl">
+                            <h2 class="text-xl font-semibold text-gray-800">Información de la Sucursal</h2>
+                            <div class="mt-4 p-6 bg-white rounded-lg shadow border space-y-4">
+                                <${FormInput} label="Nombre" name="nombre" type="text" value=${branchDetails.nombre} onInput=${handleDetailsInput} />
+                                <${FormInput} label="Dirección" name="direccion" type="text" value=${branchDetails.direccion} onInput=${handleDetailsInput} required=${false} />
+                                <${FormInput} label="Teléfono" name="telefono" type="tel" value=${branchDetails.telefono} onInput=${handleDetailsInput} required=${false} />
+                            </div>
+                            <div class="mt-4 flex justify-end">
+                                <button onClick=${handleSaveChanges} disabled=${isSaving} class="flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50 min-w-[120px]">
+                                    ${isSaving ? html`<${Spinner}/>` : 'Guardar Cambios'}
+                                </button>
+                            </div>
                         </div>
-                        <div class="mt-4 flex justify-end">
-                            <button onClick=${handleSaveChanges} disabled=${isSaving} class="flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50 min-w-[120px]">
-                                ${isSaving ? html`<${Spinner}/>` : 'Guardar Cambios'}
-                            </button>
+                        <div>
+                            <h2 class="text-xl font-semibold text-gray-800">Ubicación en el Mapa</h2>
+                             ${branchDetails.latitud && branchDetails.longitud ? html`
+                                <a 
+                                    href=${`https://maps.google.com/?q=${branchDetails.latitud},${branchDetails.longitud}`} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    class="mt-4 block rounded-lg overflow-hidden shadow border transition-shadow hover:shadow-lg"
+                                >
+                                    <img 
+                                        src=${`https://maps.googleapis.com/maps/api/staticmap?center=${branchDetails.latitud},${branchDetails.longitud}&zoom=16&size=600x400&markers=color:red%7C${branchDetails.latitud},${branchDetails.longitud}&key=AIzaSyDcOzOJnV2qJWsXeCGqBfWiORfUa4ZIBtw`} 
+                                        class="w-full aspect-[4/3] object-cover" 
+                                        alt="Mapa de la sucursal" 
+                                    />
+                                </a>
+                             ` : html`
+                                <div class="mt-4 p-6 bg-white rounded-lg shadow border text-center text-gray-500">
+                                    <p>No se ha establecido una ubicación para esta sucursal.</p>
+                                    <p class="text-xs mt-1">Edita la sucursal desde la lista principal para añadir una ubicación.</p>
+                                </div>
+                             `}
                         </div>
                     </div>
                 `}

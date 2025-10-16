@@ -1,40 +1,43 @@
 -- =============================================================================
--- AUDIT TRAIL ("BLACK BOX") SYSTEM - DATABASE SETUP (V3 - Web Catalog Context)
+-- AUDIT TRAIL ("BLACK BOX") SYSTEM - DATABASE SETUP (V10 - Definitive FK Fix)
 -- =============================================================================
--- This script implements the complete backend for the audit trail system.
--- VERSION 3 enhances the trigger function to correctly identify and label
--- actions originating from the unauthenticated web catalog, such as new client
--- sign-ups.
+-- This script provides the definitive fix for the "violates foreign key constraint"
+-- error that occurs during a SuperAdmin-initiated company deletion.
 --
--- WHAT IT DOES:
--- 1.  Creates the `historial_cambios` table to store audit logs.
--- 2.  Creates a generic trigger function `registrar_cambio()` that now detects
---     when a new client is created without a session and labels the actor as
---     'Catálogo Web'.
--- 3.  Applies this trigger to all critical business tables.
--- 4.  Creates an RPC function `get_historial_cambios()` for the frontend.
+-- PROBLEM: The audit trigger tried to insert a log referencing an `empresa_id`
+-- that was being deleted in the same transaction, causing a conflict.
+--
+-- REAL SOLUTION: An audit log should not be bound by relational integrity that
+-- prevents it from logging the deletion of parent records. This script removes
+-- the foreign key constraint on `historial_cambios.empresa_id`, treating it
+-- as a historical data point rather than a live relation. This allows the
+-- cascade delete to complete successfully while preserving a full audit trail
+-- of the deleted records.
 --
 -- INSTRUCTIONS:
--- Execute this script completely in your Supabase SQL Editor. It's safe to run
--- multiple times.
+-- Execute this script completely in your Supabase SQL Editor.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- Step 1: Create the `historial_cambios` table (no changes)
+-- Step 1: Create/Alter the `historial_cambios` table (WITHOUT FOREIGN KEY)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.historial_cambios (
     id bigserial PRIMARY KEY,
     timestamp timestamptz DEFAULT now() NOT NULL,
-    usuario_id uuid REFERENCES public.usuarios(id) ON DELETE SET NULL,
+    usuario_id uuid,
     usuario_nombre text,
     accion text NOT NULL,
     tabla_afectada text NOT NULL,
     registro_id text NOT NULL,
     datos_anteriores jsonb,
     datos_nuevos jsonb,
-    empresa_id uuid NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE
+    empresa_id uuid NOT NULL -- NOTE: The foreign key is intentionally removed.
 );
 
+-- Drop the foreign key constraint if it exists from any previous version.
+ALTER TABLE public.historial_cambios DROP CONSTRAINT IF EXISTS historial_cambios_empresa_id_fkey;
+
+-- Other configurations remain the same
 CREATE INDEX IF NOT EXISTS idx_historial_cambios_empresa_id_timestamp ON public.historial_cambios (empresa_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_historial_cambios_tabla_afectada ON public.historial_cambios (tabla_afectada);
 CREATE INDEX IF NOT EXISTS idx_historial_cambios_usuario_id ON public.historial_cambios (usuario_id);
@@ -55,7 +58,7 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Step 2: Create the generic trigger function `registrar_cambio` (UPDATED)
+-- Step 2: Restore the generic trigger function `registrar_cambio` to its robust version
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.registrar_cambio()
 RETURNS TRIGGER
@@ -69,48 +72,67 @@ DECLARE
     v_usuario_nombre text;
     v_registro_id text;
 BEGIN
+    -- 1. Get user and company info from JWT (primary method)
     v_usuario_id := auth.uid();
     v_usuario_nombre := (auth.jwt() -> 'app_metadata' ->> 'nombre_completo')::text;
     v_empresa_id := public.get_empresa_id_from_jwt();
 
-    -- Fallback for server-side operations where a JWT might not be present.
-    IF v_empresa_id IS NULL THEN
-        IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-            v_empresa_id := NEW.empresa_id;
-        ELSIF TG_OP = 'DELETE' THEN
-            v_empresa_id := OLD.empresa_id;
+    -- 2. Determine record ID and fallback to get empresa_id from the record itself (safely)
+    IF TG_OP = 'DELETE' THEN
+        v_registro_id := OLD.id::text;
+        IF v_empresa_id IS NULL AND (to_jsonb(OLD) ? 'empresa_id') THEN
+             v_empresa_id := (to_jsonb(OLD) ->> 'empresa_id')::uuid;
+        END IF;
+    ELSE -- INSERT or UPDATE
+        v_registro_id := NEW.id::text;
+        IF v_empresa_id IS NULL AND (to_jsonb(NEW) ? 'empresa_id') THEN
+             v_empresa_id := (to_jsonb(NEW) ->> 'empresa_id')::uuid;
         END IF;
     END IF;
+    
+    -- 3. Relational lookup as a second fallback for tables without direct empresa_id
+    IF v_empresa_id IS NULL THEN
+        IF TG_TABLE_NAME = 'precios_productos' THEN
+             IF TG_OP = 'DELETE' THEN
+                SELECT p.empresa_id INTO v_empresa_id FROM public.productos p WHERE p.id = OLD.producto_id;
+             ELSE
+                SELECT p.empresa_id INTO v_empresa_id FROM public.productos p WHERE p.id = NEW.producto_id;
+             END IF;
+        END IF;
+        -- Add more relational lookups here if needed for other tables...
+    END IF;
 
-    -- If after all attempts, empresa_id is still null, we cannot create an audit log.
+    -- 4. If empresa_id is still unknown, skip logging.
     IF v_empresa_id IS NULL THEN
         RAISE WARNING '[AUDIT TRIGGER SKIPPED] Could not determine empresa_id for table %. Operation: %', TG_TABLE_NAME, TG_OP;
         RETURN COALESCE(NEW, OLD);
     END IF;
 
-    -- Determine the ID of the record being changed
-    IF TG_OP = 'DELETE' THEN
-        v_registro_id := OLD.id::text;
-    ELSE
-        v_registro_id := NEW.id::text;
-    END IF;
-
-    -- **CONTEXT-AWARE USER NAMING**
-    -- If user name is null (e.g., in a server context without a JWT), determine the actor.
+    -- 5. Context-aware user naming
     IF v_usuario_nombre IS NULL THEN
         IF v_usuario_id IS NOT NULL THEN
-             SELECT nombre_completo INTO v_usuario_nombre FROM public.usuarios WHERE id = v_usuario_id;
-        END IF;
-        IF v_usuario_nombre IS NULL THEN
-            -- Check for the specific case of a new client signing up from the web catalog
-            IF TG_TABLE_NAME = 'clientes' AND TG_OP = 'INSERT' THEN
-                v_usuario_nombre := 'Catálogo Web';
-            ELSE
-                v_usuario_nombre := 'Sistema/Admin'; -- Fallback for other system operations
+            SELECT nombre_completo INTO v_usuario_nombre FROM public.usuarios WHERE id = v_usuario_id;
+            IF NOT FOUND THEN
+                SELECT nombre INTO v_usuario_nombre FROM public.clientes WHERE auth_user_id = v_usuario_id;
+                IF FOUND THEN
+                    v_usuario_nombre := 'Catálogo Web (' || v_usuario_nombre || ')';
+                END IF;
             END IF;
         END IF;
     END IF;
 
+    -- 6. Fallback user naming for system/web events (using safe JSONB access)
+    IF v_usuario_nombre IS NULL THEN
+        IF TG_TABLE_NAME = 'clientes' AND TG_OP = 'INSERT' AND (to_jsonb(NEW) ->> 'auth_user_id') IS NOT NULL THEN
+            v_usuario_nombre := 'Catálogo Web (' || (to_jsonb(NEW) ->> 'nombre') || ')';
+        ELSIF TG_TABLE_NAME = 'ventas' AND TG_OP = 'INSERT' AND (to_jsonb(NEW) ->> 'usuario_id') IS NULL THEN
+            v_usuario_nombre := 'Catálogo Web';
+        ELSE
+            v_usuario_nombre := 'Sistema/Admin';
+        END IF;
+    END IF;
+
+    -- 7. Insert the audit record
     INSERT INTO public.historial_cambios (
         usuario_id, usuario_nombre, accion, tabla_afectada, registro_id,
         datos_anteriores, datos_nuevos, empresa_id

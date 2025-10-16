@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { html } from 'htm/preact';
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { ConfirmationModal } from '../ConfirmationModal.js';
 import { FormInput } from '../FormComponents.js';
 import { ICONS } from '../Icons.js';
@@ -31,6 +31,12 @@ export function UserFormModal({ isOpen, onClose, onSave, userToEdit, branches, c
 
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+
+    // State for real-time email validation
+    const [emailError, setEmailError] = useState('');
+    const [emailValidationStatus, setEmailValidationStatus] = useState('idle'); // idle, checking, valid, invalid
+    const debounceTimeoutRef = useRef(null);
+
 
     const getInitialFormData = () => {
         if (isEditMode) {
@@ -60,8 +66,43 @@ export function UserFormModal({ isOpen, onClose, onSave, userToEdit, branches, c
             setNewPassword('');
             setConfirmPassword('');
             setErrors({});
+            // Reset email validation state
+            setEmailError('');
+            setEmailValidationStatus('idle');
         }
     }, [isOpen, userToEdit, isEditMode, branches]);
+
+    const validateEmail = useCallback(async (email) => {
+        if (isEditMode || !email.trim()) {
+            setEmailValidationStatus('idle');
+            setEmailError('');
+            return;
+        }
+
+        setEmailValidationStatus('checking');
+        setEmailError('');
+
+        try {
+            const { data, error } = await supabase.rpc('validate_user_email', {
+                p_correo: email,
+                p_user_id_to_exclude: null
+            });
+            if (error) throw error;
+            if (data.valid) {
+                setEmailValidationStatus('valid');
+                setEmailError('');
+            } else {
+                setEmailValidationStatus('invalid');
+                if (data.reason === 'format') setEmailError('Formato o proveedor de correo no válido (ej: gmail, hotmail).');
+                else if (data.reason === 'exists') setEmailError('Este correo electrónico ya está en uso.');
+            }
+        } catch (err) {
+            setEmailValidationStatus('error');
+            setEmailError('No se pudo verificar el correo.');
+            addToast({ message: 'Error al validar el correo.', type: 'error' });
+        }
+    }, [isEditMode, addToast]);
+
 
     // --- Real-time Validation ---
     const validateField = (name, value) => {
@@ -95,17 +136,9 @@ export function UserFormModal({ isOpen, onClose, onSave, userToEdit, branches, c
         };
     
         if (newPassword || confirmPassword) {
-            // 1. Validate length of newPassword
-            if (newPassword && newPassword.length < 6) {
-                newErrors.new_password = 'Debe tener al menos 6 caracteres.';
-            }
-            
-            // 2. Validate match
+            if (newPassword && newPassword.length < 6) newErrors.new_password = 'Debe tener al menos 6 caracteres.';
             if (newPassword !== confirmPassword) {
-                // Show mismatch error only if the new password is valid or the user started typing in confirm field.
-                if (confirmPassword || (newPassword && !newErrors.new_password)) {
-                     newErrors.confirm_password = 'Las contraseñas no coinciden.';
-                }
+                if (confirmPassword || (newPassword && !newErrors.new_password)) newErrors.confirm_password = 'Las contraseñas no coinciden.';
             }
         }
         
@@ -117,7 +150,21 @@ export function UserFormModal({ isOpen, onClose, onSave, userToEdit, branches, c
     const handleInput = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-        validateField(name, value);
+        
+        if (name === 'correo' && !isEditMode) {
+            setEmailValidationStatus('idle');
+            setEmailError('');
+            if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
+            debounceTimeoutRef.current = setTimeout(() => validateEmail(value), 500);
+        } else {
+             validateField(name, value);
+        }
+    };
+
+    const handleEmailBlur = (e) => {
+        if (isEditMode) return;
+        if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
+        validateEmail(e.target.value);
     };
 
     const validateFormOnSubmit = () => {
@@ -128,11 +175,8 @@ export function UserFormModal({ isOpen, onClose, onSave, userToEdit, branches, c
              if (errors[field]) isValid = false;
         });
 
-        if (isEditMode && newPassword && (newPassword.length < 6 || newPassword !== confirmPassword)) {
-            isValid = false;
-        }
+        if (isEditMode && newPassword && (newPassword.length < 6 || newPassword !== confirmPassword)) isValid = false;
         
-        // Final check based on state after validations
         const currentErrors = { ...errors };
         if (!isEditMode) {
             if (!formData.nombre_completo.trim()) { currentErrors.nombre_completo = 'El nombre es obligatorio.'; isValid = false; }
@@ -157,6 +201,14 @@ export function UserFormModal({ isOpen, onClose, onSave, userToEdit, branches, c
     };
 
     const handleConfirm = async () => {
+        if (!isEditMode && emailValidationStatus === 'invalid') {
+            addToast({ message: emailError, type: 'error' });
+            return;
+        }
+        if (!isEditMode && emailValidationStatus === 'checking') {
+            addToast({ message: 'Por favor, espera a que termine la validación del correo.', type: 'warning' });
+            return;
+        }
         if (!validateFormOnSubmit()) {
             addToast({ message: 'Por favor, corrige los errores del formulario.', type: 'error' });
             return;
@@ -214,7 +266,6 @@ export function UserFormModal({ isOpen, onClose, onSave, userToEdit, branches, c
                     const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
                     avatarUrl = `${urlData.publicUrl}?t=${new Date().getTime()}`;
 
-                    // Update the user with the new avatar URL
                     const { error: updateError } = await supabase.rpc('update_company_user', {
                         p_user_id_to_update: userId,
                         p_nombre_completo: formData.nombre_completo,
@@ -231,24 +282,19 @@ export function UserFormModal({ isOpen, onClose, onSave, userToEdit, branches, c
             console.error('Error saving user:', err);
             let errorMessage = "Ocurrió un error inesperado al guardar el usuario.";
 
-            // Extract the specific error message from the Edge Function's response
             if (err.context && typeof err.context.json === 'function') {
                 try {
                     const errorData = await err.context.json();
-                    if (errorData.error) {
-                        errorMessage = errorData.error;
-                    } else {
-                        errorMessage = err.message;
-                    }
+                    if (errorData.error) errorMessage = errorData.error;
+                    else errorMessage = err.message;
                 } catch (jsonError) {
                     console.error('Could not parse error JSON from Edge Function', jsonError);
-                    errorMessage = err.message; // Fallback to generic message
+                    errorMessage = err.message;
                 }
             } else {
                  errorMessage = err.message;
             }
             
-            // Remap known error strings for consistency, though the backend should already be friendly.
             if (errorMessage.includes('User already registered') || errorMessage.includes('duplicate key value violates unique constraint "users_email_key"')) {
                 errorMessage = 'Este correo electrónico ya está en uso.';
             }
@@ -260,6 +306,11 @@ export function UserFormModal({ isOpen, onClose, onSave, userToEdit, branches, c
     };
 
     const title = isEditMode ? 'Editar Usuario' : 'Añadir Nuevo Usuario';
+    
+    let emailIndicator = null;
+    if (emailValidationStatus === 'checking') emailIndicator = html`<${Spinner} size="h-5 w-5" color="text-gray-400" />`;
+    else if (emailValidationStatus === 'valid') emailIndicator = html`<div class="text-green-500">${ICONS.success}</div>`;
+    else if (emailValidationStatus === 'invalid') emailIndicator = html`<div class="text-red-500">${ICONS.error}</div>`;
 
     return html`
         <${ConfirmationModal}
@@ -287,7 +338,16 @@ export function UserFormModal({ isOpen, onClose, onSave, userToEdit, branches, c
                     <${FormInput} label="Nombre Completo" name="nombre_completo" type="text" value=${formData.nombre_completo} onInput=${handleInput} error=${errors.nombre_completo} />
                     
                     ${!isEditMode && html`
-                        <${FormInput} label="Correo Electrónico" name="correo" type="email" value=${formData.correo} onInput=${handleInput} error=${errors.correo} />
+                        <${FormInput}
+                            label="Correo Electrónico"
+                            name="correo"
+                            type="email"
+                            value=${formData.correo}
+                            onInput=${handleInput}
+                            onBlur=${handleEmailBlur}
+                            error=${errors.correo || emailError}
+                            rightElement=${emailIndicator}
+                        />
                     `}
                     
                     ${!isEditMode && html`

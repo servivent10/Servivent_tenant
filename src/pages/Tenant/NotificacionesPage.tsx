@@ -43,10 +43,8 @@ export function NotificacionesPage({ user, companyInfo, onLogout, onProfileUpdat
     const { startLoading, stopLoading } = useLoading();
     const [notifications, setNotifications] = useState([]);
     const [filters, setFilters] = useState({ startDate: '', endDate: '', eventTypes: [], branchIds: [], readStatus: 'all' });
-    // FIX: Initialize filterOptions state with the full shape expected from the RPC call to ensure type consistency.
     const [filterOptions, setFilterOptions] = useState({ branches: [], clients: [], users: [] });
 
-    // FIX: Add missing handleFilterChange function.
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
         setFilters(prev => ({ ...prev, [name]: value }));
@@ -70,7 +68,6 @@ export function NotificacionesPage({ user, companyInfo, onLogout, onProfileUpdat
             if (optionsRes.error) throw optionsRes.error;
 
             setNotifications(Array.isArray(notifRes.data) ? notifRes.data : []);
-            // FIX: Provide a fallback object with the correct full shape.
             setFilterOptions(optionsRes.data || { branches: [], clients: [], users: [] });
         } catch (err) {
             addToast({ message: `Error al cargar notificaciones: ${err.message}`, type: 'error' });
@@ -86,8 +83,6 @@ export function NotificacionesPage({ user, companyInfo, onLogout, onProfileUpdat
     useRealtimeListener(fetchData);
 
     const groupedNotifications = useMemo(() => {
-        // FIX: Explicitly type 'groups' to help TypeScript infer the correct type for Object.entries,
-        // which prevents 'groupNotifs' from being typed as 'unknown'.
         const groups: { [key: string]: any[] } = {};
         const today = new Date();
         const yesterday = new Date(today);

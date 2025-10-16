@@ -7,7 +7,7 @@ Este documento define la arquitectura y funcionalidad del módulo de **Productos
 
 -   Gestionar la información fundamental de cada producto: nombre, SKU, marca, modelo, descripción, unidad de medida y categoría.
 -   Administrar la galería de imágenes de cada producto.
--   Definir y gestionar múltiples **listas de precios** para implementar estrategias comerciales flexibles (ej. precios mayoristas, ofertas, etc.).
+-   Definir y gestionar múltiples **listas de precios** para implementar estrategias comerciales flexibles (ej. precios mayoristas, ofertas, etc.). Esta funcionalidad depende de que el plan de la empresa la tenga activada.
 -   Visualizar el **Costo Promedio Ponderado (CAPP)**, que es un valor calculado automáticamente por el módulo de Compras.
 
 ## 2. Páginas y Componentes Clave
@@ -20,7 +20,7 @@ Este documento define la arquitectura y funcionalidad del módulo de **Productos
 
 -   **`ProductoDetailPage.tsx`:** Página de detalle de un producto específico, organizada en pestañas:
     -   **Inventario:** Muestra el stock del producto en cada sucursal (gestionado por el módulo de Inventarios).
-    -   **Precios y Costos:** Panel para gestionar los precios de venta del producto para cada una de las `listas_precios` de la empresa. Muestra el CAPP como valor de solo lectura.
+    -   **Precios y Costos:** Panel para gestionar los precios de venta del producto. Si el plan lo permite, se pueden gestionar precios para cada una de las `listas_precios` de la empresa. De lo contrario, solo se podrá gestionar el precio "General". Muestra el CAPP como valor de solo lectura.
     -   **Detalles:** Muestra la información descriptiva del producto.
 
 -   **`ProductFormModal.tsx`:** Modal para crear y editar la información de los productos.

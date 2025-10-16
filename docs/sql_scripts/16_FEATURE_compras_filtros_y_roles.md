@@ -1,21 +1,21 @@
 -- =============================================================================
--- DATABASE ENHANCEMENT SCRIPT: FILTERS FOR PURCHASES & ROLE-BASED SECURITY (v2 - Ambiguity Fix)
+-- DATABASE ENHANCEMENT SCRIPT: FILTERS FOR PURCHASES & ROLE-BASED SECURITY (V3 - Web Orders)
 -- =============================================================================
--- Este script introduce dos mejoras y una corrección crítica:
--- 1. (FIX) Resuelve un error de "columna ambigua" al calificar explícitamente la
---    columna `sucursal_id` en la consulta inicial de perfil de usuario.
--- 2. Implementa la lógica de seguridad basada en roles en las funciones de la
---    base de datos, asegurando que los Administradores y Empleados solo vean
---    los datos de su propia sucursal.
--- 3. Añade una nueva función para obtener eficientemente los datos necesarios
---    para los nuevos filtros del módulo de Compras.
+-- This script introduces two improvements and one critical fix:
+-- 1. (FIX) Resolves an "ambiguous column" error by explicitly qualifying the
+--    `sucursal_id` column in the initial user profile query.
+-- 2. Implements role-based security logic in the database functions, ensuring
+--    that Admins and Employees only see data from their own branch, with the
+--    exception of company-wide web orders.
+-- 3. Adds a new function to efficiently retrieve the data needed for the new
+--    filters in the Purchases module.
 --
--- **INSTRUCCIONES:**
--- Ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
+-- INSTRUCTIONS:
+-- Execute this script completely in your Supabase SQL Editor.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- Paso 1: Actualizar `get_company_purchases` con lógica de roles y corrección de ambigüedad
+-- Step 1: Update `get_company_purchases` with role logic and ambiguity fix
 -- -----------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.get_company_purchases();
 CREATE OR REPLACE FUNCTION get_company_purchases()
@@ -28,7 +28,7 @@ RETURNS TABLE (
     usuario_nombre text,
     sucursal_id uuid,
     sucursal_nombre text,
-    fecha timestamptz, -- CAMBIO: de 'date' a 'timestamptz'
+    fecha timestamptz,
     total numeric,
     moneda text,
     total_bob numeric,
@@ -45,7 +45,7 @@ DECLARE
     caller_sucursal_id uuid;
     caller_empresa_id uuid;
 BEGIN
-    -- FIX: Usar el alias de tabla 'u' para resolver la ambigüedad con la columna de salida 'sucursal_id'.
+    -- FIX: Use table alias 'u' to resolve ambiguity with output column 'sucursal_id'.
     SELECT u.rol, u.sucursal_id, u.empresa_id INTO caller_rol, caller_sucursal_id, caller_empresa_id
     FROM public.usuarios u WHERE u.id = auth.uid();
 
@@ -73,7 +73,7 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Paso 2: Actualizar `get_company_sales` con lógica de roles y corrección de ambigüedad
+-- Step 2: Update `get_company_sales` with logic for roles, ambiguity fix, and web orders
 -- -----------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.get_company_sales();
 CREATE OR REPLACE FUNCTION get_company_sales()
@@ -103,7 +103,7 @@ DECLARE
     caller_sucursal_id uuid;
     caller_empresa_id uuid;
 BEGIN
-    -- FIX: Usar el alias de tabla 'u' para resolver la ambigüedad con la columna de salida 'sucursal_id'.
+    -- FIX: Use table alias 'u' to resolve ambiguity with output column 'sucursal_id'.
     SELECT u.rol, u.sucursal_id, u.empresa_id INTO caller_rol, caller_sucursal_id, caller_empresa_id
     FROM public.usuarios u WHERE u.id = auth.uid();
 
@@ -123,7 +123,10 @@ BEGIN
         LEFT JOIN public.clientes c ON v.cliente_id = c.id
         LEFT JOIN public.usuarios u ON v.usuario_id = u.id
         LEFT JOIN public.sucursales s ON v.sucursal_id = s.id
-        WHERE v.sucursal_id = caller_sucursal_id
+        WHERE v.empresa_id = caller_empresa_id AND (
+            v.sucursal_id = caller_sucursal_id 
+            OR (v.estado_pago = 'Pedido Web Pendiente' AND v.sucursal_id IS NULL) -- Allow viewing home delivery web orders
+        )
         ORDER BY v.created_at DESC;
     END IF;
 END;
@@ -131,7 +134,7 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Paso 3: Nueva función para obtener datos para los filtros de compras
+-- Step 3: New function to get data for purchase filters
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_purchases_filter_data()
 RETURNS json
@@ -167,15 +170,15 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Paso 4: Añadir columna `usuario_id` a la tabla `compras`
+-- Step 4: Add `usuario_id` column to the `compras` table
 -- -----------------------------------------------------------------------------
--- Es necesario para saber quién registró la compra.
+-- This is necessary to know who registered the purchase.
 ALTER TABLE public.compras
 ADD COLUMN IF NOT EXISTS usuario_id uuid REFERENCES public.usuarios(id) ON DELETE SET NULL;
 
 
 -- -----------------------------------------------------------------------------
--- Paso 5: Actualizar `registrar_compra` para guardar el `usuario_id`
+-- Step 5: Update `registrar_compra` to save the `usuario_id`
 -- -----------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.registrar_compra(compra_input, compra_item_input[]);
 CREATE OR REPLACE FUNCTION registrar_compra(p_compra compra_input, p_items compra_item_input[])
@@ -201,7 +204,7 @@ DECLARE
     new_price numeric;
     next_folio_number integer;
 BEGIN
-    -- ... (cálculos de total y saldo sin cambios) ...
+    -- ... (unchanged total and balance calculations) ...
     FOREACH item IN ARRAY p_items LOOP total_compra := total_compra + (item.cantidad * item.costo_unitario); END LOOP;
     total_compra_bob := CASE WHEN p_compra.moneda = 'USD' THEN total_compra * p_compra.tasa_cambio ELSE total_compra END;
     IF p_compra.tipo_pago = 'Contado' THEN saldo_final := 0; estado_final := 'Pagada';
@@ -212,7 +215,7 @@ BEGIN
     END IF;
     SELECT COALESCE(MAX(substring(folio from 6)::integer), 0) + 1 INTO next_folio_number FROM public.compras WHERE empresa_id = caller_empresa_id;
 
-    -- Insertar la cabecera de la compra, AÑADIENDO el usuario_id
+    -- Insert the purchase header, ADDING the usuario_id
     INSERT INTO public.compras (
         empresa_id, sucursal_id, proveedor_id, usuario_id, folio, fecha, moneda, tasa_cambio, total, total_bob,
         tipo_pago, estado_pago, saldo_pendiente, n_factura, fecha_vencimiento
@@ -222,7 +225,7 @@ BEGIN
         p_compra.tipo_pago, estado_final, saldo_final, p_compra.n_factura, p_compra.fecha_vencimiento
     ) RETURNING id INTO new_compra_id;
 
-    -- ... (lógica de procesamiento de items sin cambios) ...
+    -- ... (unchanged item processing logic) ...
     FOREACH item IN ARRAY p_items LOOP
         INSERT INTO public.compra_items (compra_id, producto_id, cantidad, costo_unitario) VALUES (new_compra_id, item.producto_id, item.cantidad, item.costo_unitario);
         costo_unitario_bob := CASE WHEN p_compra.moneda = 'USD' THEN item.costo_unitario * p_compra.tasa_cambio ELSE item.costo_unitario END;
@@ -234,7 +237,7 @@ BEGIN
         DECLARE stock_sucursal_anterior numeric; BEGIN SELECT cantidad INTO stock_sucursal_anterior FROM public.inventarios WHERE producto_id = item.producto_id AND sucursal_id = p_compra.sucursal_id; stock_sucursal_anterior := COALESCE(stock_sucursal_anterior, 0); INSERT INTO public.inventarios (producto_id, sucursal_id, cantidad) VALUES (item.producto_id, p_compra.sucursal_id, stock_sucursal_anterior + item.cantidad) ON CONFLICT (producto_id, sucursal_id) DO UPDATE SET cantidad = public.inventarios.cantidad + item.cantidad, updated_at = now(); INSERT INTO public.movimientos_inventario (producto_id, sucursal_id, usuario_id, tipo_movimiento, cantidad_ajustada, stock_anterior, stock_nuevo, referencia_id) VALUES (item.producto_id, p_compra.sucursal_id, caller_user_id, 'Compra', item.cantidad, stock_sucursal_anterior, stock_sucursal_anterior + item.cantidad, new_compra_id); END;
     END LOOP;
 
-    -- ... (lógica de registro de pago sin cambios) ...
+    -- ... (unchanged payment registration logic) ...
     IF p_compra.tipo_pago = 'Contado' THEN INSERT INTO public.pagos_compras (compra_id, monto, metodo_pago) VALUES (new_compra_id, total_compra, 'Contado'); ELSIF p_compra.tipo_pago = 'Crédito' AND COALESCE(p_compra.abono_inicial, 0) > 0 THEN INSERT INTO public.pagos_compras (compra_id, monto, metodo_pago) VALUES (new_compra_id, p_compra.abono_inicial, COALESCE(p_compra.metodo_abono, 'Abono Inicial')); END IF;
 
     RETURN new_compra_id;
@@ -243,5 +246,5 @@ $$;
 
 
 -- =============================================================================
--- Fin del script.
+-- End of script.
 -- =============================================================================

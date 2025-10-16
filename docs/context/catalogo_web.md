@@ -29,17 +29,17 @@ Esta fase implementa un sistema de autenticación robusto y sin fricciones que u
 
 1.  **Página de Identificación Unificada (`ClienteIdentificacionPage.tsx`):**
     *   **Punto de Entrada Único:** Tanto "Login" como "Registro" dirigen a la misma página, que inicialmente solo muestra un campo: "Ingresa tu correo electrónico para continuar".
-    *   **Verificación Inteligente en Tiempo Real:** Mientras el usuario escribe su correo, el sistema invoca la función `validate_client_email_status` en el backend, que devuelve uno de tres estados:
-        *   **`exists_linked`:** El correo ya tiene una cuenta web activa. La interfaz se transforma en un formulario de **inicio de sesión**, mostrando únicamente el campo de "Contraseña".
-        *   **`exists_unlinked`:** El correo pertenece a un cliente registrado en ServiVENT pero sin cuenta web. La interfaz muestra un mensaje de bienvenida personalizado (ej. "¡Hola de nuevo, Juan!") y le pide **crear una contraseña para activar su cuenta**.
-        *   **`new`:** El correo es completamente nuevo. La interfaz se expande para mostrar un formulario de **registro completo** con campos para "Nombre Completo", "Teléfono" y "Contraseña".
+    *   **Verificación Inteligente en Tiempo Real:** Mientras el usuario escribe su correo, el sistema invoca la función RPC `validate_client_email_status` en el backend. Esta función es el cerebro del flujo y devuelve uno de tres estados posibles:
+        *   **`exists_linked`:** El correo ya pertenece a un cliente con una cuenta web activa. La interfaz se transforma en un **formulario de inicio de sesión**, mostrando únicamente el campo de "Contraseña".
+        *   **`exists_unlinked`:** El correo pertenece a un cliente registrado en ServiVENT (ej. de una venta anterior) pero sin cuenta web. La interfaz muestra un mensaje de bienvenida personalizado (ej. "¡Hola de nuevo, Juan!") y le pide **crear una contraseña para activar su cuenta**, vinculando su perfil existente a su nueva cuenta de autenticación.
+        *   **`new`:** El correo es completamente nuevo. La interfaz se expande para mostrar un **formulario de registro completo** con campos para "Nombre Completo", "Teléfono" y "Contraseña".
     *   **Vinculación por Número de Teléfono:** En el flujo de registro `new`, mientras el usuario introduce su número de teléfono, el sistema realiza una segunda verificación en tiempo real con `find_client_by_phone`.
         *   Si se encuentra un perfil de cliente existente (sin cuenta web) asociado a ese número, la interfaz cambia y pregunta: "¿Deseas vincular este nuevo correo a tu perfil existente a nombre de [Nombre del Cliente]?".
         *   Si el cliente confirma, el proceso de registro no crea un cliente duplicado, sino que **actualiza el perfil existente** con el nuevo correo y lo vincula a la nueva cuenta de autenticación.
 
 2.  **Lógica de Backend:**
-    *   **`link-existing-client` (Edge Function):** Gestiona la activación de cuentas para clientes ya existentes, creando el usuario en `auth.users` y vinculándolo al `cliente_id` correspondiente.
-    *   **`create_client_profile_for_new_user` (Trigger):** Orquesta la creación y vinculación de perfiles. Fue mejorado para manejar el `existingClientId` (pasado desde el frontend en caso de vinculación por teléfono) y para **insertar manualmente una notificación** cuando se realiza una vinculación, ya que esta operación es un `UPDATE` y no dispara el trigger de `INSERT`.
+    *   **`link-existing-client` (Edge Function):** Gestiona la activación de cuentas para clientes ya existentes (`exists_unlinked`), creando el usuario en `auth.users` y vinculándolo al `cliente_id` correspondiente.
+    *   **`create_client_profile_for_new_user` (Trigger):** Orquesta la creación y vinculación de perfiles para el flujo `new`. Fue mejorado para manejar el `existingClientId` (pasado desde el frontend en caso de vinculación por teléfono) y para **insertar manualmente una notificación** cuando se realiza una vinculación, ya que esta operación es un `UPDATE` y no dispara el trigger de `INSERT`.
 
 3.  **Portal de Cliente (`CuentaClientePage.tsx`):**
     *   Una vez autenticado (sea por login, registro o activación), el cliente puede acceder a su portal personal (`/cuenta`).
@@ -113,11 +113,35 @@ Este paso ocurre durante el checkout, después de que el cliente ya ha iniciado 
     -   **Selección de Dirección:** Se le muestra al cliente su lista de direcciones guardadas (gestionadas desde el Portal de Cliente) para que seleccione una. El `id` de la dirección se guardará en la `venta`.
     -   **Selección de Sucursal de Despacho (Lógica Crítica):** Se le pide al cliente que seleccione de qué sucursal se deben despachar los productos. Esto es fundamental para saber de qué inventario descontar el stock.
 
-### Fase 6: Gestión de Ubicaciones con Mapas
+### Fase 6: Gestión de Ubicaciones de Sucursales con Mapas
 
--   **Backend:** Se añadirán columnas `latitud` y `longitud` a la tabla `sucursales`.
--   **UI (Propietario):** El modal `SucursalFormModal` incluirá un mapa interactivo para que el propietario establezca la ubicación exacta de sus sucursales.
--   **UI (Público):** El modal "Nuestra Empresa" usará estas coordenadas para mostrar un mapa por cada sucursal.
+Esta fase integra la geolocalización en la gestión de sucursales, mejorando la experiencia tanto para el administrador como para el cliente final. Se implementará en 5 sub-fases.
+
+#### 6.1. Backend: La Base Geográfica
+
+-   **Modificación de Base de Datos:** Se añadirán las columnas `latitud` (numeric) y `longitud` (numeric) a la tabla `public.sucursales`.
+-   **Actualización de RPC:** Las funciones `create_sucursal` y `update_sucursal` se modificarán para aceptar y guardar las nuevas coordenadas.
+
+#### 6.2. Modal de Sucursal: El Centro de Mando Geográfico (`SucursalFormModal.tsx`)
+
+-   **Diseño Interactivo:** El modal se rediseñará para incluir un **mapa interactivo de Google Maps** junto a los campos de texto.
+-   **Búsqueda Inteligente:** Una barra de búsqueda sobre el mapa utilizará la **API de Google Maps Places** para sugerir direcciones y comercios. Al seleccionar un lugar, el mapa se centrará y posicionará el marcador.
+-   **Marcador Arrastrable:** El administrador podrá arrastrar un pin en el mapa para ajustar la ubicación con precisión.
+-   **Sincronización Automática:** Al soltar el marcador, los campos `latitud`, `longitud` y `direccion` del formulario se actualizarán automáticamente usando la **API de Geocoding Inverso**.
+
+#### 6.3. Vista de Lista de Sucursales: Reconocimiento Visual (`SucursalesListPage.tsx`)
+
+-   **Tarjetas Enriquecidas (`SucursalCard.tsx`):** Cada tarjeta de sucursal mostrará una pequeña **imagen de mapa estático** (generada con la **API de Google Static Maps**) con la ubicación de la sucursal, además de su nombre, dirección y KPIs de usuarios.
+
+#### 6.4. Vista de Detalle de Sucursal: Gestión y Acceso Rápido (`SucursalDetailPage.tsx`)
+
+-   **Mapa Prominente:** En la pestaña de detalles, se mostrará un mapa estático más grande.
+-   **Acceso Directo a Google Maps:** Al hacer clic en el mapa, se abrirá una nueva pestaña en Google Maps con la ubicación exacta de la sucursal, lista para que el administrador obtenga indicaciones.
+
+#### 6.5. Experiencia del Cliente Final: Facilidad de Ubicación
+
+-   **Modal de Sucursal en Catálogo:** En el catálogo público, cuando un cliente vea los detalles de una sucursal, el modal incluirá la **imagen del mapa estático**.
+-   **Enlace Directo para Indicaciones:** Al igual que en el panel de administración, este mapa será un enlace directo a Google Maps, permitiendo al cliente obtener la ruta para llegar a la tienda con un solo clic.
 
 ### Fase 7: Procesamiento de Pedidos (Interfaz de Empresa)
 

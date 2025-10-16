@@ -64,6 +64,27 @@ Esta carpeta contiene todos los scripts SQL para configurar y mantener la base d
 | `51_FEATURE_CUSTOMER_PHONE_LINKING.md`| Catálogo Web | `[ACTIVO]` | Próximamente | Implementa la vinculación de cuentas por teléfono en el registro. |
 | `52_FIX_phone_linking_notification.md`| Catálogo Web | `[ACTIVO]` | Próximamente | Corrige la falta de notificación al vincular una cuenta por teléfono. |
 | `53_FEATURE_customer_addresses.md`| Catálogo Web | `[ACTIVO]` | Próximamente | Implementa el módulo completo de gestión de direcciones de cliente con mapas. |
-| `FIX_remove_registration_trigger.md`| Core | `[REPARACIÓN]` | N/A | Elimina un trigger obsoleto del proceso de registro. Recomendado ejecutar siempre en proyectos nuevos. |
-| `FIX_assign_owners_to_branch.md`| Sucursales y Usuarios | `[REPARACIÓN]` | N/A | Corrige perfiles de Propietarios que no están asignados a una sucursal. |
-| `FIX_link_owner_to_company.md`| Core | `[REPARACIÓN]` | N/A | Repara la vinculación entre un usuario Propietario y su empresa en casos de registro fallidos. |
+| `54_FIX_audit_trigger_fkey.md`| Auditoría | `[ACTIVO]` | Próximamente | Elimina la FK en `historial_cambios.usuario_id` para permitir auditoría de no-tenants. |
+| `55_FIX_notifications_fkey.md`| Core (Realtime) | `[ACTIVO]` | Próximamente | Elimina la FK en `notificaciones.usuario_generador_id` para permitir notificaciones de no-tenants. |
+| `56_FIX_web_order_sucursal_constraint.md`| Catálogo Web | `[ACTIVO]` | `56_REVERT_...` | Elimina la constraint `NOT NULL` en `ventas.sucursal_id` para permitir pedidos web de envío a domicilio. |
+| `56_REVERT_web_order_sucursal_constraint.md`| Catálogo Web | `[ACTIVO]` | Próximamente | Revierte la eliminación de la constraint `NOT NULL` en `ventas.sucursal_id`. |
+| `57_FIX_traspasos_cascade_delete.md`| Traspasos | `[CRÍTICO]` | `57_REVERT_traspasos_cascade_delete.md` | Corrige la restricción de clave foránea en `traspaso_items` para permitir la eliminación en cascada de productos. |
+| `58_FEATURE_user_email_validation.md`| Sucursales y Usuarios | `[ACTIVO]` | `58_REVERT_...` | Añade la función para la validación de correo de usuario en tiempo real. |
+| `DATA_INTEGRITY_FIX.md`| Core | `[REPARACIÓN]` | N/A | Script maestro que unifica y corrige los problemas de datos más comunes. |
+| `FIX_remove_registration_trigger.md`| Core | `[OBSOLETO]` | N/A | Reemplazado por `DATA_INTEGRITY_FIX.md`. |
+| `FIX_assign_owners_to_branch.md`| Sucursales y Usuarios | `[OBSOLETO]` | N/A | Reemplazado por `DATA_INTEGRITY_FIX.md`. |
+| `FIX_link_owner_to_company.md`| Core | `[OBSOLETO]` | N/A | Reemplazado por `DATA_INTEGRITY_FIX.md`. |
+| `58_FEATURE_dynamic_plans.md` | SuperAdmin / Planes | `[ACTIVO]` | `58_REVERT_dynamic_plans.md` | Implementa el sistema de gestión de planes dinámicos desde la base de datos. |
+| `59_FEATURE_dynamic_plans_enforcement.md` | Core / Planes | `[OBSOLETO]` | Próximamente | Reemplazado por el script 68. |
+| `60_FEATURE_dynamic_plans_save.md` | SuperAdmin / Planes | `[ACTIVO]` | `60_REVERT_dynamic_plans_save.md` | Añade la función para guardar la configuración completa de un plan. |
+| `61_FEATURE_superadmin_edit_payment.md` | SuperAdmin | `[ACTIVO]` | `62_REVERT_superadmin_edit_payment.md` | Añade funciones para editar pagos y licencias, corrigiendo un error. |
+| `63_FEATURE_addon_modules.md` | Planes / Módulos | `[OBSOLETO]` | `64_REVERT_addon_modules.md` | Reemplazado por el script 68. |
+| `65_FEATURE_manage_modules.md` | SuperAdmin / Módulos | `[ACTIVO]` | `66_REVERT_manage_modules.md` | Añade funciones RPC para que el SuperAdmin pueda gestionar los módulos. |
+| `68_FEATURE_dynamic_plans_enforcement_V2.md`| Core / Planes | `[ACTIVO]` | `68_REVERT_...` | **Solución Definitiva:** Unifica la obtención de permisos de planes y módulos. |
+| `68_REVERT_dynamic_plans_enforcement_V2.md`| Core / Planes | `[ACTIVO]` | Próximamente | Revierte la lógica de permisos unificada al estado anterior. |
+| `69_FEATURE_tenant_module_view.md`| Licencia / Módulos | `[ACTIVO]` | `69_REVERT_...` | Permite a los tenants ver el estado de los módulos adicionales. |
+| `69_REVERT_tenant_module_view.md`| Licencia / Módulos | `[ACTIVO]` | Próximamente | Revierte la función de vista de estado de módulos. |
+| `70_FEATURE_downloadable_receipts.md`| SuperAdmin / Licencia |`[ACTIVO]` | `70_REVERT_...` | Implementa la lógica para recibos de pago con desglose de descuentos. |
+| `70_REVERT_downloadable_receipts.md`| SuperAdmin / Licencia |`[ACTIVO]` | Próximamente | Revierte la funcionalidad de recibos de pago con descuentos. |
+| `71_FIX_plan_limit_enforcement.md`| Core / Planes | `[ACTIVO]` | `71_REVERT_...` | Corrige la validación de límites de usuarios y sucursales según el plan. |
+| `72_FEATURE_sucursal_maps.md`| Sucursales / Catálogo Web |`[ACTIVO]` | `72_REVERT_...` | Implementa la gestión de ubicaciones con mapas para las sucursales. |

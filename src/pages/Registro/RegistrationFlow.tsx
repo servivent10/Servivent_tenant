@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import { html } from 'htm/preact';
 import { supabase } from '../../lib/supabaseClient.js';
 import { FormInput, FormButtons, FormSelect } from '../../components/FormComponents.js';
@@ -10,7 +10,7 @@ import { PlanCard } from '../../components/PlanCard.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { ICONS } from '../../components/Icons.js';
 import { LoadingPage } from '../../components/LoadingPage.js';
-import { REGISTRATION_PLANS } from '../../lib/plansConfig.js';
+import { Spinner } from '../../components/Spinner.js';
 
 const countries = [
     { name: 'Argentina', timezone: 'America/Argentina/Buenos_Aires', moneda: 'ARS' },
@@ -120,15 +120,19 @@ function StepSucursal({ onNext, onBack, formData, handleInput, formErrors }) {
     `;
 }
 
-function StepPlan({ onBack, onSelectPlan, error, currencySymbol }) {
+function StepPlan({ onBack, onSelectPlan, error, currencySymbol, plans, isLoadingPlans }) {
     return html`
         <div>
             <h3 class="text-lg font-semibold text-gray-900">5. Elige tu Plan</h3>
             ${error && html`<div class="mt-4 p-4 rounded-md bg-red-50 text-red-700 text-sm" aria-live="assertive"><p>${error}</p></div>`}
             
-            <div class="isolate mx-auto mt-6 grid grid-cols-1 gap-8 md:grid-cols-2">
-                ${REGISTRATION_PLANS.filter(p => !p.prices.free).map(plan => html`<${PlanCard} plan=${plan} onSelect=${onSelectPlan} showTrialInfo=${true} currencySymbol=${currencySymbol} />`)}
-            </div>
+            ${isLoadingPlans ? html`
+                <div class="flex justify-center items-center h-64"><${Spinner} color="text-primary" size="h-10 w-10" /></div>
+            ` : html`
+                <div class="isolate mx-auto mt-6 grid grid-cols-1 gap-8 md:grid-cols-2">
+                    ${plans.filter(p => !p.prices.free).map(plan => html`<${PlanCard} plan=${plan} onSelect=${onSelectPlan} showTrialInfo=${true} currencySymbol=${currencySymbol} />`)}
+                </div>
+            `}
 
             <div class="mt-8 flex justify-start">
               <button type="button" onClick=${onBack} class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Volver</button>
@@ -183,6 +187,25 @@ export function RegistrationFlow({ navigate }) {
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [successData, setSuccessData] = useState(null);
     const totalSteps = 5;
+
+    const [plans, setPlans] = useState([]);
+    const [isLoadingPlans, setIsLoadingPlans] = useState(true);
+
+    useEffect(() => {
+        const fetchPlans = async () => {
+            setIsLoadingPlans(true);
+            try {
+                const { data, error } = await supabase.rpc('get_public_plans');
+                if (error) throw error;
+                setPlans(data || []);
+            } catch (err) {
+                setError('No se pudieron cargar los planes. Intenta recargar la página.');
+            } finally {
+                setIsLoadingPlans(false);
+            }
+        };
+        fetchPlans();
+    }, []);
 
     const validateField = (name, value) => {
         switch (name) {
@@ -417,17 +440,17 @@ export function RegistrationFlow({ navigate }) {
                         ${s.status === 'complete' ? html`
                           <a href="#" onClick=${(e) => { e.preventDefault(); if (index < step - 1) setStep(index + 1); }} class="group flex flex-col border-l-4 border-primary py-2 pl-4 transition-colors hover:border-primary-dark md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4">
                             <span class="text-sm font-medium text-primary transition-colors">${`Paso ${index+1}`}</span>
-                            <span class="text-sm font-medium">${s.name}</span>
+                            <span class="text-sm font-medium text-gray-900">${s.name}</span>
                           </a>
                         ` : s.status === 'current' ? html`
                           <div class="flex flex-col border-l-4 border-primary py-2 pl-4 md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4" aria-current="step">
                             <span class="text-sm font-medium text-primary">${`Paso ${index+1}`}</span>
-                            <span class="text-sm font-medium">${s.name}</span>
+                            <span class="text-sm font-medium text-gray-900">${s.name}</span>
                           </div>
                         ` : html`
                            <div class="group flex flex-col border-l-4 border-gray-200 py-2 pl-4 transition-colors md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4">
                             <span class="text-sm font-medium text-gray-500 transition-colors">${`Paso ${index+1}`}</span>
-                            <span class="text-sm font-medium">${s.name}</span>
+                            <span class="text-sm font-medium text-gray-500">${s.name}</span>
                           </div>
                         `}
                       </li>
@@ -440,7 +463,7 @@ export function RegistrationFlow({ navigate }) {
                   ${step === 2 && html`<${StepLocalizacion} onNext=${nextStep} onBack=${prevStep} formData=${formData} handleCountryChange=${handleCountryChange} />`}
                   ${step === 3 && html`<${StepPropietario} onNext=${nextStep} onBack=${prevStep} ...${stepProps} />`}
                   ${step === 4 && html`<${StepSucursal} onNext=${nextStep} onBack=${prevStep} ...${stepProps} />`}
-                  ${step === 5 && html`<${StepPlan} onBack=${prevStep} onSelectPlan=${handleInitiateRegistration} error=${error} currencySymbol=${getCurrencySymbol(formData.moneda)} />`}
+                  ${step === 5 && html`<${StepPlan} onBack=${prevStep} onSelectPlan=${handleInitiateRegistration} error=${error} currencySymbol=${getCurrencySymbol(formData.moneda)} plans=${plans} isLoadingPlans=${isLoadingPlans} />`}
                 </div>
             </div>
 

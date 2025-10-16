@@ -38,11 +38,12 @@ const QuantityControl = ({ quantity, onUpdate }) => {
     `;
 };
 
-export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company, navigate, slug, customerProfile }) {
+export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company, navigate, slug, customerProfile, sucursales = [] }) {
     const [deliveryMethod, setDeliveryMethod] = useState('domicilio');
     const [addresses, setAddresses] = useState([]);
     const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
     const [selectedAddressId, setSelectedAddressId] = useState(null);
+    const [selectedSucursalId, setSelectedSucursalId] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const { addToast } = useToast();
 
@@ -69,15 +70,25 @@ export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company,
     useEffect(() => {
         if (deliveryMethod === 'domicilio') {
             fetchAddresses();
+        } else if (deliveryMethod === 'retiro' && sucursales.length > 0) {
+            setSelectedSucursalId(sucursales[0].id);
         }
-    }, [deliveryMethod, fetchAddresses]);
+    }, [deliveryMethod, fetchAddresses, sucursales]);
 
     const handleConfirmOrder = () => {
-        if (deliveryMethod === 'domicilio' && !selectedAddressId) {
-            addToast({ message: 'Por favor, selecciona o añade una dirección de envío.', type: 'warning' });
-            return;
+        if (deliveryMethod === 'domicilio') {
+            if (!selectedAddressId) {
+                addToast({ message: 'Por favor, selecciona o añade una dirección de envío.', type: 'warning' });
+                return;
+            }
+            onPlaceOrder({ addressId: selectedAddressId, sucursalId: null });
+        } else if (deliveryMethod === 'retiro') {
+            if (!selectedSucursalId) {
+                addToast({ message: 'Por favor, selecciona una sucursal para el retiro.', type: 'warning' });
+                return;
+            }
+            onPlaceOrder({ addressId: null, sucursalId: selectedSucursalId });
         }
-        onPlaceOrder({ addressId: selectedAddressId });
     };
     
     const subtotal = cart.reduce((sum, item) => sum + (item.precio_oferta > 0 && item.precio_oferta < item.precio_base ? item.precio_oferta : item.precio_base) * item.quantity, 0);
@@ -142,11 +153,11 @@ export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company,
                     <div class="mt-6">
                         <h3 class="text-base font-medium text-gray-800">Método de Entrega</h3>
                         <div class="mt-2 grid grid-cols-2 gap-2">
-                            <button onClick=${() => setDeliveryMethod('domicilio')} class=${`flex flex-col items-center justify-center p-3 rounded-md border text-sm ${deliveryMethod === 'domicilio' ? 'bg-primary-light border-primary ring-2 ring-primary' : 'bg-white'}`}>
-                                ${ICONS.suppliers} <span class="font-semibold">Envío a Domicilio</span>
+                            <button onClick=${() => setDeliveryMethod('domicilio')} class=${`flex flex-col items-center justify-center p-3 rounded-md border text-sm transition-colors ${deliveryMethod === 'domicilio' ? 'bg-primary-light border-primary ring-2 ring-primary text-primary-dark' : 'bg-white text-gray-900'}`}>
+                                <div class=${deliveryMethod === 'domicilio' ? 'text-primary-dark' : 'text-gray-900'}>${ICONS.suppliers}</div> <span class="font-semibold mt-1">Envío a Domicilio</span>
                             </button>
-                            <button onClick=${() => setDeliveryMethod('retiro')} class=${`flex flex-col items-center justify-center p-3 rounded-md border text-sm ${deliveryMethod === 'retiro' ? 'bg-primary-light border-primary ring-2 ring-primary' : 'bg-white'}`}>
-                                ${ICONS.storefront} <span class="font-semibold">Retiro en Sucursal</span>
+                            <button onClick=${() => setDeliveryMethod('retiro')} class=${`flex flex-col items-center justify-center p-3 rounded-md border text-sm transition-colors ${deliveryMethod === 'retiro' ? 'bg-primary-light border-primary ring-2 ring-primary text-primary-dark' : 'bg-white text-gray-900'}`}>
+                                <div class=${deliveryMethod === 'retiro' ? 'text-primary-dark' : 'text-gray-900'}>${ICONS.storefront}</div> <span class="font-semibold mt-1">Retiro en Sucursal</span>
                             </button>
                         </div>
                     </div>
@@ -164,8 +175,8 @@ export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company,
                                     <div class="mt-2 space-y-2">
                                         ${addresses.map(addr => html`
                                             <div onClick=${() => setSelectedAddressId(addr.id)} class=${`p-3 rounded-md border cursor-pointer ${selectedAddressId === addr.id ? 'bg-blue-100 border-blue-300 ring-2 ring-blue-500' : 'bg-white'}`}>
-                                                <p class="font-semibold text-sm">${addr.nombre} ${addr.es_principal ? '(Principal)' : ''}</p>
-                                                <p class="text-xs text-gray-600">${addr.direccion_texto}</p>
+                                                <p class="font-semibold text-sm ${selectedAddressId === addr.id ? 'text-blue-900' : 'text-gray-900'}">${addr.nombre} ${addr.es_principal ? '(Principal)' : ''}</p>
+                                                <p class="text-xs ${selectedAddressId === addr.id ? 'text-blue-700' : 'text-gray-600'}">${addr.direccion_texto}</p>
                                             </div>
                                         `)}
                                         <button onClick=${() => setIsModalOpen(true)} class="text-sm font-semibold text-primary hover:underline">+ Añadir otra dirección</button>
@@ -176,7 +187,19 @@ export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company,
                     `}
                      ${deliveryMethod === 'retiro' && html`
                         <div class="mt-6 animate-fade-in-down">
-                            <p class="text-sm text-center p-4 bg-white rounded-md border text-gray-600">La selección de sucursal para retiro se realizará al confirmar el pedido.</p>
+                            <h3 class="text-base font-medium text-gray-800">Sucursal para Retiro</h3>
+                            ${sucursales.length === 0 ? html`
+                                <p class="mt-2 text-sm p-4 bg-white rounded-md border text-gray-600">No hay sucursales disponibles para retiro.</p>
+                            ` : html`
+                                <div class="mt-2 space-y-2">
+                                    ${sucursales.map(s => html`
+                                        <div onClick=${() => setSelectedSucursalId(s.id)} class=${`p-3 rounded-md border cursor-pointer ${selectedSucursalId === s.id ? 'bg-blue-100 border-blue-300 ring-2 ring-blue-500' : 'bg-white'}`}>
+                                            <p class="font-semibold text-sm ${selectedSucursalId === s.id ? 'text-blue-900' : 'text-gray-900'}">${s.nombre}</p>
+                                            <p class="text-xs ${selectedSucursalId === s.id ? 'text-blue-700' : 'text-gray-600'}">${s.direccion}</p>
+                                        </div>
+                                    `)}
+                                </div>
+                            `}
                         </div>
                     `}
 

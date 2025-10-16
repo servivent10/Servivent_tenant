@@ -9,7 +9,8 @@ import { getTenantSidebarLinks, TENANT_FOOTER_LINKS } from './tenantLinks.js';
 
 export function PendingApprovalPage({ user, onLogout, onProfileUpdate, companyInfo }) {
     
-    const sidebarLinks = getTenantSidebarLinks(user.role);
+    // FIX: Pass companyInfo to getTenantSidebarLinks to satisfy function signature and allow dynamic link generation based on plan.
+    const sidebarLinks = getTenantSidebarLinks(user.role, companyInfo);
 
     const breadcrumbs = [
         { name: 'Cuenta Pendiente', href: '#' }

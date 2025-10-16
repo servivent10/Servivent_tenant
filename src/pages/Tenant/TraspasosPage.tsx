@@ -13,15 +13,33 @@ import { useLoading } from '../../hooks/useLoading.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { useRealtimeListener } from '../../hooks/useRealtime.js';
 
+const PremiumModuleMessage = ({ moduleName, featureDescription }) => {
+    return html`
+        <div class="text-center p-8 rounded-lg border-2 border-dashed border-gray-200 bg-white animate-fade-in-down">
+            <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                ${ICONS.bolt}
+            </div>
+            <h3 class="mt-4 text-lg font-bold text-gray-900">${moduleName} Deshabilitado</h3>
+            <p class="mt-2 text-sm text-gray-600">
+                ${featureDescription}
+            </p>
+            <p class="mt-1 text-sm text-gray-500">
+                Actualiza tu plan o contacta a Soporte ServiVENT para activar este módulo.
+            </p>
+        </div>
+    `;
+};
+
 export function TraspasosPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
     const [data, setData] = useState({ traspasos: [], kpis: {} });
 
     const canCreate = user.role === 'Propietario' || user.role === 'Administrador';
+    const planSupportsModule = !!companyInfo?.planDetails?.features?.modulo_traspasos;
 
     const fetchData = async () => {
-        if (!canCreate) return;
+        if (!canCreate || !planSupportsModule) return;
         startLoading();
         try {
             const { data: result, error } = await supabase.rpc('get_traspasos_data');
@@ -38,10 +56,10 @@ export function TraspasosPage({ user, onLogout, onProfileUpdate, companyInfo, na
         if (!canCreate) {
             addToast({ message: 'No tienes permiso para acceder a este módulo.', type: 'warning' });
             navigate('/dashboard');
-        } else {
+        } else if (planSupportsModule) {
             fetchData();
         }
-    }, [canCreate]);
+    }, [canCreate, planSupportsModule]);
 
     useRealtimeListener(fetchData);
 
@@ -141,32 +159,39 @@ export function TraspasosPage({ user, onLogout, onProfileUpdate, companyInfo, na
             companyInfo=${companyInfo}
             notifications=${notifications}
         >
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 class="text-2xl font-semibold text-gray-900">Traspasos de Inventario</h1>
-                    <p class="mt-1 text-sm text-gray-600">Movimientos de stock entre tus sucursales.</p>
+            ${!planSupportsModule ? html`
+                <${PremiumModuleMessage}
+                    moduleName="Módulo de Traspasos"
+                    featureDescription="La transferencia de inventario entre sucursales es una funcionalidad que no está activada para tu plan actual."
+                />
+            ` : html`
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h1 class="text-2xl font-semibold text-gray-900">Traspasos de Inventario</h1>
+                        <p class="mt-1 text-sm text-gray-600">Movimientos de stock entre tus sucursales.</p>
+                    </div>
+                    <button 
+                        onClick=${() => navigate('/traspasos/nuevo')}
+                        class="hidden sm:inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover"
+                    >
+                        ${ICONS.add} Nuevo Traspaso
+                    </button>
                 </div>
-                 <button 
-                    onClick=${() => navigate('/traspasos/nuevo')}
-                    class="hidden sm:inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover"
-                >
-                    ${ICONS.add} Nuevo Traspaso
-                </button>
-            </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-6">
-                <${KPI_Card} title="Traspasos este Mes" value=${kpis.traspasos_this_month} icon=${ICONS.transfers} color="primary" />
-                <${KPI_Card} title="Productos más Traspasado" value=${kpis.producto_mas_traspasado || 'N/A'} icon=${ICONS.package_2} />
-                <${KPI_Card} title="Total de Productos Movidos" value=${kpis.total_productos_movidos} icon=${ICONS.inventory} />
-            </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mt-6">
+                    <${KPI_Card} title="Traspasos este Mes" value=${kpis.traspasos_this_month} icon=${ICONS.transfers} color="primary" />
+                    <${KPI_Card} title="Productos más Traspasado" value=${kpis.producto_mas_traspasado || 'N/A'} icon=${ICONS.package_2} />
+                    <${KPI_Card} title="Total de Productos Movidos" value=${kpis.total_productos_movidos} icon=${ICONS.inventory} />
+                </div>
 
-            <div class="mt-8">
-                <${TraspasosList} />
-            </div>
+                <div class="mt-8">
+                    <${TraspasosList} />
+                </div>
 
-            <div class="sm:hidden">
-                <${FloatingActionButton} onClick=${() => navigate('/traspasos/nuevo')} label="Nuevo Traspaso" />
-            </div>
+                <div class="sm:hidden">
+                    <${FloatingActionButton} onClick=${() => navigate('/traspasos/nuevo')} label="Nuevo Traspaso" />
+                </div>
+            `}
         <//>
     `;
 }

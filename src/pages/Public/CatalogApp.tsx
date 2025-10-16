@@ -254,10 +254,8 @@ export function CatalogApp({ path, navigate, customerProfile }) {
             const { error: rpcError } = await supabase.rpc('registrar_pedido_web', {
                 p_slug: slug,
                 p_items: orderItems,
-                p_cliente_email: customerProfile.correo,
-                p_cliente_nombre: customerProfile.nombre,
-                p_cliente_telefono: customerProfile.telefono,
-                p_direccion_id: deliveryDetails.addressId // NEW
+                p_direccion_id: deliveryDetails.addressId || null,
+                p_sucursal_id_retiro: deliveryDetails.sucursalId || null
             });
 
             if (rpcError) throw rpcError;
@@ -322,7 +320,7 @@ export function CatalogApp({ path, navigate, customerProfile }) {
     
     let pageContent;
     if (isCartPage) {
-        pageContent = html`<${CatalogCartPage} cart=${cart} onUpdateQuantity=${handleUpdateQuantity} onPlaceOrder=${handlePlaceOrder} company=${catalogData.company} navigate=${navigate} slug=${slug} customerProfile=${customerProfile} />`;
+        pageContent = html`<${CatalogCartPage} cart=${cart} onUpdateQuantity=${handleUpdateQuantity} onPlaceOrder=${handlePlaceOrder} company=${catalogData.company} navigate=${navigate} slug=${slug} customerProfile=${customerProfile} sucursales=${catalogData.sucursales} />`;
     } else if (activePedidoId) {
         pageContent = html`<${ClientePedidoDetailPage} pedidoId=${activePedidoId} slug=${slug} navigate=${navigate} company=${catalogData.company} />`;
     } else if (isAccountPage) {

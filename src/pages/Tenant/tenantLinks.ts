@@ -5,7 +5,7 @@
 import { html } from 'htm/preact';
 import { ICONS } from '../../components/Icons.js';
 
-export function getTenantSidebarLinks(role) {
+export function getTenantSidebarLinks(role, companyInfo) {
     const links = [
         { name: 'Dashboard', href: '#/dashboard', icon: ICONS.home },
         { name: 'Punto de Venta', href: '#/terminal-venta', icon: ICONS.pos },
@@ -21,9 +21,12 @@ export function getTenantSidebarLinks(role) {
     if (role === 'Propietario' || role === 'Administrador') {
         links.push(
             { name: 'Compras', href: '#/compras', icon: ICONS.purchases },
-            { name: 'Ventas', href: '#/ventas', icon: ICONS.sales },
-            { name: 'Historial de Cajas', href: '#/historial-cajas', icon: ICONS.history_edu }
+            { name: 'Ventas', href: '#/ventas', icon: ICONS.sales }
         );
+        // **DYNAMIC MODULE based on plan features**
+        if (companyInfo?.planDetails?.features?.aperturar_cajas) {
+            links.push({ name: 'Historial de Cajas', href: '#/historial-cajas', icon: ICONS.history_edu });
+        }
     } else if (role === 'Empleado') {
         links.push({ name: 'Ventas', href: '#/ventas', icon: ICONS.sales });
     }
@@ -35,8 +38,15 @@ export function getTenantSidebarLinks(role) {
     if (role === 'Propietario' || role === 'Administrador') {
         links.push(
             { name: 'Proveedores', href: '#/proveedores', icon: ICONS.suppliers },
-            { name: 'Clientes', href: '#/clientes', icon: ICONS.clients },
-            { name: 'Traspasos', href: '#/traspasos', icon: ICONS.transfers },
+            { name: 'Clientes', href: '#/clientes', icon: ICONS.clients }
+        );
+
+        // **DYNAMIC MODULE based on plan features**
+        if (companyInfo?.planDetails?.features?.modulo_traspasos) {
+            links.push({ name: 'Traspasos', href: '#/traspasos', icon: ICONS.transfers });
+        }
+
+        links.push(
             { name: 'Gastos', href: '#/gastos', icon: ICONS.expenses },
             { name: 'Auditoría', href: '#/auditoria', icon: ICONS.manage_history }
         );

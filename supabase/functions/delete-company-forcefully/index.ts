@@ -56,33 +56,50 @@ Deno.serve(async (req) => {
     if (signInError) throw new Error("Contraseña de SuperAdmin incorrecta. Operación cancelada.");
     console.log('[STEP 1/3] Verificación de SuperAdmin completada.');
 
-    // --- 2. ETAPA 1: ROMPER EL CICLO DE RECURSIÓN (AHORA DENTRO DE LA EDGE FUNCTION) ---
-    console.log('[STEP 2/3] Obteniendo la lista de usuarios para eliminar...');
-    const { data: usersToDelete, error: userFetchError } = await supabaseAdmin
+    // --- 2. ETAPA 1: OBTENER Y ELIMINAR TODOS LOS USUARIOS DE AUTH ---
+    console.log('[STEP 2/3] Obteniendo la lista de todos los usuarios (empleados y clientes) para eliminar...');
+    
+    // Obtener IDs de empleados de la empresa
+    const { data: tenantUsers, error: tenantUserError } = await supabaseAdmin
       .from('usuarios')
       .select('id')
       .eq('empresa_id', p_empresa_id);
 
-    if (userFetchError) {
-      throw new Error(`Error al obtener la lista de usuarios: ${userFetchError.message}`);
+    if (tenantUserError) {
+      throw new Error(`Error al obtener la lista de empleados: ${tenantUserError.message}`);
     }
 
-    console.log(`[STEP 2/3] Se encontraron ${usersToDelete.length} usuarios. Procediendo a eliminarlos...`);
+    // Obtener IDs de clientes con cuenta web de la empresa
+    const { data: customerUsers, error: customerUserError } = await supabaseAdmin
+      .from('clientes')
+      .select('auth_user_id')
+      .eq('empresa_id', p_empresa_id)
+      .not('auth_user_id', 'is', null);
+
+    if (customerUserError) {
+      throw new Error(`Error al obtener la lista de clientes: ${customerUserError.message}`);
+    }
+
+    const tenantUserIds = tenantUsers.map(u => u.id);
+    const customerUserIds = customerUsers.map(c => c.auth_user_id);
+    
+    // Combinar y eliminar duplicados
+    const allUserIdsToDelete = [...new Set([...tenantUserIds, ...customerUserIds])];
+
+    console.log(`[STEP 2/3] Se encontraron ${allUserIdsToDelete.length} usuarios en total (empleados y clientes). Procediendo a eliminarlos...`);
     
     // Eliminar cada usuario usando el cliente de administrador
-    for (const userToDelete of usersToDelete) {
-      const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(userToDelete.id);
+    for (const userIdToDelete of allUserIdsToDelete) {
+      const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(userIdToDelete);
       if (deleteUserError) {
-        // Registrar el error pero continuar si es posible
-        console.warn(`No se pudo eliminar al usuario ${userToDelete.id}: ${deleteUserError.message}`);
+        // Registrar el error pero continuar si es posible (ej. usuario ya no existe)
+        console.warn(`No se pudo eliminar al usuario ${userIdToDelete}: ${deleteUserError.message}`);
       }
     }
     console.log('[STEP 2/3] Preparación completada, usuarios eliminados de auth.users.');
 
 
     // --- 3. ETAPA 2: DEMOLICIÓN FINAL ---
-    // Con los usuarios ya eliminados, el planificador ya no ve un ciclo y
-    // la cascada puede proceder sin problemas para el resto de las tablas.
     console.log('[STEP 3/3] Ejecutando DELETE final en la tabla de empresas...');
     const { error: deleteError } = await supabaseAdmin
       .from('empresas')

@@ -197,7 +197,8 @@ export function DashboardLayout({ user, onLogout, onProfileUpdate, sidebarLinks,
     const safeUser = user || { name: ' ', role: '', sucursal: ' ' };
     const safeCompanyInfo = companyInfo || { name: ' ', licenseStatus: '' };
 
-    const finalSidebarLinks = sidebarLinks || getTenantSidebarLinks(safeUser.role);
+    // **MODIFIED:** Pass companyInfo to get dynamic links based on plan features
+    const finalSidebarLinks = sidebarLinks || getTenantSidebarLinks(safeUser.role, safeCompanyInfo);
     const finalFooterLinks = footerLinks || TENANT_FOOTER_LINKS;
 
     const fetchNotifications = async () => {

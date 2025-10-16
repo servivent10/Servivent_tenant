@@ -7,7 +7,7 @@ Este documento define la arquitectura, diseño y funcionalidad del módulo de **
 
 -   **Punto de Venta (`TerminalVentaPage.tsx`):** Proporcionar una interfaz rápida, intuitiva y optimizada para pantallas táctiles que permita a los empleados registrar ventas de manera eficiente, aplicando dinámicamente diferentes políticas de precios y gestionando clientes.
 -   **Historial de Ventas (`VentasPage.tsx`):** Ofrecer una herramienta potente para que los administradores y propietarios puedan buscar, filtrar y analizar el historial completo de ventas, obteniendo KPIs clave sobre el rendimiento del negocio.
--   **Detalle de Venta (`VentaDetailPage.tsx`):** Permitir la visualización detallada de una transacción específica, incluyendo los productos vendidos, los totales y la gestión de pagos para las ventas a crédito.
+-   **Detalle de Venta (`VentaDetailPage.tsx`):** Permitir la visualización detallada de una transacción específica, incluyendo los productos vendidos, y la gestión de pagos para las ventas a crédito.
 
 ## 2. Flujo Funcional y UI/UX
 
@@ -15,7 +15,7 @@ Este documento define la arquitectura, diseño y funcionalidad del módulo de **
 
 -   **Layout Responsivo:** En escritorio, muestra un catálogo de productos y un carrito lateral fijo. En móvil, el catálogo es a pantalla completa y un botón flotante abre el carrito.
 -   **Catálogo de Productos:** Búsqueda rápida y filtros. Los productos sin stock o precio se muestran deshabilitados.
--   **Gestión de Clientes y Precios:** Permite buscar y seleccionar clientes y listas de precios, recalculando el carrito al instante.
+-   **Gestión de Clientes y Precios:** Permite buscar y seleccionar clientes. Si el plan de la empresa lo permite, también se puede seleccionar una lista de precios, recalculando el carrito al instante.
 -   **Carrito de Venta (`CartPanel`):** Permite ajustar cantidades, aplicar precios personalizados y descuentos globales limitados por el margen de ganancia.
 -   **Finalización (`CheckoutModal`):** Modal para capturar método de pago, tipo de venta (Contado/Crédito) y calcular el cambio.
 

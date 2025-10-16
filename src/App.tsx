@@ -11,6 +11,8 @@ import { LoginPage } from './pages/Login/LoginPage.js';
 import { RegistrationFlow } from './pages/Registro/RegistrationFlow.js';
 import { SuperAdminPage } from './pages/SuperAdmin/SuperAdminPage.js';
 import { CompanyDetailsPage } from './pages/SuperAdmin/CompanyDetailsPage.js';
+import { PlanesPage } from './pages/SuperAdmin/PlanesPage.js';
+import { ModulosPage } from './pages/SuperAdmin/ModulosPage.js';
 import { DashboardLayout } from './components/DashboardLayout.js';
 import { DashboardPage } from './pages/Tenant/DashboardPage.js';
 import { TerminalVentaPage } from './pages/Tenant/TerminalVentaPage.js';
@@ -41,7 +43,6 @@ import { PendingApprovalPage } from './pages/Tenant/PendingApprovalPage.js';
 import { AdminToolPage } from './pages/Admin/AdminToolPage.js';
 import { ToastProvider, useToast } from './hooks/useToast.js';
 import { LoadingProvider } from './hooks/useLoading.js';
-import { UPGRADE_PLANS, REGISTRATION_PLANS } from './lib/plansConfig.js';
 import { RealtimeProvider } from './hooks/useRealtime.js';
 import { CatalogApp } from './pages/Public/CatalogApp.js';
 import { TerminalVentaProvider, NuevaCompraProvider, ProductFormProvider, CatalogCartProvider } from './contexts/StatePersistence.js';
@@ -147,44 +148,50 @@ function AppContent() {
 
             setLoading(true);
             setHasLoadFailed(false);
+            setLoadingSteps([
+                { key: 'profile', label: 'Cargando Perfil de Usuario...', status: 'loading' }
+            ]);
 
-            // Attempt to fetch tenant user profile
             const { data: profile, error: profileError } = await supabase.rpc('get_user_profile_data').single();
 
-            if (profile && !profileError) {
-                // This is a TENANT user session
-                setCustomerProfile(null); // Clean up any customer profile data
-                
-                const initialSteps = [
-                    { key: 'profile', label: 'Cargando Perfil de Usuario', status: 'loading' },
-                    { key: 'company', label: 'Verificando Información de la Empresa', status: 'loading' }
-                ];
-                setLoadingSteps(initialSteps);
-                
-                // Process tenant data
-                const getCurrencySymbol = (code) => ({'BOB': 'Bs', 'ARS': '$', 'BRL': 'R$', 'CLP': '$', 'COP': '$', 'USD': '$', 'GTQ': 'Q', 'HNL': 'L', 'MXN': '$', 'PAB': 'B/.', 'PYG': '₲', 'PEN': 'S/', 'DOP': 'RD$', 'UYU': '$U', 'EUR': '€'}[code] || code);
+            if (profileError) {
+                addToast({ message: `Error crítico al cargar el perfil: ${profileError.message}`, type: 'error', duration: 10000 });
+                await supabase.auth.signOut();
+                setLoading(false);
+                return;
+            }
 
+            if (profile && profile.rol) {
+                // This is a TENANT user session (regular user or SuperAdmin)
+                setCustomerProfile(null);
+
+                const getCurrencySymbol = (code) => ({'BOB': 'Bs', 'ARS': '$', 'BRL': 'R$', 'CLP': '$', 'COP': '$', 'USD': '$', 'GTQ': 'Q', 'HNL': 'L', 'MXN': '$', 'PAB': 'B/.', 'PYG': '₲', 'PEN': 'S/', 'DOP': 'RD$', 'UYU': '$U', 'EUR': '€'}[code] || code);
+                
                 let companyData = null;
+                // For regular users, company_id will be present. For SuperAdmin, it will be null.
                 if (profile.empresa_id) {
-                    const planName = profile.plan_actual || 'Sin Plan';
-                    const basePlanName = planName.split('(')[0].trim();
-                    const planDetails = [...REGISTRATION_PLANS, ...UPGRADE_PLANS].find(p => p.title === basePlanName);
+                    const planDetails = profile.planDetails || {};
                     companyData = {
-                        name: profile.empresa_nombre, nit: profile.empresa_nit, plan: planName, logo: profile.empresa_logo,
+                        name: profile.empresa_nombre, nit: profile.empresa_nit, plan: profile.plan_actual, logo: profile.empresa_logo,
                         planDetails, licenseStatus: profile.estado_licencia || 'Activa', licenseEndDate: profile.fecha_fin_licencia,
                         paymentHistory: profile.historial_pagos || [], timezone: profile.empresa_timezone, moneda: profile.empresa_moneda,
                         monedaSimbolo: getCurrencySymbol(profile.empresa_moneda), modo_caja: profile.empresa_modo_caja || 'por_sucursal',
                         slug: profile.empresa_slug,
                     };
+                } else if (profile.rol === 'SuperAdmin') {
+                    // Create a placeholder companyInfo for SuperAdmin
+                    companyData = { name: 'SuperAdmin Panel', licenseStatus: 'Activa', planDetails: {} };
                 }
+                
                 setCompanyInfo(companyData);
+                console.log('%c[DIAGNÓSTICO] Datos de la empresa cargados:', 'color: cyan; font-weight: bold;', companyData);
+
                 setDisplayUser({
                     id: session.user.id, empresa_id: profile.empresa_id, sucursal_id: profile.sucursal_id,
                     email: session.user.email, name: profile.nombre_completo, role: profile.rol,
-                    avatar: profile.avatar, sucursal: profile.rol === 'SuperAdmin' ? 'Global' : (profile.sucursal_principal_nombre || 'Sucursal Principal'),
+                    avatar: profile.avatar, sucursal: profile.sucursal_principal_nombre || 'Global',
                 });
 
-                // Conflict resolution: If a tenant user is on a catalog page, redirect to their dashboard.
                 const path = window.location.hash.substring(1);
                 if (path.startsWith('/catalogo/')) {
                     navigate('/dashboard');
@@ -210,14 +217,14 @@ function AppContent() {
                             console.error("Customer profile fetch failed:", err);
                         }
                     }
-                } else if (!path.startsWith('/registro') && !path.startsWith('/admin-delete-tool')) {
-                    // This is a FAILED TENANT LOGIN (like SuperAdmin).
-                    // The profile couldn't be loaded, but they are not in a customer area. This is an error state.
+                } else if (!profile && !path.startsWith('/registro') && !path.startsWith('/admin-delete-tool')) {
+                    // Definitive check for failed tenant login: profile is null/empty but it's not a customer route.
                     addToast({ message: 'Error al cargar el perfil de usuario. La sesión puede estar corrupta. Cerrando sesión.', type: 'error' });
                     await supabase.auth.signOut();
                 }
             }
             setLoading(false);
+            setLoadingSteps([]);
         };
         
         handleSessionChange();
@@ -295,9 +302,17 @@ function AppContent() {
             content = html`<${PendingApprovalPage} user=${displayUser} onLogout=${handleLogout} onProfileUpdate=${handleProfileUpdate} companyInfo=${companyInfo} />`;
         } else if (displayUser.role === 'SuperAdmin') {
             const companyDetailsMatch = currentPath.match(/^\/superadmin\/empresa\/(.+)$/);
-            content = companyDetailsMatch
-                ? html`<${CompanyDetailsPage} companyId=${companyDetailsMatch[1]} user=${displayUser} onLogout=${handleLogout} navigate=${navigate} onProfileUpdate=${handleProfileUpdate} />`
-                : html`<${SuperAdminPage} user=${displayUser} onLogout=${handleLogout} navigate=${navigate} onProfileUpdate=${handleProfileUpdate} />`;
+            const isPlanesRoute = currentPath === '/superadmin/planes';
+            const isModulosRoute = currentPath === '/superadmin/modulos';
+            if (isModulosRoute) {
+                 content = html`<${ModulosPage} user=${displayUser} onLogout=${handleLogout} navigate=${navigate} onProfileUpdate=${handleProfileUpdate} />`;
+            } else if (isPlanesRoute) {
+                 content = html`<${PlanesPage} user=${displayUser} onLogout=${handleLogout} navigate=${navigate} onProfileUpdate=${handleProfileUpdate} />`;
+            } else if (companyDetailsMatch) {
+                content = html`<${CompanyDetailsPage} companyId=${companyDetailsMatch[1]} user=${displayUser} onLogout=${handleLogout} navigate=${navigate} onProfileUpdate=${handleProfileUpdate} />`;
+            } else {
+                content = html`<${SuperAdminPage} user=${displayUser} onLogout=${handleLogout} navigate=${navigate} onProfileUpdate=${handleProfileUpdate} />`;
+            }
         } else if (['Propietario', 'Administrador', 'Empleado'].includes(displayUser.role)) {
             const commonProps = { user: displayUser, onLogout: handleLogout, companyInfo, onProfileUpdate: handleProfileUpdate, onCompanyInfoUpdate: handleCompanyInfoUpdate };
             content = html`<${TenantRoutes} currentPath=${currentPath} navigate=${navigate} ...${commonProps} />`;

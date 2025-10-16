@@ -1,5 +1,3 @@
-
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -58,7 +56,7 @@ const getDatesFromPreset = (preset) => {
 };
 
 export function HistorialCajasPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
-    // FIX: Initialize kpis with default values to prevent errors on initial render.
+    const canUseCashRegister = !!companyInfo?.planDetails?.features?.aperturar_cajas;
     const [data, setData] = useState({ kpis: { total_ventas_efectivo: 0, total_faltantes: 0, total_sobrantes: 0, total_ventas_digitales: 0 }, historial: [], filterOptions: { sucursales: [], usuarios: [] } });
     const [datePreset, setDatePreset] = useState('this_month');
     const [filters, setFilters] = useState(() => {
@@ -84,7 +82,7 @@ export function HistorialCajasPage({ user, onLogout, onProfileUpdate, companyInf
     };
     
     const fetchData = useCallback(async () => {
-        if (!companyInfo.timezone) return;
+        if (!canUseCashRegister || !companyInfo.timezone) return;
         startLoading();
         try {
             const { data: result, error } = await supabase.rpc('get_historial_cajas', {
@@ -102,7 +100,7 @@ export function HistorialCajasPage({ user, onLogout, onProfileUpdate, companyInf
         } finally {
             stopLoading();
         }
-    }, [filters, companyInfo.timezone]);
+    }, [filters, companyInfo.timezone, canUseCashRegister]);
 
     useEffect(() => {
         fetchData();
@@ -127,9 +125,10 @@ export function HistorialCajasPage({ user, onLogout, onProfileUpdate, companyInf
         setDetailModalOpen(true);
     };
 
-    // This provides a fallback in case the kpis object from the RPC is null.
     const kpis = data.kpis || { total_ventas_efectivo: 0, total_faltantes: 0, total_sobrantes: 0, total_ventas_digitales: 0 };
-
+    const historial = data?.historial || [];
+    const filterOptions = data?.filterOptions || { sucursales: [], usuarios: [] };
+    
     const breadcrumbs = [ { name: 'Historial de Cajas', href: '#/historial-cajas' } ];
 
     const DiferenciaPill = ({ diferencia }) => {
@@ -138,6 +137,33 @@ export function HistorialCajasPage({ user, onLogout, onProfileUpdate, companyInf
         if (value < -0.005) return html`<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-800">Faltante</span>`;
         return html`<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-800">Cuadrado</span>`;
     };
+
+    if (!canUseCashRegister) {
+        return html`
+            <${DashboardLayout} 
+                user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate}
+                activeLink="Historial de Cajas" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo}
+            >
+                <div class="text-center bg-white p-8 rounded-lg shadow-md border border-amber-200">
+                    <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100">
+                        <div class="text-amber-600 text-4xl">${ICONS.bolt}</div>
+                    </div>
+                    <h1 class="mt-6 text-2xl font-bold text-gray-900">Módulo Premium Deshabilitado</h1>
+                    <p class="mt-4 text-gray-600">
+                        El historial y la gestión de cajas es una funcionalidad premium que no está activada para tu plan actual.
+                    </p>
+                     <p class="mt-2 text-gray-600">
+                        Por favor, contacta al Soporte ServiVENT para activar este módulo.
+                    </p>
+                    <div class="mt-6">
+                        <button onClick=${() => navigate('/dashboard')} class="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover">
+                            Volver al Dashboard
+                        </button>
+                    </div>
+                </div>
+            <//>
+        `;
+    }
 
     return html`
         <${DashboardLayout} 
@@ -164,7 +190,7 @@ export function HistorialCajasPage({ user, onLogout, onProfileUpdate, companyInf
                                 <button onClick=${() => handleDatePresetChange('this_week')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'this_week' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>Semana</button>
                                 <button onClick=${() => handleDatePresetChange('this_month')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'this_month' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>Mes</button>
                                 <button onClick=${() => handleDatePresetChange('this_year')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'this_year' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>Año</button>
-                                <button onClick=${() => handleDatePresetChange('custom')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'custom' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`} title="Rango personalizado">${ICONS.calendar_month}</button>
+                                <button onClick=${() => handleDatePresetChange('custom')} class=${`flex items-center gap-1 px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'custom' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`} title="Rango personalizado">${ICONS.calendar_month} Personalizar</button>
                             </div>
                         </div>
                         <${FormSelect} 
@@ -182,26 +208,26 @@ export function HistorialCajasPage({ user, onLogout, onProfileUpdate, companyInf
                         ${user.role === 'Propietario' && html`
                             <${FormSelect} label="Sucursal" name="sucursal_id" value=${filters.sucursal_id} onInput=${handleFilterChange}>
                                 <option value="all">Todas las Sucursales</option>
-                                ${data.filterOptions.sucursales.map(s => html`<option value=${s.id}>${s.nombre}</option>`)}
+                                ${filterOptions.sucursales.map(s => html`<option value=${s.id}>${s.nombre}</option>`)}
                             <//>
                         `}
                     </div>
                      ${datePreset === 'custom' && html`
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4 border-t animate-fade-in-down">
-                            <${FormInput} label="Fecha Desde" name="startDate" type="date" value=${filters.startDate} onInput=${handleFilterChange} required=${false} />
-                            <${FormInput} label="Fecha Hasta" name="endDate" type="date" value=${filters.endDate} onInput=${handleFilterChange} required=${false} />
+                            <${FormInput} label="Desde" name="startDate" type="date" value=${filters.startDate} onInput=${handleFilterChange} required=${false} />
+                            <${FormInput} label="Hasta" name="endDate" type="date" value=${filters.endDate} onInput=${handleFilterChange} required=${false} />
                         </div>
                     `}
                 </div>
                 
-                ${(data.historial || []).length === 0 ? html`
+                ${historial.length === 0 ? html`
                     <div class="text-center py-12 rounded-lg border-2 border-dashed border-gray-200 bg-white">
                         <h3 class="text-lg font-medium text-gray-900">No se encontraron registros</h3>
                         <p class="mt-1 text-sm text-gray-500">Intenta con otro rango de fechas o ajusta los filtros.</p>
                     </div>
                 ` : html `
                     <div class="space-y-4 lg:hidden">
-                        ${data.historial.map(s => html`
+                        ${historial.map(s => html`
                             <div key=${s.id} onClick=${() => handleRowClick(s)} class="bg-white p-4 rounded-lg shadow-sm border cursor-pointer">
                                 <div class="flex justify-between items-start">
                                     <div>
@@ -230,7 +256,7 @@ export function HistorialCajasPage({ user, onLogout, onProfileUpdate, companyInf
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200 bg-white">
-                            ${data.historial.map(s => html`
+                            ${historial.map(s => html`
                                 <tr key=${s.id} onClick=${() => handleRowClick(s)} class="hover:bg-gray-50 cursor-pointer">
                                     <td class="py-4 pl-4 pr-3 text-sm text-gray-700 sm:pl-6">${new Date(s.fecha_cierre).toLocaleString()}</td>
                                     <td class="px-3 py-4 text-sm text-gray-500">${s.sucursal_nombre}</td>

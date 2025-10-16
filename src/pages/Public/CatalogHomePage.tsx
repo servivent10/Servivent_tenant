@@ -17,6 +17,14 @@ const formatCurrency = (value, currencySymbol = 'Bs') => {
 
 function SucursalDetailModal({ isOpen, onClose, sucursal }) {
     if (!sucursal) return null;
+    const GOOGLE_MAPS_API_KEY = 'AIzaSyDcOzOJnV2qJWsXeCGqBfWiORfUa4ZIBtw';
+    const staticMapUrl = (sucursal.latitud && sucursal.longitud)
+        ? `https://maps.googleapis.com/maps/api/staticmap?center=${sucursal.latitud},${sucursal.longitud}&zoom=16&size=600x300&markers=color:red%7C${sucursal.latitud},${sucursal.longitud}&key=${GOOGLE_MAPS_API_KEY}`
+        : null;
+    const googleMapsUrl = (sucursal.latitud && sucursal.longitud)
+        ? `https://maps.google.com/?q=${sucursal.latitud},${sucursal.longitud}`
+        : null;
+
     return html`
         <${ConfirmationModal}
             isOpen=${isOpen}
@@ -24,10 +32,23 @@ function SucursalDetailModal({ isOpen, onClose, sucursal }) {
             title=${sucursal.nombre}
             confirmText="Cerrar"
             onConfirm=${onClose}
+            maxWidthClass="max-w-lg"
         >
             <div class="space-y-4 text-sm text-gray-600">
                 ${sucursal.direccion && html`<p class="flex items-start gap-2">${ICONS.storefront} <span>${sucursal.direccion}</span></p>`}
                 ${sucursal.telefono && html`<p class="flex items-center gap-2">${ICONS.phone} <span>${sucursal.telefono}</span></p>`}
+
+                ${staticMapUrl && html`
+                    <div class="mt-4 border-t pt-4">
+                        <h4 class="text-sm font-medium text-gray-800 mb-2">Ubicación</h4>
+                        <a href=${googleMapsUrl} target="_blank" rel="noopener noreferrer" class="block rounded-lg overflow-hidden shadow border transition-shadow hover:shadow-md">
+                            <img src=${staticMapUrl} alt="Mapa de ${sucursal.nombre}" class="w-full" />
+                        </a>
+                        <a href=${googleMapsUrl} target="_blank" rel="noopener noreferrer" class="mt-2 text-sm font-semibold text-primary hover:underline flex items-center gap-1 justify-center">
+                            Abrir en Google Maps ${ICONS.chevron_right}
+                        </a>
+                    </div>
+                `}
             </div>
         <//>
     `;

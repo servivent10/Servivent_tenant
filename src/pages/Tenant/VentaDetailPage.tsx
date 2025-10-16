@@ -143,7 +143,9 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
             `;
         }
         
-        const isWebOrder = venta.estado_pago === 'Pedido Web Pendiente';
+        const isWebOrder = venta.metodo_pago === 'Pedido Web' || venta.estado_pago === 'Pedido Web Pendiente';
+        const isDelivery = isWebOrder && venta.direccion_entrega_id;
+        const isPickup = isWebOrder && !venta.direccion_entrega_id;
 
         return html`
             <div class="flex items-center gap-4 mb-4">
@@ -156,7 +158,7 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                 </div>
             </div>
 
-            ${isWebOrder && html`
+            ${venta.estado_pago === 'Pedido Web Pendiente' && html`
                 <div class="mb-6 p-4 rounded-md bg-cyan-50 text-cyan-800 border border-cyan-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4" role="alert">
                     <div class="flex items-start gap-3">
                         <div class="text-2xl flex-shrink-0 mt-0.5">${ICONS.bolt}</div>
@@ -184,8 +186,8 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                         </dl>
                     </div>
 
-                    ${venta.direccion_entrega && html`
-                        <div class="bg-white p-6 rounded-lg shadow-md border">
+                    ${isDelivery && venta.direccion_entrega && html`
+                        <div class="bg-white p-6 rounded-lg shadow-md border animate-fade-in-down">
                             <h3 class="text-lg font-semibold text-gray-800 mb-2">Dirección de Envío</h3>
                             <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
                                 <div><dt class="text-gray-500">Lugar</dt><dd class="font-medium text-gray-800">${venta.direccion_entrega.nombre}</dd></div>
@@ -196,6 +198,16 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                                     ${ICONS.suppliers} Ver en Google Maps
                                 </a>
                             </div>
+                        </div>
+                    `}
+                    
+                    ${isPickup && html`
+                        <div class="bg-white p-6 rounded-lg shadow-md border animate-fade-in-down">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-2">Método de Entrega</h3>
+                            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                <div><dt class="text-gray-500">Tipo</dt><dd class="font-medium text-gray-800">Retiro en Sucursal</dd></div>
+                                <div><dt class="text-gray-500">Sucursal de Retiro</dt><dd class="font-medium text-gray-800">${venta.sucursal_nombre}</dd></div>
+                            </dl>
                         </div>
                     `}
                     

@@ -478,8 +478,8 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
     `;
 };
 
-function CartPanel({ posData, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, onDiscountChange, onFinalizeSale, onOpenPricePopover, isPriceRuleActive, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user,
-    cart, customPrices, selectedClientId, setSelectedClientId, activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue
+function CartPanel({ companyInfo, posData, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, onDiscountChange, onFinalizeSale, onOpenPricePopover, isPriceRuleActive, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user,
+    cart, customPrices, selectedClientId, setSelectedClientId, activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue, canUseCashRegister
 }) {
     const activePriceListName = useMemo(() => {
         return posData.price_lists.find(pl => pl.id === activePriceListId)?.nombre || '';
@@ -487,12 +487,29 @@ function CartPanel({ posData, handleClearCart, getPriceForProduct, handleUpdateQ
 
     const canCloseCaja = user.role !== 'Empleado' || currentModoCaja === 'por_usuario';
     
+    const { listas_precios, catalogo_web } = companyInfo.planDetails.features;
+
+    const availablePriceLists = useMemo(() => {
+        if (listas_precios) {
+            return posData.price_lists; // Funcionalidad completa
+        }
+        if (!listas_precios && catalogo_web) {
+            return posData.price_lists.filter(
+                pl => pl.es_predeterminada || pl.nombre === 'Ofertas Web'
+            ); // Funcionalidad limitada
+        }
+        // !listas_precios && !catalogo_web
+        return posData.price_lists.filter(pl => pl.es_predeterminada); // Funcionalidad básica
+    }, [posData.price_lists, listas_precios, catalogo_web]);
+
+    const isPriceListDisabled = !listas_precios && !catalogo_web;
+    
     return html`
         <div class="p-4 flex-shrink-0 border-b flex justify-between items-center">
             <h2 class="text-lg font-semibold text-gray-800">Carrito de Venta</h2>
             
             <div class="flex items-center gap-3">
-                ${currentModoCaja && canCloseCaja && html`
+                ${canUseCashRegister && currentModoCaja && canCloseCaja && html`
                     <div class="flex items-center bg-slate-100 rounded-full text-sm font-medium text-slate-700 shadow-sm">
                         <div class="flex items-center gap-1.5 pl-3 py-1.5">
                             ${currentModoCaja === 'por_usuario' ? ICONS.users : ICONS.storefront}
@@ -528,8 +545,9 @@ function CartPanel({ posData, handleClearCart, getPriceForProduct, handleUpdateQ
                         name="price-list"
                         value=${activePriceListId}
                         onInput=${e => setActivePriceListId(e.target.value)}
+                        disabled=${isPriceListDisabled}
                     >
-                        ${posData.price_lists.map(pl => html`<option value=${pl.id}>${pl.nombre}</option>`)}
+                        ${availablePriceLists.map(pl => html`<option value=${pl.id}>${pl.nombre}</option>`)}
                     <//>
                 </div>
             </div>
@@ -683,6 +701,8 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const [isCierreModalOpen, setIsCierreModalOpen] = useState(false);
     const [sessionSummary, setSessionSummary] = useState(null);
     const [currentModoCaja, setCurrentModoCaja] = useState(companyInfo.modo_caja);
+    
+    const canUseCashRegister = !!companyInfo?.planDetails?.features?.aperturar_cajas;
 
     const formatCurrency = (value) => {
         const number = Number(value || 0);
@@ -757,13 +777,20 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const internalFetch = useCallback(async () => {
         startLoading();
         try {
-            await Promise.all([ checkActiveSession(), fetchData() ]);
+            const promises = [fetchData()];
+            if (canUseCashRegister) {
+                promises.push(checkActiveSession());
+            }
+            await Promise.all(promises);
         } finally {
             stopLoading();
         }
-    }, [checkActiveSession, fetchData, startLoading, stopLoading]);
+    }, [checkActiveSession, fetchData, startLoading, stopLoading, canUseCashRegister]);
 
-    useEffect(() => { internalFetch(); }, [internalFetch]);
+    useEffect(() => {
+        internalFetch();
+    }, [internalFetch]);
+    
     useRealtimeListener(internalFetch);
 
     useEffect(() => {
@@ -846,8 +873,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const handleShowDetails = (product) => { setProductForDetailView(product); setDetailModalOpen(true); };
 
     const handleAddToCart = (product) => {
-// FIX: Explicitly type `currentCart` to resolve TypeScript inference issue.
-        setCart((currentCart: {product: any, quantity: number}[]) => {
+        setCart((currentCart) => {
             const existingItem = currentCart.find(item => item.product.id === product.id);
             if (existingItem) {
                 if (existingItem.quantity < product.stock_sucursal) {
@@ -899,8 +925,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const handleUpdateQuantity = (productId, newQuantity) => {
         if (isNaN(newQuantity)) return;
         if (newQuantity <= 0) { handleRemoveFromCart(productId); return; }
-// FIX: Explicitly type `currentCart` to resolve TypeScript inference issue.
-        setCart((currentCart: {product: any, quantity: number}[]) => {
+        setCart((currentCart) => {
             const itemToUpdate = currentCart.find(item => item.product.id === productId);
             if (!itemToUpdate) return currentCart;
             let finalQuantity = newQuantity > itemToUpdate.product.stock_sucursal ? itemToUpdate.product.stock_sucursal : newQuantity;
@@ -910,8 +935,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     };
 
     const handleRemoveFromCart = (productId) => {
-// FIX: Explicitly type `currentCart` to resolve TypeScript inference issue.
-        setCart((currentCart: {product: any, quantity: number}[]) => currentCart.filter(item => item.product.id !== productId));
+        setCart((currentCart) => currentCart.filter(item => item.product.id !== productId));
         setCustomPrices(prev => { const newPrices = { ...prev }; delete newPrices[productId]; return newPrices; });
     };
 
@@ -1006,20 +1030,23 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             stopLoading();
         }
     };
-
-    if (sessionState === 'checking') {
-        return html`<${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo} disablePadding=${true}><div class="h-full"></div><//>`;
-    }
-
-    if (sessionState === 'closed') {
-        return html`<${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo} disablePadding=${true}><${AperturaCajaModal} onSessionOpen=${internalFetch} companyInfo=${companyInfo} user=${user} navigate=${navigate} modoCaja=${currentModoCaja} /><//>`;
+    
+    if (canUseCashRegister) {
+        if (sessionState === 'checking') {
+            return html`<${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo} disablePadding=${true}><div class="h-full"></div><//>`;
+        }
+    
+        if (sessionState === 'closed') {
+            return html`<${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo} disablePadding=${true}><${AperturaCajaModal} onSessionOpen=${internalFetch} companyInfo=${companyInfo} user=${user} navigate=${navigate} modoCaja=${currentModoCaja} /><//>`;
+        }
     }
 
     const cartPanelProps = {
-        posData, handleClearCart, getPriceForProduct: getActivePriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals,
+        posData, companyInfo, handleClearCart, getPriceForProduct: getActivePriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals,
         onDiscountChange: handleDiscountChange, onFinalizeSale: () => setIsCheckoutModalOpen(true), onOpenPricePopover: handleOpenPricePopover,
         isPriceRuleActive, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user,
-        cart, customPrices, selectedClientId, setSelectedClientId, activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue
+        cart, customPrices, selectedClientId, setSelectedClientId, activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue,
+        canUseCashRegister
     };
 
     return html`

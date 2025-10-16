@@ -17,9 +17,11 @@ Proporcionar a los Propietarios y Administradores un lugar centralizado para:
     -   **Propietario:** Puede ver y editar toda la información.
     -   **Administrador / Empleado:** Pueden ver la información pero los campos del formulario están deshabilitados (solo lectura).
 -   **Funcionalidad:**
-    -   Presenta un formulario dividido en dos secciones:
-        1.  **Logo de la Empresa:** Permite al Propietario subir o cambiar el logo. La imagen se almacena en el bucket `logos` de Supabase Storage, dentro de una carpeta con el `empresa_id` para garantizar la seguridad de los datos.
-        2.  **Información General:** Campos para editar el Nombre de la Empresa y el NIT.
+    -   Presenta un formulario dividido en secciones a través de pestañas:
+        1.  **Datos de la Empresa:** Permite al Propietario subir o cambiar el logo y editar el Nombre de la Empresa y el NIT.
+        2.  **Listas de Precios:** Gestiona las diferentes políticas de precios. Esta pestaña solo es visible si el plan actual de la empresa tiene la característica `listasPrecios` activada.
+        3.  **Terminal de Venta:** Configura el modo de operación de las cajas.
+        4.  **Catálogo Web:** Si la empresa tiene el **Módulo de Catálogo Web** activado (independientemente de su plan), esta pestaña aparecerá, permitiendo al Propietario configurar la URL única (`slug`) para su catálogo público.
 -   **Lógica de Backend:** La acción de guardar invoca la función RPC `update_company_info`, que actualiza la fila correspondiente en la tabla `empresas`.
 
 ### `LicenciaPage.tsx`
@@ -28,8 +30,8 @@ Proporcionar a los Propietarios y Administradores un lugar centralizado para:
 -   **Funcionalidad:**
     -   **KPIs:** Muestra tarjetas con el estado actual del plan: Estado de la Licencia, Días Restantes, Límite de Usuarios y Límite de Sucursales.
     -   **Pestañas (Tabs):**
-        1.  **Mi Plan:** Muestra una comparación de los planes de mejora (`UPGRADE_PLANS`), destacando el plan actual del usuario. (La funcionalidad de pago aún no está implementada).
-        2.  **Historial de Pagos:** Muestra una lista (tabla/tarjetas) de todos los pagos registrados para la empresa, obtenidos del `companyInfo` que se carga al iniciar sesión.
+        1.  **Mi Plan:** Muestra una comparación de los planes de mejora, destacando el plan actual del usuario.
+        2.  **Historial de Pagos:** Muestra una lista (tabla/tarjetas) de todos los pagos registrados para la empresa.
 
 ## 3. Flujo de Datos
 

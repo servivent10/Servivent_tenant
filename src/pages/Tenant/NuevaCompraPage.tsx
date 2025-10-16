@@ -95,7 +95,6 @@ const SearchableSelect = ({ label, name, placeholder, options, value, onChange, 
 
 
 // --- NEW PURCHASE WIZARD PAGE COMPONENTS ---
-// FIX: Define Step1 component for the purchase wizard.
 function Step1({ formData, handleInput, setFormData, proveedores, setIsProveedorFormOpen }) {
   return html`
     <div class="max-w-xl mx-auto space-y-6 animate-fade-in-down">
@@ -129,7 +128,6 @@ function Step1({ formData, handleInput, setFormData, proveedores, setIsProveedor
   `;
 }
 
-// FIX: Define Step2 component for the purchase wizard.
 function Step2({ formData, handleEditItem, handleRemoveItem, total, productos, handleProductSelected, setIsProductFormOpen, addedProductIds }) {
     const [searchTerm, setSearchTerm] = useState('');
     const availableProducts = useMemo(() => {
@@ -192,7 +190,6 @@ function Step2({ formData, handleEditItem, handleRemoveItem, total, productos, h
     `;
 }
 
-// FIX: Define Step3 component for the purchase wizard.
 function Step3({ formData, handleInput, total }) {
   return html`
     <div class="max-w-xl mx-auto space-y-6 animate-fade-in-down">

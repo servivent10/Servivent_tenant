@@ -99,8 +99,7 @@ export function ClienteIdentificacionPage({ navigate, slug }) {
                 addToast({ message: '¡Cuenta activada y sesión iniciada!', type: 'success' });
                 navigate(`/catalogo/${slug}`);
             } else if (emailState === 'new') { // New user registration flow
-                // FIX: Explicitly typed 'optionsData' as 'any' to allow adding 'existingClientId' dynamically, resolving the TypeScript error when linking an existing client during registration.
-                const optionsData: any = { nombre: formData.nombre, telefono: formData.telefono, slug: slug };
+                const optionsData: { [key: string]: any } = { nombre: formData.nombre, telefono: formData.telefono, slug: slug };
                 if (phoneState === 'found' && linkConfirmation === 'link') {
                     optionsData.existingClientId = clientFoundByPhone.id;
                 }

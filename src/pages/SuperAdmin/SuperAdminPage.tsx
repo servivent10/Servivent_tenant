@@ -128,6 +128,8 @@ const CompanyTable = ({ companies, onAction, onRowClick }) => {
 export function SuperAdminPage({ user, onLogout, navigate, onProfileUpdate }) {
     const sidebarLinks = [
         { name: 'Gestionar Empresas', href: '#/superadmin', icon: ICONS.building },
+        { name: 'Gestión de Planes', href: '#/superadmin/planes', icon: ICONS.credit_score },
+        { name: 'Gestión de Módulos', href: '#/superadmin/modulos', icon: ICONS.bolt },
         { name: 'Licencias y Pagos', href: '#', icon: ICONS.chart },
     ];
     const breadcrumbs = [ { name: 'SuperAdmin', href: '#/superadmin' }, { name: 'Empresas', href: '#/superadmin' }];

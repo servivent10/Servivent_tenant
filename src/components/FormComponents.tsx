@@ -18,8 +18,7 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
   let inputType = type;
   let inputValue = value;
   let onInputHandler = onInput;
-  // FIX: Explicitly typed 'otherInputProps' as 'any' to allow adding properties like 'style' dynamically, resolving the TypeScript error.
-  const otherInputProps: any = {};
+  const otherInputProps: { [key: string]: any } = {};
 
   if (type === 'password' && isPasswordVisible) {
     inputType = 'text';

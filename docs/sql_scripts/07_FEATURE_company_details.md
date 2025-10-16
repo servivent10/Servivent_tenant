@@ -1,10 +1,10 @@
 -- =============================================================================
--- COMPANY DETAILS & PAYMENTS FUNCTIONS (v2 - Enriched Details)
+-- COMPANY DETAILS & PAYMENTS FUNCTIONS (v3 - Plan ID Fix)
 -- =============================================================================
--- Este script actualiza la función de detalles para que incluya información
--- de la sucursal principal (dirección, teléfono) y del propietario, y la
--- moneda de la empresa, centralizando toda la información clave en un solo
--- objeto para una visualización más completa en el panel de SuperAdmin.
+-- Este script actualiza la función `add_license_payment` para que, al cambiar
+-- el plan de una empresa, actualice correctamente tanto el `tipo_licencia` (texto)
+-- como el `plan_id` (foreign key), solucionando la causa raíz de la inconsistencia
+-- de datos.
 --
 -- INSTRUCCIONES:
 -- Ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS public.pagos_licencia (
 );
 
 -- -----------------------------------------------------------------------------
--- Función 1: Obtener detalles completos de una empresa (ACTUALIZADA)
+-- Función 1: Obtener detalles completos de una empresa (sin cambios)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_company_details(p_empresa_id uuid)
 RETURNS json
@@ -135,7 +135,7 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Función 2: Añadir un pago y actualizar la licencia (sin cambios)
+-- Función 2: Añadir un pago y actualizar la licencia (CORREGIDA)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION add_license_payment(
     p_empresa_id uuid, 
@@ -151,6 +151,8 @@ SECURITY DEFINER
 AS $$
 DECLARE
     v_licencia_id uuid;
+    v_plan_name_from_type text;
+    v_plan_id_to_set uuid;
 BEGIN
     -- Comprobación de seguridad
     IF NOT EXISTS (SELECT 1 FROM public.usuarios WHERE id = auth.uid() AND rol = 'SuperAdmin') THEN
@@ -158,24 +160,34 @@ BEGIN
     END IF;
 
     SELECT id INTO v_licencia_id FROM public.licencias WHERE empresa_id = p_empresa_id;
+    IF v_licencia_id IS NULL THEN RAISE EXCEPTION 'No se encontró una licencia para la empresa especificada.'; END IF;
+    IF p_nueva_fecha_fin IS NULL THEN RAISE EXCEPTION 'La nueva fecha de fin no puede ser nula.'; END IF;
 
-    IF v_licencia_id IS NULL THEN
-        RAISE EXCEPTION 'No se encontró una licencia para la empresa especificada.';
-    END IF;
+    -- **NUEVA LÓGICA: Buscar el plan_id correcto**
+    -- 1. Extraer el nombre base del plan del texto (ej. "Profesional" de "Profesional (Mensual)")
+    v_plan_name_from_type := (regexp_match(p_plan_tipo, '^\w+'))[1];
     
-    IF p_nueva_fecha_fin IS NULL THEN
-        RAISE EXCEPTION 'La nueva fecha de fin no puede ser nula.';
+    -- 2. Manejar el alias "Básico" que corresponde al plan "Emprendedor"
+    IF v_plan_name_from_type = 'Básico' THEN
+        v_plan_name_from_type := 'Emprendedor';
     END IF;
 
-    -- 1. Insertar el registro del pago
+    -- 3. Buscar el ID del plan en la tabla `planes`
+    SELECT id INTO v_plan_id_to_set FROM public.planes WHERE nombre = v_plan_name_from_type;
+    IF v_plan_id_to_set IS NULL THEN
+        RAISE EXCEPTION 'El tipo de plan "%" no es válido o no se encuentra en la tabla de planes.', p_plan_tipo;
+    END IF;
+
+    -- 4. Insertar el registro del pago
     INSERT INTO public.pagos_licencia(empresa_id, licencia_id, monto, fecha_pago, metodo_pago, notas)
     VALUES (p_empresa_id, v_licencia_id, p_monto, NOW(), p_metodo_pago, p_notas);
 
-    -- 2. Actualizar la licencia con la nueva información
+    -- 5. Actualizar la licencia con la nueva información, INCLUYENDO EL plan_id
     UPDATE public.licencias
     SET 
         tipo_licencia = p_plan_tipo,
         fecha_fin = p_nueva_fecha_fin,
+        plan_id = v_plan_id_to_set, -- **AQUÍ ESTÁ LA CORRECCIÓN**
         estado = 'Activa' -- Siempre se activa/reactiva al hacer un pago
     WHERE id = v_licencia_id;
 

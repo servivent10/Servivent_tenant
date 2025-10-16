@@ -24,6 +24,11 @@ Proporcionar al administrador de ServiVENT una interfaz centralizada para superv
         1.  **Usuarios:** Lista todos los usuarios de la empresa, con la opción de **resetear la contraseña** del Propietario.
         2.  **Sucursales:** Lista todas las sucursales registradas por la empresa.
         3.  **Pagos de Licencia:** Muestra un historial de todos los pagos registrados. Permite **añadir un nuevo pago**, lo que también actualiza el plan y la fecha de vencimiento de la licencia de la empresa.
+        4.  **Módulos:** Permite activar o desactivar Módulos Adicionales (Add-ons) para la empresa, como el "Catálogo Web".
+
+3.  **`ModulosPage.tsx` (Gestión de Módulos):**
+    -   Una nueva página que permite al SuperAdmin crear y editar los Módulos Adicionales que se pueden ofrecer a las empresas.
+    -   Incluye un formulario para definir el nombre, código interno, descripción y precio de cada módulo.
 
 ## 3. Lógica de Backend y Funciones Clave
 
@@ -35,3 +40,9 @@ Este módulo depende exclusivamente de funciones RPC de PostgreSQL con `SECURITY
 -   **`get_company_details()`:** Obtiene el JSON completo con toda la información para `CompanyDetailsPage` (KPIs, listas de usuarios, sucursales y pagos).
 -   **`add_license_payment()`:** Registra un pago y actualiza la licencia de una empresa.
 -   **`reset_owner_password_as_superadmin()`:** Establece una nueva contraseña para un usuario, encriptándola correctamente.
+-   **`update_license_end_date_as_superadmin()`:** Permite al SuperAdmin editar directamente la fecha de vencimiento de una licencia.
+-   **`update_payment_and_license_as_superadmin()`:** Edita un registro de pago y la fecha de vencimiento de la licencia simultáneamente.
+-   **`get_company_modules_status()`:** Obtiene la lista de módulos disponibles y su estado (activo/inactivo) para una empresa.
+-   **`toggle_company_module()`:** Activa o desactiva un módulo para una empresa.
+-   **`get_all_modulos_management()`:** Obtiene la lista completa de módulos para su gestión en `ModulosPage`.
+-   **`upsert_modulo()`:** Crea o actualiza un módulo en el sistema.

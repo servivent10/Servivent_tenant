@@ -34,55 +34,58 @@ const RolePill = ({ role, count }) => {
 };
 
 const SucursalCard = ({ sucursal, onClick, onEdit, onDelete }) => {
-    const CompactRolePill = ({ role, count }) => {
-        if (!count || count < 0) return null;
-        const styles = {
-            P: 'bg-amber-100 text-amber-800',
-            A: 'bg-blue-100 text-blue-800',
-            E: 'bg-slate-100 text-slate-800',
-        };
-        const titles = {
-            P: 'Propietarios',
-            A: 'Administradores',
-            E: 'Empleados',
-        };
-        return html`<span title=${titles[role]} class="${styles[role]} text-xs font-bold inline-flex items-center px-2 py-0.5 rounded-full">${count}${role}</span>`;
-    };
-    
+    const GOOGLE_MAPS_API_KEY = 'AIzaSyDcOzOJnV2qJWsXeCGqBfWiORfUa4ZIBtw';
+    const staticMapUrl = (sucursal.latitud && sucursal.longitud)
+        ? `https://maps.googleapis.com/maps/api/staticmap?center=${sucursal.latitud},${sucursal.longitud}&zoom=15&size=400x300&markers=color:red%7C${sucursal.latitud},${sucursal.longitud}&key=${GOOGLE_MAPS_API_KEY}`
+        : null;
+
     return html`
-    <div class="bg-white rounded-lg shadow-md border overflow-hidden transition-shadow hover:shadow-xl">
-        <div class="p-5 cursor-pointer" onClick=${() => onClick(sucursal)}>
-            <div class="flex items-center justify-between">
-                <div class="flex-1 min-w-0">
-                    <h3 class="text-lg font-bold text-gray-800 truncate" title=${sucursal.nombre}>${sucursal.nombre}</h3>
-                    <p class="text-sm text-gray-600 mt-1 truncate" title=${sucursal.direccion || ''}>${sucursal.direccion || 'Dirección no especificada'}</p>
+        <div class="bg-white rounded-lg shadow-md border overflow-hidden transition-shadow hover:shadow-xl flex flex-col">
+            {/* Header */}
+            <div class="p-4 border-b flex items-center gap-3 bg-gray-50">
+                <div class="text-primary text-2xl">${ICONS.storefront}</div>
+                <h3 class="text-lg font-bold text-gray-800 truncate" title=${sucursal.nombre}>${sucursal.nombre}</h3>
+            </div>
+
+            {/* Body */}
+            <div class="p-4 space-y-4 flex-grow cursor-pointer" onClick=${() => onClick(sucursal)}>
+                <div>
+                    ${staticMapUrl ? html`
+                        <img src=${staticMapUrl} alt="Mapa de ${sucursal.nombre}" class="w-full h-40 object-cover rounded-md border" />
+                    ` : html`
+                        <div class="w-full h-40 flex items-center justify-center bg-slate-100 text-slate-400 rounded-md border">
+                            <p>Ubicación no establecida</p>
+                        </div>
+                    `}
                 </div>
-                <div class="ml-4 flex-shrink-0">
-                    <${Avatar} name=${sucursal.nombre} avatarUrl=${null} size="h-14 w-14" />
+                <div class="text-sm space-y-2">
+                     <p class="flex items-start gap-2 text-gray-600">
+                        <span class="text-gray-400 mt-0.5">${ICONS.storefront}</span>
+                        <span class="flex-1">${sucursal.direccion || 'Dirección no especificada'}</span>
+                     </p>
+                     <p class="flex items-center gap-2 text-gray-500">
+                        <span class="text-gray-400">${ICONS.phone}</span>
+                        <span>${sucursal.telefono || 'Teléfono no especificado'}</span>
+                    </p>
                 </div>
             </div>
-        </div>
-        <div class="bg-gray-50 px-5 py-3 border-t">
-            <div class="flex items-center justify-between text-sm">
-                <div class="flex items-center gap-4 text-gray-600">
-                    <div class="flex items-center gap-2">
+
+            {/* Footer */}
+            <div class="bg-gray-50 px-5 py-3 border-t">
+                <div class="flex items-center justify-between text-sm">
+                    <div class="flex items-center gap-2 text-gray-600">
                         ${ICONS.users}
                         <span>${sucursal.user_count} ${sucursal.user_count === 1 ? 'Usuario' : 'Usuarios'}</span>
                     </div>
-                    <div class="flex items-center gap-1.5">
-                        <${CompactRolePill} role="P" count=${sucursal.propietarios_count || 0} />
-                        <${CompactRolePill} role="A" count=${sucursal.administradores_count || 0} />
-                        <${CompactRolePill} role="E" count=${sucursal.empleados_count || 0} />
+                    <div class="flex items-center">
+                        <button onClick=${(e) => { e.stopPropagation(); onEdit(sucursal); }} class="p-2 text-gray-400 hover:text-primary hover:bg-gray-100 rounded-full">${ICONS.edit}</button>
+                        <button onClick=${(e) => { e.stopPropagation(); onDelete(sucursal); }} class="p-2 text-gray-400 hover:text-red-500 hover:bg-gray-100 rounded-full">${ICONS.delete}</button>
                     </div>
-                </div>
-                <div class="flex items-center">
-                    <button onClick=${(e) => { e.stopPropagation(); onEdit(sucursal); }} class="p-2 text-gray-400 hover:text-primary hover:bg-gray-100 rounded-full">${ICONS.edit}</button>
-                    <button onClick=${(e) => { e.stopPropagation(); onDelete(sucursal); }} class="p-2 text-gray-400 hover:text-red-500 hover:bg-gray-100 rounded-full">${ICONS.delete}</button>
                 </div>
             </div>
         </div>
-    </div>
-`};
+    `;
+};
 
 export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
     const { addToast } = useToast();
@@ -95,7 +98,7 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
     const [sucursalToDelete, setSucursalToDelete] = useState(null);
 
     const planLimits = companyInfo?.planDetails?.limits;
-    const maxBranches = planLimits?.maxBranches ?? 1;
+    const maxBranches = planLimits?.max_branches ?? 1;
     const branchCount = data.sucursales.length;
     const atLimit = branchCount >= maxBranches;
 
@@ -107,10 +110,8 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
             const { data, error } = await supabase.rpc('get_company_sucursales');
             if (error) throw error;
 
-            // Handle redirection for non-owners
             if (user.role !== 'Propietario' && data.sucursales.user_sucursal_id) {
                 navigate(`/sucursales/${data.sucursales.user_sucursal_id}`);
-                // No need to stop loading, as navigation will unmount this component.
                 return;
             }
 
@@ -175,7 +176,6 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
 
     const breadcrumbs = [ { name: activeLinkName, href: '#/sucursales' } ];
 
-    // Render loading/redirect for non-owners
     if (user.role !== 'Propietario') {
         return html`
             <${DashboardLayout} 
@@ -194,7 +194,6 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
         `;
     }
     
-    // FIX: Provide a default object for kpis to prevent errors if it's null from the RPC call.
     const kpis = data?.kpis || { total_sucursales: 0, total_empleados: 0, propietarios_count: 0, administradores_count: 0, empleados_count: 0 };
 
     return html`
@@ -212,12 +211,13 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
                     <h1 class="text-2xl font-semibold text-gray-900">Gestión de Sucursales</h1>
                     <p class="mt-1 text-sm text-gray-600">
                         Administra todas las ubicaciones de tu negocio. 
-                        <span class="font-semibold text-primary">${branchCount} de ${maxBranches === Infinity ? '∞' : maxBranches}</span> sucursales utilizadas.
+                        <span class="font-semibold text-primary">${branchCount} de ${maxBranches >= 99999 ? '∞' : maxBranches}</span> sucursales utilizadas.
                     </p>
                 </div>
                  <button 
                     onClick=${handleAddSucursal}
                     disabled=${atLimit}
+                    title=${atLimit ? 'Has alcanzado el límite de sucursales de tu plan.' : 'Añadir nueva sucursal'}
                     class="hidden sm:inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400 disabled:cursor-not-allowed"
                 >
                     ${ICONS.add} Añadir Sucursal
@@ -247,7 +247,7 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
                     <p class="mt-1 text-sm text-gray-500">Comienza añadiendo la primera sucursal de tu empresa.</p>
                 </div>
             ` : html `
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
                     ${data.sucursales.map(s => html`
                         <${SucursalCard} 
                             sucursal=${s} 
