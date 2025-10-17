@@ -9,7 +9,7 @@ import { Spinner } from '../Spinner.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { useToast } from '../../hooks/useToast.js';
 
-const REQUIRED_HEADERS = ['sku', 'nombre', 'marca', 'modelo', 'descripcion', 'categoria_nombre', 'unidad_medida', 'precio_base'];
+const REQUIRED_HEADERS = ['sku', 'nombre', 'marca', 'modelo', 'descripcion', 'categoria_nombre', 'unidad_medida', 'precio_base', 'costo_inicial'];
 
 const StatusIndicator = ({ status }) => {
     if (status === 'loading') {
@@ -71,19 +71,18 @@ export function ProductImportModal({ isOpen, onClose, onImportSuccess, onDownloa
                 const rows = text.trim().split(/\r?\n/);
                 const headerRow = rows.shift().split(',').map(h => h.trim().toLowerCase().replace(/\uFEFF/g, ''));
                 
-                const missingHeaders = REQUIRED_HEADERS.filter(h => !headerRow.includes(h));
-                if (missingHeaders.length > 0) {
-                    throw new Error(`Faltan las siguientes columnas requeridas: ${missingHeaders.join(', ')}`);
+                const allRequiredHeadersPresent = REQUIRED_HEADERS.every(h => headerRow.includes(h));
+                if (!allRequiredHeadersPresent) {
+                     const missingHeaders = REQUIRED_HEADERS.filter(h => !headerRow.includes(h));
+                     throw new Error(`Faltan las siguientes columnas requeridas: ${missingHeaders.join(', ')}`);
                 }
 
                 const data = rows.filter(row => row.trim() !== '').map(row => {
                     const values = row.split(',');
                     const obj = {};
                     headerRow.forEach((header, index) => {
-                        if (REQUIRED_HEADERS.includes(header)) {
-                             const value = values[index] ? values[index].trim() : '';
-                             obj[header] = value === '' ? null : value;
-                        }
+                         const value = values[index] ? values[index].trim() : '';
+                         obj[header] = value === '' ? null : value;
                     });
                     return obj;
                 });

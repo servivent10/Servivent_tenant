@@ -60,20 +60,51 @@ interface ProductFormDraft {
     formData: {
         nombre: string; sku: string; marca: string; modelo: string;
         descripcion: string; categoria_id: string; unidad_medida: string;
+        costo_inicial: string;
+        precio_base: string;
     };
     imageFiles: File[];
     imagePreviews: string[];
+    categorySearchTerm: string;
+    brandSearchTerm: string;
 }
 
 interface ProductFormContextValue {
     draft: ProductFormDraft;
     setDraft: StateUpdater<ProductFormDraft>;
     clearDraft: () => void;
+    isModalOpen: boolean;
+    setIsModalOpen: StateUpdater<boolean>;
+    productToEdit: any | null;
+    setProductToEdit: StateUpdater<any | null>;
 }
 
 interface CatalogCartContextValue {
     cart: CatalogCartItem[];
     setCart: StateUpdater<CatalogCartItem[]>;
+}
+
+interface InventorySetupData {
+    [key: string]: {
+        cantidad?: string | number;
+        stock_minimo?: string | number;
+    };
+}
+
+interface InitialSetupDraft {
+    costoInicial: string;
+    precioBase: string;
+    inventoryData: InventorySetupData;
+}
+
+interface InitialSetupContextValue {
+    isModalOpen: boolean;
+    setIsModalOpen: StateUpdater<boolean>;
+    productForSetup: any | null;
+    setProductForSetup: StateUpdater<any | null>;
+    draft: InitialSetupDraft;
+    setDraft: StateUpdater<InitialSetupDraft>;
+    clearDraft: () => void;
 }
 
 
@@ -152,16 +183,26 @@ export function ProductFormProvider({ children }) {
     const getInitialDraft = (): ProductFormDraft => ({
         formData: {
             nombre: '', sku: '', marca: '', modelo: '',
-            descripcion: '', categoria_id: '', unidad_medida: 'Unidad'
+            descripcion: '', categoria_id: '', unidad_medida: 'Unidad',
+            costo_inicial: '',
+            precio_base: ''
         },
         imageFiles: [],
         imagePreviews: [],
+        categorySearchTerm: '',
+        brandSearchTerm: '',
     });
 
     const [draft, setDraft] = useState<ProductFormDraft>(getInitialDraft());
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [productToEdit, setProductToEdit] = useState(null);
     const clearDraft = () => setDraft(getInitialDraft());
 
-    const value: ProductFormContextValue = { draft, setDraft, clearDraft };
+    const value: ProductFormContextValue = { 
+        draft, setDraft, clearDraft,
+        isModalOpen, setIsModalOpen,
+        productToEdit, setProductToEdit
+    };
 
     return html`<${ProductFormContext.Provider} value=${value}>${children}<//>`;
 }
@@ -181,4 +222,41 @@ export function CatalogCartProvider({ children }) {
     const [cart, setCart] = useState<CatalogCartItem[]>([]);
     const value: CatalogCartContextValue = { cart, setCart };
     return html`<${CatalogCartContext.Provider} value=${value}>${children}<//>`;
+}
+
+
+// --- InitialSetup Context ---
+const InitialSetupContext = createContext<InitialSetupContextValue | null>(null);
+
+export const useInitialSetup = () => {
+    const context = useContext(InitialSetupContext);
+    if (!context) {
+        throw new Error('useInitialSetup must be used within an InitialSetupProvider');
+    }
+    return context;
+};
+
+export function InitialSetupProvider({ children }) {
+    const getInitialDraft = (): InitialSetupDraft => ({
+        costoInicial: '',
+        precioBase: '',
+        inventoryData: {},
+    });
+
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [productForSetup, setProductForSetup] = useState<any | null>(null);
+    const [draft, setDraft] = useState<InitialSetupDraft>(getInitialDraft());
+
+    const clearDraft = useCallback(() => {
+        setDraft(getInitialDraft());
+    }, []);
+
+    const value: InitialSetupContextValue = {
+        isModalOpen, setIsModalOpen,
+        productForSetup, setProductForSetup,
+        draft, setDraft,
+        clearDraft,
+    };
+
+    return html`<${InitialSetupContext.Provider} value=${value}>${children}<//>`;
 }

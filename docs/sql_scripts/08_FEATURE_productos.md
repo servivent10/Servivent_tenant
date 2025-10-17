@@ -114,8 +114,69 @@ $$;
 
 
 -- **FUNCIÓN ACTUALIZADA:** `get_product_details`
--- **CAMBIO:** Ahora devuelve `ganancia_maxima` y `ganancia_minima` en lugar de `tipo_ganancia` y `valor_ganancia`.
-CREATE OR REPLACE FUNCTION get_product_details(p_producto_id uuid) RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ DECLARE caller_empresa_id uuid; details jsonb; images json; inventory json; prices json; all_branches json; BEGIN caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid()); IF NOT EXISTS (SELECT 1 FROM public.productos WHERE id = p_producto_id AND empresa_id = caller_empresa_id) THEN RAISE EXCEPTION 'Producto no encontrado o no pertenece a tu empresa.'; END IF; SELECT to_jsonb(p) || jsonb_build_object('categoria_nombre', c.nombre) INTO details FROM public.productos p LEFT JOIN public.categorias c ON p.categoria_id = c.id WHERE p.id = p_producto_id; SELECT json_agg(i ORDER BY i.orden) INTO images FROM public.imagenes_productos i WHERE i.producto_id = p_producto_id; SELECT json_agg(inv) INTO inventory FROM ( SELECT i.sucursal_id, i.cantidad, i.stock_minimo, s.nombre as sucursal_nombre FROM public.inventarios i JOIN public.sucursales s ON i.sucursal_id = s.id WHERE i.producto_id = p_producto_id ) inv; SELECT json_agg(pr) INTO prices FROM ( SELECT lp.id as lista_precio_id, lp.nombre as lista_nombre, lp.es_predeterminada, pp.precio, pp.ganancia_maxima, pp.ganancia_minima FROM public.listas_precios lp LEFT JOIN public.precios_productos pp ON lp.id = pp.lista_precio_id AND pp.producto_id = p_producto_id WHERE lp.empresa_id = caller_empresa_id ORDER BY lp.es_predeterminada DESC, lp.orden ASC, lp.nombre ASC ) pr; SELECT json_agg(b) INTO all_branches FROM (SELECT id, nombre FROM public.sucursales WHERE empresa_id = caller_empresa_id ORDER BY nombre) b; RETURN json_build_object('details', details, 'images', COALESCE(images, '[]'::json), 'inventory', COALESCE(inventory, '[]'::json), 'prices', COALESCE(prices, '[]'::json), 'all_branches', COALESCE(all_branches, '[]'::json)); END; $$;
+-- **CAMBIO:** Ahora devuelve `ganancia_maxima`, `ganancia_minima`, `has_sales` y `has_purchases`.
+CREATE OR REPLACE FUNCTION get_product_details(p_producto_id uuid)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    caller_empresa_id uuid;
+    details jsonb;
+    images json;
+    inventory json;
+    prices json;
+    all_branches json;
+    v_has_sales boolean;
+    v_has_purchases boolean;
+BEGIN
+    caller_empresa_id := (SELECT u.empresa_id FROM public.usuarios u WHERE u.id = auth.uid());
+    IF NOT EXISTS (SELECT 1 FROM public.productos WHERE id = p_producto_id AND empresa_id = caller_empresa_id) THEN
+        RAISE EXCEPTION 'Producto no encontrado o no pertenece a tu empresa.';
+    END IF;
+
+    -- Check for sales and purchase history
+    SELECT EXISTS(SELECT 1 FROM public.venta_items WHERE producto_id = p_producto_id) INTO v_has_sales;
+    SELECT EXISTS(SELECT 1 FROM public.compra_items WHERE producto_id = p_producto_id) INTO v_has_purchases;
+
+    SELECT to_jsonb(p) || jsonb_build_object(
+        'categoria_nombre', c.nombre,
+        'has_sales', v_has_sales,
+        'has_purchases', v_has_purchases
+    ) INTO details
+    FROM public.productos p
+    LEFT JOIN public.categorias c ON p.categoria_id = c.id
+    WHERE p.id = p_producto_id;
+
+    SELECT json_agg(i ORDER BY i.orden) INTO images FROM public.imagenes_productos i WHERE i.producto_id = p_producto_id;
+
+    SELECT json_agg(inv) INTO inventory FROM (
+        SELECT i.sucursal_id, i.cantidad, i.stock_minimo, s.nombre as sucursal_nombre
+        FROM public.inventarios i
+        JOIN public.sucursales s ON i.sucursal_id = s.id
+        WHERE i.producto_id = p_producto_id
+    ) inv;
+
+    SELECT json_agg(pr) INTO prices FROM (
+        SELECT lp.id as lista_precio_id, lp.nombre as lista_nombre, lp.es_predeterminada, pp.precio, pp.ganancia_maxima, pp.ganancia_minima
+        FROM public.listas_precios lp
+        LEFT JOIN public.precios_productos pp ON lp.id = pp.lista_precio_id AND pp.producto_id = p_producto_id
+        WHERE lp.empresa_id = caller_empresa_id
+        ORDER BY lp.es_predeterminada DESC, lp.orden ASC, lp.nombre ASC
+    ) pr;
+
+    SELECT json_agg(b) INTO all_branches FROM (SELECT id, nombre FROM public.sucursales WHERE empresa_id = caller_empresa_id ORDER BY nombre) b;
+
+    RETURN json_build_object(
+        'details', details,
+        'images', COALESCE(images, '[]'::json),
+        'inventory', COALESCE(inventory, '[]'::json),
+        'prices', COALESCE(prices, '[]'::json),
+        'all_branches', COALESCE(all_branches, '[]'::json)
+    );
+END;
+$$;
 
 -- **FUNCIÓN ACTUALIZADA:** `update_product_prices`
 -- **CAMBIO:** Se actualiza el tipo de entrada y la lógica de inserción/actualización.
@@ -128,7 +189,6 @@ CREATE OR REPLACE FUNCTION update_product_prices( p_producto_id uuid, p_precios 
 -- **CAMBIO:** Se actualizan los tipos de entrada y la lógica para manejar precios y ganancias.
 DROP TYPE IF EXISTS public.compra_item_input CASCADE;
 CREATE TYPE public.compra_item_input AS ( producto_id uuid, cantidad numeric, costo_unitario numeric, precios price_rule_input[] );
-
 DROP TYPE IF EXISTS public.compra_input CASCADE;
 CREATE TYPE public.compra_input AS ( proveedor_id uuid, sucursal_id uuid, fecha date, moneda text, tasa_cambio numeric, tipo_pago text, n_factura text, fecha_vencimiento date, abono_inicial numeric, metodo_abono text );
 

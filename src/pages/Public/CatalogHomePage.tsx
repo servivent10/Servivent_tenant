@@ -58,6 +58,7 @@ function SucursalDetailModal({ isOpen, onClose, sucursal }) {
 const ProductHighlightCard = ({ product, currencySymbol, navigate, slug }) => {
     const hasOffer = product.precio_oferta > 0 && product.precio_oferta < product.precio_base;
     const displayPrice = hasOffer ? product.precio_oferta : product.precio_base;
+    const brandAndModelText = [product.marca, product.modelo].filter(Boolean).join(' / ');
 
     return html`
         <a href=${`/#/catalogo/${slug}/producto/${product.id}`} onClick=${(e) => { e.preventDefault(); navigate(`/catalogo/${slug}/producto/${product.id}`); }} class="group bg-white rounded-lg shadow-md border block flex flex-col overflow-hidden transition-shadow hover:shadow-lg">
@@ -70,8 +71,9 @@ const ProductHighlightCard = ({ product, currencySymbol, navigate, slug }) => {
             </div>
             <div class="flex flex-col justify-start p-4 border-t">
                 <h3 class="text-sm font-semibold text-gray-800 leading-tight line-clamp-2 min-h-[2.5rem] group-hover:text-primary">${product.nombre}</h3>
-                <p class="text-xs text-gray-500 leading-tight mb-2">${product.modelo || ' '}</p>
-                <p class="text-xs text-gray-600 line-clamp-2 min-h-[2rem]">${product.descripcion}</p>
+                <p class="text-xs text-gray-500 leading-tight mt-1 truncate" title=${brandAndModelText}>
+                    ${brandAndModelText || html`&nbsp;`}
+                </p>
             </div>
         </a>
     `;

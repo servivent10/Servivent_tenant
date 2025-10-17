@@ -88,3 +88,5 @@ Esta carpeta contiene todos los scripts SQL para configurar y mantener la base d
 | `70_REVERT_downloadable_receipts.md`| SuperAdmin / Licencia |`[ACTIVO]` | Próximamente | Revierte la funcionalidad de recibos de pago con descuentos. |
 | `71_FIX_plan_limit_enforcement.md`| Core / Planes | `[ACTIVO]` | `71_REVERT_...` | Corrige la validación de límites de usuarios y sucursales según el plan. |
 | `72_FEATURE_sucursal_maps.md`| Sucursales / Catálogo Web |`[ACTIVO]` | `72_REVERT_...` | Implementa la gestión de ubicaciones con mapas para las sucursales. |
+| `73_FEATURE_stock_minimo_y_costo_inicial.md`| Inventarios / Productos |`[ACTIVO]` | Próximamente | Implementa la lógica para el stock mínimo y el costo inicial. |
+| `74_FEATURE_initial_product_setup.md`| Inventarios / Productos |`[ACTIVO]` | Próximamente | Implementa la lógica para la Configuración Inicial de Productos. |

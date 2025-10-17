@@ -63,33 +63,35 @@ export function ProductDetailView({ product, company, onAddToCart, navigate, slu
 
     return html`
         <div>
-            <div class="mx-auto px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+            <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
                 <button onClick=${() => navigate(`/catalogo/${slug}/productos`)} class="flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-hover mb-6">
                     ${ICONS.arrow_back} Volver al catálogo
                 </button>
-                <div class="lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-8">
-                    <!-- Image gallery -->
-                    <div class="flex flex-col-reverse">
-                        <div class="mx-auto mt-6 hidden w-full max-w-2xl sm:block lg:max-w-none">
-                            <div class="grid grid-cols-4 gap-6" aria-orientation="horizontal" role="tablist">
-                                ${images.map((image, idx) => html`
-                                    <button onClick=${() => setActiveImageIndex(idx)} type="button" class="relative flex h-24 cursor-pointer items-center justify-center rounded-md bg-white text-sm font-medium uppercase text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring focus:ring-opacity-50 focus:ring-offset-4">
-                                        <span class="sr-only">${idx + 1}</span>
-                                        <span class="absolute inset-0 overflow-hidden rounded-md">
-                                            <img src=${image.url} alt="" class="h-full w-full object-cover object-center" />
-                                        </span>
-                                        ${activeImageIndex === idx && html`<span class="pointer-events-none absolute inset-0 rounded-md ring-2 ring-primary ring-offset-2" aria-hidden="true"></span>`}
-                                    </button>
-                                `)}
+                <div class="flex flex-col lg:flex-row lg:gap-x-12">
+                    <div class="lg:w-1/2">
+                        <div class="flex flex-col-reverse">
+                            {/* Thumbnails */}
+                            <div class="mx-auto mt-6 hidden w-full max-w-2xl sm:block lg:max-w-none">
+                                <div class="grid grid-cols-4 gap-6" aria-orientation="horizontal" role="tablist">
+                                    ${images.map((image, idx) => html`
+                                        <button onClick=${() => setActiveImageIndex(idx)} type="button" class="relative flex h-24 cursor-pointer items-center justify-center rounded-md bg-white text-sm font-medium uppercase text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring focus:ring-opacity-50 focus:ring-offset-4">
+                                            <span class="sr-only">${idx + 1}</span>
+                                            <span class="absolute inset-0 overflow-hidden rounded-md">
+                                                <img src=${image.url} alt="" class="h-full w-full object-cover object-center" />
+                                            </span>
+                                            ${activeImageIndex === idx && html`<span class="pointer-events-none absolute inset-0 rounded-md ring-2 ring-primary ring-offset-2" aria-hidden="true"></span>`}
+                                        </button>
+                                    `)}
+                                </div>
                             </div>
-                        </div>
-                        <div class="aspect-w-1 aspect-h-1 w-full">
-                            <img src=${images[activeImageIndex].url} alt=${product.nombre} class="h-full w-full object-cover object-center sm:rounded-lg" />
+                            {/* Main Image */}
+                            <div class="aspect-square w-full bg-gray-100 rounded-lg overflow-hidden border">
+                                <img src=${images[activeImageIndex].url} alt=${product.nombre} class="h-full w-full object-contain object-center" />
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Product info -->
-                    <div class="mt-10 px-4 sm:mt-16 sm:px-0 lg:mt-0">
+                    <div class="lg:w-1/2 mt-10 lg:mt-0">
                         <h1 class="text-3xl font-bold tracking-tight text-gray-900">${product.nombre}</h1>
                         <div class="mt-3">
                             <h2 class="sr-only">Información del producto</h2>
@@ -124,8 +126,7 @@ export function ProductDetailView({ product, company, onAddToCart, navigate, slu
 
                          <div class="mt-8 border-t border-gray-200 pt-8">
                             <h3 class="text-base font-medium text-gray-900">Descripción</h3>
-                            <div class="mt-4 space-y-6 text-base text-gray-700">
-                                <p>${product.descripcion || 'Sin descripción detallada.'}</p>
+                            <div class="mt-4 space-y-6 text-base text-gray-700" dangerouslySetInnerHTML=${{ __html: product.descripcion || 'Sin descripción detallada.'}}>
                             </div>
                         </div>
                     </div>

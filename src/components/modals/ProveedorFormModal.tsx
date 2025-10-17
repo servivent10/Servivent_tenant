@@ -26,8 +26,8 @@ export function ProveedorFormModal({ isOpen, onClose, onSave, proveedorToEdit })
     const handleInput = (e) => setFormData(prev => ({...prev, [e.target.name]: e.target.value}));
 
     const handleConfirm = async () => {
-        if (!formData.nombre.trim() || !formData.telefono.trim()) {
-            addToast({ message: 'El nombre de la empresa y el teléfono son obligatorios.', type: 'error' });
+        if (!formData.nombre.trim() || !formData.nombre_contacto.trim() || !formData.telefono.trim()) {
+            addToast({ message: 'El nombre de la empresa, nombre del contacto y teléfono son obligatorios.', type: 'error' });
             return;
         }
         setIsLoading(true);
@@ -63,7 +63,7 @@ export function ProveedorFormModal({ isOpen, onClose, onSave, proveedorToEdit })
         >
             <div class="space-y-4">
                 <${FormInput} label="Nombre de la Empresa" name="nombre" type="text" value=${formData.nombre} onInput=${handleInput} />
-                <${FormInput} label="Nombre del Contacto (Opcional)" name="nombre_contacto" type="text" value=${formData.nombre_contacto} onInput=${handleInput} required=${false} />
+                <${FormInput} label="Nombre del Contacto" name="nombre_contacto" type="text" value=${formData.nombre_contacto} onInput=${handleInput} required=${true} />
                 <${FormInput} label="NIT (Opcional)" name="nit" type="text" value=${formData.nit} onInput=${handleInput} required=${false} />
                 <div class="grid grid-cols-2 gap-4">
                     <${FormInput} label="Teléfono" name="telefono" type="tel" value=${formData.telefono} onInput=${handleInput} required=${true} />

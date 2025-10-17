@@ -11,11 +11,13 @@ import { useToast } from '../../hooks/useToast.js';
 import { useLoading } from '../../hooks/useLoading.js';
 import { Tabs } from '../../components/Tabs.js';
 import { KPI_Card } from '../../components/KPI_Card.js';
-import { ProductFormModal } from '../../components/modals/ProductFormModal.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { Spinner } from '../../components/Spinner.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 import { useRealtimeListener } from '../../hooks/useRealtime.js';
+import { InventoryAdjustModal } from '../../components/modals/InventoryAdjustModal.js';
+import { useProductForm } from '../../contexts/StatePersistence.js';
+import { ProductFormModal } from '../../components/modals/ProductFormModal.js';
 
 const InventoryBreakdown = ({ inventory = [], allBranches = [], user, onAdjust }) => {
     // Determine which branches are visible based on the user's role
@@ -147,8 +149,8 @@ const PriceManagementTab = ({ details, initialPrices, productId, user, onPricesU
             }));
 
             const { error } = await supabase.rpc('update_product_prices', {
-                p_producto_id: productId,
-                p_precios: updates
+                p_precios: updates,
+                p_producto_id: productId
             });
 
             if (error) throw error;
@@ -267,132 +269,14 @@ const PriceManagementTab = ({ details, initialPrices, productId, user, onPricesU
     `;
 };
 
-const InventoryAdjustModal = ({ isOpen, onClose, onSave, product, inventory, allBranches, branchToAdjust }) => {
-    const { addToast } = useToast();
-    const [adjustments, setAdjustments] = useState({});
-    const [reason, setReason] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    
-    // Determine which branches to display in the modal
-    const branchesToShow = useMemo(() => {
-        return branchToAdjust ? [branchToAdjust] : allBranches;
-    }, [branchToAdjust, allBranches]);
-
-    useEffect(() => {
-        if (isOpen) {
-            setAdjustments({});
-            setReason('Ajuste manual');
-        }
-    }, [isOpen]);
-
-    const handleAdjustmentChange = (sucursalId, value) => {
-        setAdjustments(prev => ({ ...prev, [sucursalId]: value }));
-    };
-
-    const handleConfirm = async () => {
-        const adjustmentsToSave = Object.entries(adjustments)
-            .map(([sucursal_id, cantidad_ajuste]) => ({
-                sucursal_id,
-                cantidad_ajuste: Number(cantidad_ajuste) || 0,
-            }))
-            .filter(adj => adj.cantidad_ajuste !== 0);
-
-        if (adjustmentsToSave.length === 0) {
-            addToast({ message: 'No se introdujo ningún ajuste.', type: 'info' });
-            onClose();
-            return;
-        }
-
-        setIsLoading(true);
-        try {
-            const { error } = await supabase.rpc('ajustar_inventario_lote', {
-                p_producto_id: product.id,
-                p_ajustes: adjustmentsToSave,
-                p_motivo: reason,
-            });
-            if (error) throw error;
-            onSave();
-        } catch (err) {
-            addToast({ message: `Error al ajustar inventario: ${err.message}`, type: 'error' });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const inventoryMap = new Map(inventory.map(item => [item.sucursal_id, item.cantidad]));
-    const title = branchToAdjust ? `Ajuste en ${branchToAdjust.nombre}` : "Ajuste de Inventario";
-
-    return html`
-        <${ConfirmationModal}
-            isOpen=${isOpen}
-            onClose=${onClose}
-            onConfirm=${handleConfirm}
-            title=${title}
-            confirmText=${isLoading ? html`<${Spinner}/>` : 'Guardar Ajustes'}
-            icon=${ICONS.inventory}
-            maxWidthClass="max-w-xl"
-        >
-            <div class="max-h-[60vh] overflow-y-auto -m-6 p-6 space-y-4">
-                <p class="text-sm text-gray-600">Ajustando para: <span class="font-bold text-gray-800">${product.nombre}</span></p>
-                
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sucursal</th>
-                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actual</th>
-                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ajuste (+/-)</th>
-                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Nuevo</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        ${branchesToShow.map(branch => {
-                            const currentStock = Number(inventoryMap.get(branch.id) || 0);
-                            const adjustmentValue = Number(adjustments[branch.id]) || 0;
-                            const newStock = currentStock + adjustmentValue;
-                            return html`
-                                <tr key=${branch.id}>
-                                    <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">${branch.nombre}</td>
-                                    <td class="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-500">${currentStock}</td>
-                                    <td class="px-3 py-2 whitespace-nowrap">
-                                        <input 
-                                            type="number" 
-                                            class="w-24 text-center rounded-md border border-gray-300 p-2 bg-white text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm transition-colors duration-200"
-                                            value=${adjustments[branch.id] || ''}
-                                            onInput=${e => handleAdjustmentChange(branch.id, e.target.value)}
-                                        />
-                                    </td>
-                                    <td class="px-3 py-2 whitespace-nowrap text-sm text-center font-bold ${newStock < 0 ? 'text-red-600' : 'text-gray-900'}">
-                                        ${newStock}
-                                    </td>
-                                </tr>
-                            `;
-                        })}
-                    </tbody>
-                </table>
-                <div>
-                    <label for="reason" class="block text-sm font-medium text-gray-700">Motivo del Ajuste</label>
-                    <input 
-                        type="text" 
-                        id="reason"
-                        value=${reason}
-                        onInput=${e => setReason(e.target.value)}
-                        class="mt-1 block w-full rounded-md border border-gray-300 p-2 text-gray-900 bg-white shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm transition-colors duration-200"
-                    />
-                </div>
-            </div>
-        <//>
-    `;
-};
-
-
 export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
+    const { setIsModalOpen, setProductToEdit } = useProductForm();
     const [data, setData] = useState(null);
     const [activeTab, setActiveTab] = useState('inventario');
     const [activeImage, setActiveImage] = useState(0);
 
-    const [isFormModalOpen, setFormModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [isAdjustModalOpen, setAdjustModalOpen] = useState(false);
     const [branchToAdjust, setBranchToAdjust] = useState(null);
@@ -414,12 +298,22 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
 
     useEffect(() => {
         fetchData();
-    }, [productoId]);
+    }, [fetchData]);
     
     useRealtimeListener(fetchData);
 
+    const handleSaveProduct = (action, savedProductId) => {
+        addToast({ message: 'Producto actualizado con éxito.', type: 'success' });
+        fetchData();
+    };
+
     const handleEdit = () => {
-        setFormModalOpen(true);
+        const productForEdit = {
+            ...data.details,
+            precio_base: data.prices.find(p => p.es_predeterminada)?.precio ?? 0
+        };
+        setProductToEdit(productForEdit);
+        setIsModalOpen(true);
     };
     
     const handleOpenAdjustModal = (branch) => {
@@ -446,19 +340,12 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
         }
     };
 
-    const handleSaveProduct = (action) => {
-        setFormModalOpen(false);
-        addToast({ message: `Producto actualizado con éxito.`, type: 'success' });
-        fetchData();
-    };
-
     const handleSaveAdjustments = () => {
         setAdjustModalOpen(false);
         setBranchToAdjust(null);
         addToast({ message: 'Inventario actualizado.', type: 'success' });
         fetchData();
     };
-
 
     if (!data) {
         return html`<${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink="Productos" />`;
@@ -489,11 +376,6 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
     }, [inventory, user]);
 
     const kpiTitle = user.role === 'Propietario' ? "Stock Total" : "Stock en Sucursal";
-
-    const productForEdit = {
-        ...details,
-        precio_base: prices.find(p => p.es_predeterminada)?.precio ?? 0
-    };
 
     const generalPrice = prices?.find(p => p.es_predeterminada)?.precio;
     const fallbackPrice = prices?.find(p => p.precio != null)?.precio;
@@ -611,21 +493,16 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
                                     <div><dt class="text-sm font-medium text-gray-500">Modelo</dt><dd class="mt-1 text-sm text-gray-900">${details.modelo || 'N/A'}</dd></div>
                                     <div><dt class="text-sm font-medium text-gray-500">Categoría</dt><dd class="mt-1 text-sm text-gray-900">${details.categoria_nombre || 'Sin categoría'}</dd></div>
                                     <div><dt class="text-sm font-medium text-gray-500">Unidad de Medida</dt><dd class="mt-1 text-sm text-gray-900">${details.unidad_medida}</dd></div>
-                                    <div class="sm:col-span-2"><dt class="text-sm font-medium text-gray-500">Descripción</dt><dd class="mt-1 text-sm text-gray-900">${details.descripcion || 'Sin descripción.'}</dd></div>
+                                    <div class="sm:col-span-2">
+                                        <dt class="text-sm font-medium text-gray-500">Descripción</dt>
+                                        <dd class="mt-1 text-sm text-gray-900 whitespace-pre-wrap" dangerouslySetInnerHTML=${{ __html: details.descripcion || 'Sin descripción.' }}></dd>
+                                    </div>
                                 </dl>
                             </div>
                         `}
                     </div>
                 </div>
             </div>
-
-            <${ProductFormModal} 
-                isOpen=${isFormModalOpen}
-                onClose=${() => setFormModalOpen(false)}
-                onSave=${handleSaveProduct}
-                user=${user}
-                productToEdit=${productForEdit}
-            />
 
             <${ConfirmationModal}
                 isOpen=${isDeleteModalOpen}
@@ -646,10 +523,11 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
                     onSave=${handleSaveAdjustments}
                     product=${details}
                     inventory=${inventory}
-                    allBranches=${all_branches}
                     branchToAdjust=${branchToAdjust}
                 />
             `}
+            
+            <${ProductFormModal} onSave=${handleSaveProduct} user=${user} />
         <//>
     `;
 }

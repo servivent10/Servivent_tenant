@@ -22,7 +22,7 @@ import { ClientePedidoDetailPage } from './ClientePedidoDetailPage.js';
 import { useCatalogCart } from '../../contexts/StatePersistence.js';
 
 // --- Mobile Menu Component ---
-function MobileMenu({ isOpen, onClose, company, customerProfile, onLoginClick, onAccountClick, onLogout, navigate, slug, onSearch, searchTerm }) {
+function MobileMenu({ isOpen, onClose, company, customerProfile, onLoginClick, onAccountClick, onLogout, navigate, slug }) {
     return html`
         <div class="relative z-40 lg:hidden" role="dialog" aria-modal="true" hidden=${!isOpen}>
             <div class="fixed inset-0 bg-black bg-opacity-25" onClick=${onClose}></div>
@@ -33,21 +33,6 @@ function MobileMenu({ isOpen, onClose, company, customerProfile, onLoginClick, o
                             <span class="sr-only">Close menu</span>
                             ${ICONS.close}
                         </button>
-                    </div>
-
-                    <div class="px-4 py-4">
-                        <form onSubmit=${(e) => { e.preventDefault(); onClose(); }}>
-                            <${FormInput}
-                                name="search-mobile"
-                                type="text"
-                                placeholder="Buscar..."
-                                value=${searchTerm}
-                                onInput=${onSearch}
-                                icon=${ICONS.search}
-                                required=${false}
-                                label=""
-                            />
-                        </form>
                     </div>
 
                     <div class="space-y-6 border-t border-gray-200 px-4 py-6">
@@ -71,7 +56,7 @@ function MobileMenu({ isOpen, onClose, company, customerProfile, onLoginClick, o
 
 
 // --- Header Component for Public Catalog ---
-function PublicHeader({ company, cartItemCount, onCartClick, onSearch, searchTerm, customerProfile, onLoginClick, onAccountClick, onLogout, navigate, slug, onMobileMenuOpen }) {
+function PublicHeader({ company, cartItemCount, onCartClick, onSearch, searchTerm, onClearSearch, customerProfile, onLoginClick, onAccountClick, onLogout, navigate, slug, onMobileMenuOpen }) {
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
     const profileMenuRef = useRef(null);
 
@@ -84,6 +69,17 @@ function PublicHeader({ company, cartItemCount, onCartClick, onSearch, searchTer
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const clearButton = html`
+        <button 
+            type="button"
+            onClick=${onClearSearch}
+            class="text-gray-400 hover:text-gray-600"
+            aria-label="Limpiar búsqueda"
+        >
+            ${ICONS.close}
+        </button>
+    `;
 
     return html`
         <header class="bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-30">
@@ -119,6 +115,7 @@ function PublicHeader({ company, cartItemCount, onCartClick, onSearch, searchTer
                                 icon=${ICONS.search}
                                 required=${false}
                                 label=""
+                                rightElement=${searchTerm ? clearButton : null}
                             />
                         </div>
                         
@@ -156,6 +153,19 @@ function PublicHeader({ company, cartItemCount, onCartClick, onSearch, searchTer
                     </div>
                 </div>
             </nav>
+             <div class="lg:hidden border-t border-gray-200 px-4 py-3">
+                <${FormInput}
+                    name="search-mobile"
+                    type="text"
+                    placeholder="Buscar productos..."
+                    value=${searchTerm}
+                    onInput=${onSearch}
+                    icon=${ICONS.search}
+                    required=${false}
+                    label=""
+                    rightElement=${searchTerm ? clearButton : null}
+                />
+            </div>
         </header>
     `;
 }
@@ -276,6 +286,10 @@ export function CatalogApp({ path, navigate, customerProfile }) {
             navigate(`/catalogo/${slug}/productos`);
         }
     };
+    
+    const handleClearSearch = () => {
+        handleFilterChange('searchTerm', '');
+    };
 
     const cartItemCount = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
     
@@ -349,8 +363,6 @@ export function CatalogApp({ path, navigate, customerProfile }) {
                 onLogout=${() => { handleLogout(); setIsMobileMenuOpen(false); }}
                 navigate=${navigate}
                 slug=${slug}
-                onSearch=${handleSearch}
-                searchTerm=${filters.searchTerm}
             />
             <${PublicHeader} 
                 company=${catalogData.company} 
@@ -358,6 +370,7 @@ export function CatalogApp({ path, navigate, customerProfile }) {
                 onCartClick=${() => navigate(`/catalogo/${slug}/carrito`)}
                 onSearch=${handleSearch}
                 searchTerm=${filters.searchTerm}
+                onClearSearch=${handleClearSearch}
                 customerProfile=${customerProfile}
                 onLoginClick=${() => navigate(`/catalogo/${slug}/login`)}
                 onAccountClick=${() => navigate(`/catalogo/${slug}/cuenta`)}

@@ -288,6 +288,13 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
 
+    useEffect(() => {
+        if (user.role === 'Empleado') {
+            addToast({ message: 'No tienes permiso para acceder a este módulo.', type: 'warning' });
+            navigate('/dashboard');
+        }
+    }, [user.role, navigate, addToast]);
+
     const formatCurrency = (value) => {
         const number = Number(value || 0);
         const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -295,6 +302,7 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
     };
     
     const fetchData = async () => {
+        if (user.role === 'Empleado') return;
         startLoading();
         try {
             const [purchasesRes, optionsRes] = await Promise.all([
@@ -467,6 +475,10 @@ export function ComprasPage({ user, onLogout, onProfileUpdate, companyInfo, navi
             </div>
         `;
     };
+    
+    if (user.role === 'Empleado') {
+        return null;
+    }
 
     return html`
         <${DashboardLayout} 

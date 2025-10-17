@@ -63,6 +63,11 @@ export const ICONS = {
     // Form
     eye: html`<${Icon} name="visibility" className="text-xl" />`,
     eyeSlash: html`<${Icon} name="visibility_off" className="text-xl" />`,
+    bold: html`<${Icon} name="format_bold" />`,
+    italic: html`<${Icon} name="format_italic" />`,
+    underline: html`<${Icon} name="format_underlined" />`,
+    fontSize: html`<${Icon} name="format_size" />`,
+    palette: html`<${Icon} name="palette" />`,
     add_circle: html`<${Icon} name="add_circle" />`,
     remove_circle: html`<${Icon} name="remove_circle" />`,
 

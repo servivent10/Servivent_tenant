@@ -45,7 +45,7 @@ import { ToastProvider, useToast } from './hooks/useToast.js';
 import { LoadingProvider } from './hooks/useLoading.js';
 import { RealtimeProvider } from './hooks/useRealtime.js';
 import { CatalogApp } from './pages/Public/CatalogApp.js';
-import { TerminalVentaProvider, NuevaCompraProvider, ProductFormProvider, CatalogCartProvider } from './contexts/StatePersistence.js';
+import { TerminalVentaProvider, NuevaCompraProvider, ProductFormProvider, CatalogCartProvider, InitialSetupProvider } from './contexts/StatePersistence.js';
 
 function TenantRoutes({ currentPath, navigate, ...commonProps }) {
     const sucursalDetailsMatch = currentPath.match(/^\/sucursales\/(.+)$/);
@@ -342,7 +342,9 @@ export function App() {
                         <${NuevaCompraProvider}>
                             <${ProductFormProvider}>
                                 <${CatalogCartProvider}>
-                                    <${AppContent} />
+                                    <${InitialSetupProvider}>
+                                        <${AppContent} />
+                                    <//>
                                 <//>
                             <//>
                         <//>

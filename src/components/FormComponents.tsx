@@ -6,69 +6,30 @@ import { html } from 'htm/preact';
 import { useState } from 'preact/hooks';
 import { ICONS } from './Icons.js';
 
-export const FormInput = ({ label, name, type, required = true, value, onInput, error, disabled = false, theme = 'light', icon, rightElement, ...props }) => {
+export const FormInput = ({ label, name, type, required = true, value, onInput, error, disabled = false, icon, rightElement, ...props }) => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const { className, ...restProps } = props;
+
+  const finalType = type === 'password' && isPasswordVisible ? 'text' : type;
 
   const togglePasswordVisibility = () => {
     setIsPasswordVisible(prev => !prev);
   };
   
-  // --- Determine props based on input type ---
-  let inputType = type;
-  let inputValue = value;
-  let onInputHandler = onInput;
-  const otherInputProps: { [key: string]: any } = {};
-
-  if (type === 'password' && isPasswordVisible) {
-    inputType = 'text';
-  }
-
-  if (type === 'date' || type === 'datetime-local') {
-    otherInputProps.style = { colorScheme: 'light' };
-  }
-
-  if (type === 'datetime-local') {
-    const formatISOToLocalInput = (isoString) => {
-        if (!isoString) return '';
-        try {
-            const date = new Date(isoString);
-            if (isNaN(date.getTime())) return '';
-            const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-            return new Date(date.getTime() - tzoffset).toISOString().slice(0, 16);
-        } catch { return ''; }
-    };
-    inputValue = formatISOToLocalInput(value);
-  }
-
-  // --- Class definitions ---
   const hasError = !!error;
-  const isDark = theme === 'dark';
 
-  const labelClasses = isDark ? 'text-gray-300' : 'text-gray-900';
-  const baseClasses = isDark 
-    ? 'ring-1 ring-inset ring-gray-500 focus:ring-primary' 
-    : 'border border-gray-300 focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25';
-  
-  const errorClasses = isDark 
-    ? 'ring-1 ring-inset ring-red-500 focus:ring-red-500'
-    : 'border border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/25';
+  const labelClasses = 'text-gray-900';
+  const baseClasses = 'border border-gray-300 focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25';
+  const errorClasses = 'border border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/25';
     
-  const inputClasses = isDark 
-    ? 'bg-gray-700/50 text-white placeholder-gray-400' 
-    : 'bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500';
-  
+  const inputClasses = 'bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500';
   const disabledClasses = disabled ? 'cursor-not-allowed' : '';
-  const buttonClasses = isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-700';
+  const buttonClasses = 'text-gray-500 hover:text-gray-700';
   
   let paddingClasses = 'p-2';
-  if (icon) {
-      paddingClasses += ' pl-10';
-  }
-  if (type === 'password' || rightElement) {
-      paddingClasses += ' pr-10';
-  }
-
+  if (icon) paddingClasses += ' pl-10';
+  if (type === 'password' || rightElement) paddingClasses += ' pr-10';
+  
   const fullClass = `block w-full rounded-md shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses} ${paddingClasses} ${className || ''}`;
 
   return html`
@@ -84,16 +45,15 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
             <input 
               id=${name} 
               name=${name} 
-              type=${inputType} 
+              type=${finalType} 
               required=${required} 
-              value=${inputValue}
-              onInput=${onInputHandler}
+              value=${value}
+              onInput=${onInput}
               onFocus=${(e) => e.target.select()}
               disabled=${disabled}
               class=${fullClass}
               aria-invalid=${hasError}
               aria-describedby=${hasError ? `${name}-error` : undefined}
-              ...${otherInputProps}
               ...${restProps}
             />
             ${type === 'password' && !rightElement && html`

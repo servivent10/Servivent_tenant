@@ -10,7 +10,6 @@ import { supabase } from '../../lib/supabaseClient.js';
 import { useToast } from '../../hooks/useToast.js';
 import { useLoading } from '../../hooks/useLoading.js';
 import { KPI_Card } from '../../components/KPI_Card.js';
-import { ProductFormModal } from '../../components/modals/ProductFormModal.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { ProductImportModal } from '../../components/modals/ProductImportModal.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
@@ -18,7 +17,9 @@ import { FilterBar, AdvancedFilterPanel } from '../../components/shared/FilterCo
 import { CategoryFormModal } from '../../components/modals/CategoryFormModal.js';
 import { Spinner } from '../../components/Spinner.js';
 import { useRealtimeListener } from '../../hooks/useRealtime.js';
-import { useProductForm } from '../../contexts/StatePersistence.js';
+import { useProductForm, useInitialSetup } from '../../contexts/StatePersistence.js';
+import { ProductFormModal } from '../../components/modals/ProductFormModal.js';
+import { InitialSetupModal } from '../../components/modals/InitialSetupModal.js';
 
 const CategoryManagerModal = ({ isOpen, onClose, onRefreshRequired }) => {
     const { addToast } = useToast();
@@ -164,7 +165,7 @@ const StockPill = ({ stock }) => {
     return html`<span class="${pillClass} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">${text} (${stock})</span>`;
 };
 
-const ProductCard = ({ product, navigate, onEdit, onDelete, user, formatCurrency }) => {
+const ProductCard = ({ product, navigate, onEdit, onDelete, onSetup, user, formatCurrency }) => {
     const handleCardClick = () => {
         if (window.getSelection().toString()) {
             return;
@@ -178,6 +179,7 @@ const ProductCard = ({ product, navigate, onEdit, onDelete, user, formatCurrency
     };
     
     const stockToShow = user.role === 'Propietario' ? product.stock_total : product.stock_sucursal;
+    const showSetupButton = !product.has_sales && !product.has_purchases;
 
     return html`
         <div onClick=${handleCardClick} class="group bg-white rounded-lg shadow-sm border overflow-hidden flex flex-row transition-shadow hover:shadow-md cursor-pointer">
@@ -196,6 +198,9 @@ const ProductCard = ({ product, navigate, onEdit, onDelete, user, formatCurrency
                             <p class="text-sm text-gray-500 truncate" title=${product.modelo || ''}>${product.modelo || 'Sin modelo'}</p>
                         </div>
                         <div class="flex items-center flex-shrink-0">
+                            ${showSetupButton && html`
+                                <button onClick=${(e) => handleActionClick(e, onSetup)} title="Configuración Inicial Rápida" class="text-gray-400 hover:text-amber-500 p-1 rounded-full">${ICONS.bolt}</button>
+                            `}
                             <button onClick=${(e) => handleActionClick(e, onEdit)} title="Editar" class="text-gray-400 hover:text-primary p-1 rounded-full">${ICONS.edit}</button>
                             <button onClick=${(e) => handleActionClick(e, onDelete)} title="Eliminar" class="text-gray-400 hover:text-red-600 p-1 rounded-full">${ICONS.delete}</button>
                         </div>
@@ -212,7 +217,7 @@ const ProductCard = ({ product, navigate, onEdit, onDelete, user, formatCurrency
     `;
 };
 
-const ProductTable = ({ products, navigate, onEdit, onDelete, user, formatCurrency }) => {
+const ProductTable = ({ products, navigate, onEdit, onDelete, onSetup, user, formatCurrency }) => {
     const handleRowClick = (product) => {
         navigate(`/productos/${product.id}`);
     };
@@ -237,6 +242,7 @@ const ProductTable = ({ products, navigate, onEdit, onDelete, user, formatCurren
             <tbody class="divide-y divide-gray-200 bg-white">
             ${products.map(p => {
                 const stockToShow = user.role === 'Propietario' ? p.stock_total : p.stock_sucursal;
+                const showSetupButton = !p.has_sales && !p.has_purchases;
                 return html`
                 <tr key=${p.id} onClick=${() => handleRowClick(p)} class="group hover:bg-gray-50 cursor-pointer">
                 <td class="py-4 pl-4 pr-3 text-sm sm:pl-6">
@@ -264,6 +270,9 @@ const ProductTable = ({ products, navigate, onEdit, onDelete, user, formatCurren
                 
                 <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                     <div class="flex items-center justify-end space-x-1">
+                    ${showSetupButton && html`
+                        <button onClick=${(e) => { e.stopPropagation(); onSetup(p); }} title="Configuración Inicial Rápida" class="text-gray-400 hover:text-amber-500 p-1 rounded-full hover:bg-gray-100">${ICONS.bolt}</button>
+                    `}
                     <button onClick=${(e) => { e.stopPropagation(); onEdit(p); }} title="Editar" class="text-gray-400 hover:text-primary p-1 rounded-full hover:bg-gray-100">${ICONS.edit}</button>
                     <button onClick=${(e) => { e.stopPropagation(); onDelete(p); }} title="Eliminar" class="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-gray-100">${ICONS.delete}</button>
                     </div>
@@ -291,11 +300,12 @@ const productStatusOptions = [
 export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
-    const { clearDraft } = useProductForm();
+    
+    const { setIsModalOpen, setProductToEdit, clearDraft } = useProductForm();
+    const { setIsModalOpen: setIsSetupModalOpen, setProductForSetup } = useInitialSetup();
+    
     const [products, setProducts] = useState([]);
     const [kpis, setKpis] = useState({ total_products: 0, total_stock_items: 0, products_without_stock: 0 });
-    const [isFormModalOpen, setFormModalOpen] = useState(false);
-    const [productToEdit, setProductToEdit] = useState(null);
     const [productToDelete, setProductToDelete] = useState(null);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [isImportModalOpen, setImportModalOpen] = useState(false);
@@ -307,6 +317,9 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
     const [isFabOpen, setIsFabOpen] = useState(false);
 
+    const [allBranches, setAllBranches] = useState([]);
+
+
     const formatCurrency = (value) => {
         const number = Number(value || 0);
         const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -316,17 +329,20 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     const fetchData = useCallback(async () => {
         startLoading();
         try {
-            const [productsRes, optionsRes] = await Promise.all([
+            const [productsRes, optionsRes, branchesRes] = await Promise.all([
                 supabase.rpc('get_company_products_with_stock_and_cost'),
-                supabase.rpc('get_inventory_filter_data')
+                supabase.rpc('get_inventory_filter_data'),
+                supabase.rpc('get_company_sucursales')
             ]);
             
             if (productsRes.error) throw productsRes.error;
             if (optionsRes.error) throw optionsRes.error;
+            if (branchesRes.error) throw branchesRes.error;
             
             const productData = productsRes.data || [];
             setProducts(productData);
             setFilterOptions(optionsRes.data || { categories: [], brands: [] });
+            setAllBranches(branchesRes.data?.sucursales || []);
 
             const totalStock = productData.reduce((sum, p) => sum + Number(p.stock_total || 0), 0);
             const withoutStock = productData.filter(p => (p.stock_total || 0) <= 0).length;
@@ -352,14 +368,24 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
 
     const handleAddProduct = () => {
         setIsFabOpen(false);
+        clearDraft();
         setProductToEdit(null);
-        clearDraft(); // Clear any previous draft from context
-        setFormModalOpen(true);
+        setIsModalOpen(true);
     };
     
     const handleEditProduct = (product) => {
         setProductToEdit(product);
-        setFormModalOpen(true);
+        setIsModalOpen(true);
+    };
+    
+    const handleSetupProduct = (product) => {
+        setProductForSetup(product);
+        setIsSetupModalOpen(true);
+    };
+
+    const handleSaveSetup = () => {
+        setIsSetupModalOpen(false);
+        fetchData();
     };
 
     const handleDeleteProduct = (product) => {
@@ -385,7 +411,7 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     };
     
     const handleSaveProduct = (action, productId) => {
-        setFormModalOpen(false);
+        setIsModalOpen(false);
         addToast({ message: `Producto ${action === 'edit' ? 'actualizado' : 'creado'} con éxito.`, type: 'success' });
         fetchData();
         if (action === 'create' && productId) {
@@ -394,9 +420,9 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     };
     
     const handleDownloadTemplate = () => {
-        const headers = "sku,nombre,marca,modelo,descripcion,categoria_nombre,unidad_medida,precio_base";
-        const example1 = "SKU001,Laptop Gamer XYZ,GamerCorp,Nitro 5,Teclado RGB y pantalla 144Hz,Laptops,Unidad,8500.5";
-        const example2 = "SKU002,Mouse Inalámbrico,Tech,M1,Diseño ergonómico,Periféricos,Pieza,150";
+        const headers = "sku,nombre,marca,modelo,descripcion,categoria_nombre,unidad_medida,precio_base,costo_inicial";
+        const example1 = "SKU001,Laptop Gamer XYZ,GamerCorp,Nitro 5,Teclado RGB y pantalla 144Hz,Laptops,Unidad,8500.50,7000.00";
+        const example2 = "SKU002,Mouse Inalámbrico,Tech,M1,Diseño ergonómico,Periféricos,Pieza,150.00,110.00";
         const bom = "\uFEFF";
         const csvContent = "data:text/csv;charset=utf-8," + bom + [headers, example1, example2].join("\n");
         const encodedUri = encodeURI(csvContent);
@@ -450,11 +476,11 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     const ProductList = () => html`
         <div class="grid grid-cols-1 xl:hidden gap-4">
             ${filteredProducts.map(p => html`
-                <${ProductCard} product=${p} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} user=${user} formatCurrency=${formatCurrency} />
+                <${ProductCard} product=${p} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} onSetup=${handleSetupProduct} user=${user} formatCurrency=${formatCurrency} />
             `)}
         </div>
         <div class="hidden xl:block">
-            <${ProductTable} products=${filteredProducts} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} user=${user} formatCurrency=${formatCurrency} />
+            <${ProductTable} products=${filteredProducts} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} onSetup=${handleSetupProduct} user=${user} formatCurrency=${formatCurrency} />
         </div>
     `;
 
@@ -528,11 +554,14 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
             </div>
             
             <${ProductFormModal}
-                isOpen=${isFormModalOpen}
-                onClose=${() => setFormModalOpen(false)}
                 onSave=${handleSaveProduct}
                 user=${user}
-                productToEdit=${productToEdit}
+            />
+
+            <${InitialSetupModal}
+                onSave=${handleSaveSetup}
+                branches=${allBranches}
+                companyInfo=${companyInfo}
             />
 
             <${ConfirmationModal}
