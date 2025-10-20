@@ -12,10 +12,10 @@ const ConnectivityPanel = ({ log, onReconnect }) => {
 
     const getIconForType = (type) => {
         switch (type) {
-            case 'success': return html`<div class="text-emerald-500">${ICONS.success}</div>`;
-            case 'error': return html`<div class="text-red-500">${ICONS.error}</div>`;
-            case 'info': return html`<div class="text-blue-500">${ICONS.info}</div>`;
-            default: return html`<div class="text-gray-400">${ICONS.info}</div>`;
+            case 'success': return html`<div class="text-emerald-500 text-base">${ICONS.success}</div>`;
+            case 'error': return html`<div class="text-red-500 text-base">${ICONS.error}</div>`;
+            case 'info': return html`<div class="text-blue-500 text-base">${ICONS.info}</div>`;
+            default: return html`<div class="text-gray-400 text-base">${ICONS.info}</div>`;
         }
     };
     
@@ -64,7 +64,7 @@ export function ConnectivityCenter() {
             icon: ICONS.wifi_off,
             color: 'text-red-500',
             text: 'Sin conexión a internet.',
-            animation: '',
+            animation: 'animate-icon-pulse',
         },
         ERROR: {
             icon: ICONS.wifi_off,
@@ -74,7 +74,7 @@ export function ConnectivityCenter() {
         },
         CONNECTING: {
             icon: ICONS.wifi,
-            color: 'text-yellow-500',
+            color: 'text-amber-500',
             text: 'Conectando en tiempo real...',
             animation: 'animate-icon-pulse',
         },
@@ -98,6 +98,11 @@ export function ConnectivityCenter() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const handleReconnect = () => {
+        forceReconnect();
+        setPanelOpen(false);
+    }
+
     return html`
         <div ref=${wrapperRef} class="relative">
             <button
@@ -111,7 +116,7 @@ export function ConnectivityCenter() {
                     ${currentStatus.icon}
                 </div>
             </button>
-            ${isPanelOpen && html`<${ConnectivityPanel} log=${log} onReconnect=${forceReconnect} />`}
+            ${isPanelOpen && html`<${ConnectivityPanel} log=${log} onReconnect=${handleReconnect} />`}
         </div>
     `;
 }

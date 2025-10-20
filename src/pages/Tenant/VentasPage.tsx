@@ -11,6 +11,9 @@ import { useToast } from '../../hooks/useToast.js';
 import { useLoading } from '../../hooks/useLoading.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { FormInput, FormSelect } from '../../components/FormComponents.js';
+import { generatePdfFromComponent } from '../../lib/pdfGenerator.js';
+import { NotaVentaTemplate } from '../../components/receipts/NotaVentaTemplate.js';
+import { Spinner } from '../../components/Spinner.js';
 
 const initialFilters = {
     startDate: '',
@@ -20,7 +23,8 @@ const initialFilters = {
     cliente_id: 'all',
     vendedor_ids: [],
     sucursal_ids: [],
-    metodos_pago: []
+    metodos_pago: [],
+    estado_vencimiento: 'all' // Nuevo filtro
 };
 
 const PAYMENT_METHODS = ['Efectivo', 'Tarjeta', 'QR', 'Transferencia Bancaria'];
@@ -181,7 +185,7 @@ const FilterBar = ({ datePreset, onDatePresetChange, filters, onFilterChange, on
     return html`
         <div class="p-4 bg-white rounded-t-lg shadow-sm border-b-0 border">
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
-                <div class="sm:col-span-2 lg:col-span-5">
+                <div class="sm:col-span-2 lg:col-span-4">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Rango de Fechas</label>
                     <div class="flex items-center flex-wrap bg-white border rounded-md shadow-sm p-1">
                         <button onClick=${() => onDatePresetChange('today')} class=${`px-3 py-1 text-sm font-medium rounded transition-colors ${datePreset === 'today' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>Hoy</button>
@@ -207,7 +211,20 @@ const FilterBar = ({ datePreset, onDatePresetChange, filters, onFilterChange, on
                         ]}
                     />
                 </div>
-
+                 <div class="lg:col-span-2">
+                    <${FormSelect} 
+                        label="Estado de Vencimiento"
+                        name="estado_vencimiento"
+                        value=${filters.estado_vencimiento}
+                        onInput=${onFilterChange}
+                        options=${[
+                            { value: 'all', label: 'Todos' },
+                            { value: 'Al día', label: 'Al día' },
+                            { value: 'Vencida', label: 'Vencida' },
+                            { value: 'Pagada', label: 'Pagada' },
+                        ]}
+                    />
+                </div>
                 <div class="lg:col-span-2">
                     <${FormSelect}
                         label="Tipo de Venta"
@@ -222,7 +239,7 @@ const FilterBar = ({ datePreset, onDatePresetChange, filters, onFilterChange, on
                     />
                 </div>
 
-                <div class="lg:col-span-3 flex items-center gap-2">
+                <div class="lg:col-span-2 flex items-center gap-2">
                     <button onClick=${onToggleAdvanced} class="relative w-full rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-500 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 flex items-center justify-between text-left">
                         <span>Avanzada</span>
                         ${isAdvancedOpen ? ICONS.chevron_up : ICONS.chevron_down}
@@ -296,6 +313,10 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
     });
     const [filterOptions, setFilterOptions] = useState({ clients: [], users: [], branches: [] });
     const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
+    
+    const [downloadingId, setDownloadingId] = useState(null);
+    const [receiptData, setReceiptData] = useState(null);
+    const receiptRef = useRef(null);
 
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
@@ -359,6 +380,35 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
         setDatePreset('this_month');
         setIsAdvancedSearchOpen(false);
     };
+    
+    const handleDownloadReceipt = async (venta) => {
+        if (downloadingId) return;
+        setDownloadingId(venta.id);
+        try {
+            const { data, error } = await supabase.rpc('get_sale_details', { p_venta_id: venta.id });
+            if (error) throw error;
+            setReceiptData(data); // Set data to render the hidden component
+        } catch (err) {
+            addToast({ message: `Error al generar recibo: ${err.message}`, type: 'error' });
+            setDownloadingId(null);
+        }
+    };
+
+    useEffect(() => {
+        if (receiptData && receiptRef.current) {
+            generatePdfFromComponent(receiptRef.current, `NotaVenta-${receiptData.folio}.pdf`, 'a4')
+                .then(() => {
+                    addToast({ message: 'Descarga iniciada.', type: 'success' });
+                })
+                .catch((err) => {
+                    addToast({ message: `Error en PDF: ${err.message}`, type: 'error' });
+                })
+                .finally(() => {
+                    setReceiptData(null);
+                    setDownloadingId(null);
+                });
+        }
+    }, [receiptData]);
 
     const filteredVentas = useMemo(() => {
         let { startDate, endDate } = getDatesFromPreset(datePreset);
@@ -380,6 +430,7 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
             if (filters.vendedor_ids.length > 0 && !filters.vendedor_ids.includes(venta.usuario_id)) return false;
             if (user.role === 'Propietario' && filters.sucursal_ids.length > 0 && !filters.sucursal_ids.includes(venta.sucursal_id)) return false;
             if (filters.metodos_pago.length > 0 && !filters.metodos_pago.includes(venta.metodo_pago)) return false;
+            if (filters.estado_vencimiento !== 'all' && venta.estado_vencimiento !== filters.estado_vencimiento) return false;
             
             return true;
         });
@@ -424,6 +475,22 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
         }
     };
     
+    const VencimientoPill = ({ estado, dias }) => {
+        if (!estado || estado === 'Pagada' || estado === 'N/A') return null;
+
+        const diasAbs = Math.abs(dias);
+        const diaText = diasAbs === 1 ? 'día' : 'días';
+
+        if (estado === 'Vencida') {
+            return html`<span class="text-xs font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded-full ml-2">Vencida hace ${diasAbs} ${diaText}</span>`;
+        }
+        if (estado === 'Al día') {
+            if (dias === 0) return html`<span class="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full ml-2">Vence Hoy</span>`;
+            return html`<span class="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full ml-2">Vence en ${diasAbs} ${diaText}</span>`;
+        }
+        return null;
+    };
+    
     const VentasList = ({ ventas }) => {
         const handleRowClick = (venta) => navigate(`/ventas/${venta.id}`);
         
@@ -434,24 +501,62 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
         return html`
             <div class="space-y-4 md:hidden mt-6">
                 ${ventas.map(v => html`
-                    <div key=${v.id} onClick=${() => handleRowClick(v)} class="bg-white p-4 rounded-lg shadow border cursor-pointer">
-                        <div class="flex justify-between items-start"><div class="min-w-0"><div class="font-bold text-gray-800 truncate">${v.cliente_nombre || 'Consumidor Final'}</div><div class="text-sm text-gray-600">Folio: ${v.folio}</div></div><span class=${getStatusPill(v.estado_pago)}>${v.estado_pago}</span></div>
-                        <div class="flex justify-between items-end mt-2 pt-2 border-t"><div class="text-sm"><p class="text-gray-500">${new Date(v.fecha).toLocaleDateString()}</p><p class="text-lg font-bold text-primary">${formatCurrency(v.total)}</p></div><span class="text-xs text-primary font-semibold">Ver Detalles ${ICONS.chevron_right}</span></div>
+                    <div key=${v.id} class="bg-white p-4 rounded-lg shadow border">
+                        <div onClick=${() => handleRowClick(v)} class="cursor-pointer">
+                            <div class="flex justify-between items-start">
+                                <div class="min-w-0">
+                                    <div class="font-bold text-gray-800 truncate">${v.cliente_nombre || 'Consumidor Final'}</div>
+                                    <div class="text-sm text-gray-600">Folio: ${v.folio}</div>
+                                </div>
+                                <div class="flex flex-col items-end gap-1">
+                                    <span class=${getStatusPill(v.estado_pago)}>${v.estado_pago}</span>
+                                    <${VencimientoPill} estado=${v.estado_vencimiento} dias=${v.dias_diferencia} />
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-end mt-2">
+                                <div class="text-sm">
+                                    <p class="text-gray-500">${new Date(v.fecha).toLocaleDateString()}</p>
+                                    <p class="text-lg font-bold text-primary">${formatCurrency(v.total)}</p>
+                                </div>
+                                <span class="text-xs text-primary font-semibold">Ver Detalles ${ICONS.chevron_right}</span>
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t">
+                            <button onClick=${(e) => { e.stopPropagation(); handleDownloadReceipt(v); }} disabled=${downloadingId === v.id} class="w-full flex items-center justify-center gap-2 rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50">
+                                ${downloadingId === v.id ? html`<${Spinner} size="h-4 w-4" color="text-gray-500" />` : ICONS.download}
+                                Descargar Nota (PDF)
+                            </button>
+                        </div>
                     </div>
                 `)}
             </div>
             <div class="hidden md:block overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg mt-0">
                 <table class="min-w-full divide-y divide-gray-300">
-                    <thead class="bg-gray-50"><tr><th class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Folio</th><th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Cliente</th><th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Fecha</th><th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Vendedor</th><th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Total</th><th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Estado</th></tr></thead>
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Folio</th>
+                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Cliente</th>
+                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Fecha</th>
+                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Total</th>
+                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Estado Pago</th>
+                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Vencimiento</th>
+                            <th class="relative py-3.5 pl-3 pr-4 sm:pr-6"><span class="sr-only">Acciones</span></th>
+                        </tr>
+                    </thead>
                     <tbody class="divide-y divide-gray-200 bg-white">
                         ${ventas.map(v => html`
                             <tr key=${v.id} onClick=${() => handleRowClick(v)} class="hover:bg-gray-50 cursor-pointer">
                                 <td class="py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">${v.folio}</td>
                                 <td class="px-3 py-4 text-sm text-gray-500 truncate">${v.cliente_nombre || 'Consumidor Final'}</td>
                                 <td class="px-3 py-4 text-sm text-gray-500">${new Date(v.fecha).toLocaleDateString()}</td>
-                                <td class="px-3 py-4 text-sm text-gray-500 truncate">${v.usuario_nombre}</td>
                                 <td class="px-3 py-4 text-sm font-semibold text-primary">${formatCurrency(v.total)}</td>
                                 <td class="px-3 py-4 text-sm"><span class=${getStatusPill(v.estado_pago)}>${v.estado_pago}</span></td>
+                                <td class="px-3 py-4 text-sm"><${VencimientoPill} estado=${v.estado_vencimiento} dias=${v.dias_diferencia} /></td>
+                                 <td class="relative py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                                    <button onClick=${(e) => { e.stopPropagation(); handleDownloadReceipt(v); }} disabled=${downloadingId === v.id} class="p-2 rounded-full text-gray-400 hover:text-primary hover:bg-gray-100 disabled:opacity-50" title="Descargar Nota de Venta (PDF)">
+                                        ${downloadingId === v.id ? html`<${Spinner} size="h-5 w-5" color="text-primary" />` : ICONS.download}
+                                    </button>
+                                </td>
                             </tr>
                         `)}
                     </tbody>
@@ -504,6 +609,11 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
                     <${VentasList} ventas=${filteredVentas} />
                  </div>
             </div>
+             ${receiptData && html`
+                <div style="position: fixed; left: -9999px; top: 0;">
+                    <${NotaVentaTemplate} ref=${receiptRef} saleDetails=${receiptData} companyInfo=${companyInfo} />
+                </div>
+             `}
         <//>
     `;
 }

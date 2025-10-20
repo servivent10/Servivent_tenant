@@ -14,41 +14,7 @@ import { ComparativeBarChart } from '../../components/charts/ComparativeBarChart
 import { HorizontalBarChart } from '../../components/charts/HorizontalBarChart.js';
 import { FormInput, FormSelect } from '../../components/FormComponents.js';
 import { Avatar } from '../../components/Avatar.js';
-
-const KPICard = ({ title, value, change, icon, iconBgColor, count, countLabel }) => {
-    const isUp = change >= 0;
-    const changeColor = isUp ? 'text-green-600' : 'text-red-600';
-
-    return html`
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200/80 relative transition-all hover:shadow-md hover:-translate-y-1">
-            ${(count !== null && count !== undefined) && html`
-                <span title=${countLabel} class="absolute top-3 right-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
-                  ${count}
-                </span>
-            `}
-            <div class="flex items-start justify-between">
-                <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium text-gray-500 truncate">${title}</p>
-                    <div class="mt-1">
-                        <p class="text-3xl font-bold text-gray-900">${value}</p>
-                    </div>
-                </div>
-                <div class="flex-shrink-0 ml-2">
-                    <div class="flex items-center justify-center h-12 w-12 rounded-lg ${iconBgColor}">
-                        ${icon}
-                    </div>
-                </div>
-            </div>
-            ${change !== null && change !== undefined && html`
-                <div class="mt-2 flex items-center text-sm ${changeColor}">
-                    ${isUp ? ICONS.chevron_up : ICONS.chevron_down}
-                    <span class="font-semibold">${Math.abs(change)}%</span>
-                    <span class="ml-1 text-gray-500">vs período anterior</span>
-                </div>
-            `}
-        </div>
-    `;
-};
+import { KPI_Card } from '../../components/KPI_Card.js';
 
 const DashboardWidget = ({ title, icon, children, className = '' }) => html`
     <div class=${`bg-white p-6 rounded-xl shadow-sm border border-gray-200/80 ${className}`}>
@@ -103,8 +69,8 @@ const DashboardSkeleton = () => {
                     <${SkeletonBox} className="h-10 w-48" />
                 </div>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                ${[...Array(6)].map(() => html`<${SkeletonBox} className="h-32" />`)}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                ${[...Array(8)].map(() => html`<${SkeletonBox} className="h-32" />`)}
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
                 <div class="lg:col-span-2 space-y-6">
@@ -294,31 +260,15 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
                 </div>
             `}
             
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                <${KPICard} title="Ventas" value=${formatCurrency(kpis.total_sales)} change=${kpis.sales_change_percentage} icon=${ICONS.sales} iconBgColor="bg-blue-100 text-blue-600" count=${kpis.total_sales_count} countLabel="Cantidad de Ventas" />
-                <${KPICard} title="Ganancia Bruta" value=${formatCurrency(kpis.gross_profit)} change=${kpis.profit_change_percentage} icon=${ICONS.dollar} iconBgColor="bg-emerald-100 text-emerald-600" />
-                <${KPICard} title="Total Descuentos" value=${formatCurrency(kpis.total_discounts)} change=${null} icon=${ICONS.local_offer} iconBgColor="bg-rose-100 text-rose-600" count=${kpis.discount_sales_count} countLabel="Ventas con Descuento" />
-                <${KPICard} title="Compras" value=${formatCurrency(kpis.total_purchases)} change=${null} icon=${ICONS.purchases} iconBgColor="bg-amber-100 text-amber-600" count=${kpis.total_purchases_count} countLabel="Cantidad de Compras" />
-                <${KPICard} title="Total Gastos" value=${formatCurrency(kpis.total_gastos)} change=${null} icon=${ICONS.expenses} iconBgColor="bg-orange-100 text-orange-600" count=${kpis.total_gastos_count} countLabel="Cantidad de Gastos" />
-
-                <div class="bg-white p-5 rounded-xl shadow-sm border-2 border-primary relative transition-all hover:shadow-md hover:-translate-y-1">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1 min-w-0">
-                            <p class="text-sm font-medium text-gray-500 truncate">Ganancia NETA</p>
-                            <div class="mt-1">
-                                <p class="text-3xl font-bold text-primary">${formatCurrency(gananciaNeta)}</p>
-                            </div>
-                        </div>
-                        <div class="flex-shrink-0 ml-2">
-                            <div class="flex items-center justify-center h-12 w-12 rounded-lg bg-primary-light text-primary">
-                                ${ICONS.emoji_events}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mt-2 text-sm text-gray-500">
-                        (Ganancia Bruta - Gastos)
-                    </div>
-                </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <${KPI_Card} title="Ventas Totales" value=${formatCurrency(kpis.total_sales)} icon=${ICONS.sales} color="primary" count=${kpis.total_sales_count} countLabel="Nº de Ventas" />
+                <${KPI_Card} title="Ganancia Bruta" value=${formatCurrency(kpis.gross_profit)} icon=${ICONS.dollar} color="green" />
+                <${KPI_Card} title="Cuentas por Cobrar" value=${formatCurrency(kpis.cuentas_por_cobrar)} icon=${ICONS.credit_score} color="amber" count=${kpis.cuentas_por_cobrar_count} countLabel="Ventas a Crédito Pendientes" />
+                <${KPI_Card} title="Cuentas Vencidas" value=${formatCurrency(kpis.cuentas_vencidas)} icon=${ICONS.warning} color="red" count=${kpis.cuentas_vencidas_count} countLabel="Ventas a Crédito Vencidas" />
+                <${KPI_Card} title="Compras Totales" value=${formatCurrency(kpis.total_purchases)} icon=${ICONS.purchases} color="primary" count=${kpis.total_purchases_count} countLabel="Nº de Compras" />
+                <${KPI_Card} title="Gastos Totales" value=${formatCurrency(kpis.total_gastos)} icon=${ICONS.expenses} color="primary" count=${kpis.total_gastos_count} countLabel="Nº de Gastos" />
+                <${KPI_Card} title="Descuentos Otorgados" value=${formatCurrency(kpis.total_discounts)} icon=${ICONS.local_offer} count=${kpis.discount_sales_count} countLabel="Ventas con Descuento" />
+                <${KPI_Card} title="Ganancia NETA" value=${formatCurrency(gananciaNeta)} icon=${ICONS.emoji_events} color="green" subtext="(Ganancia Bruta - Gastos)" />
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">

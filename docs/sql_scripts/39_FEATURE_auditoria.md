@@ -1,18 +1,22 @@
 -- =============================================================================
--- AUDIT TRAIL ("BLACK BOX") SYSTEM - DATABASE SETUP (V10 - Definitive FK Fix)
+-- AUDIT TRAIL ("BLACK BOX") SYSTEM - DATABASE SETUP (V11 - Bulk Operation Context)
 -- =============================================================================
 -- This script provides the definitive fix for the "violates foreign key constraint"
--- error that occurs during a SuperAdmin-initiated company deletion.
+-- error that occurs during a SuperAdmin-initiated company deletion, AND adds
+-- context-awareness to avoid logging individual rows during bulk operations.
 --
--- PROBLEM: The audit trigger tried to insert a log referencing an `empresa_id`
--- that was being deleted in the same transaction, causing a conflict.
+-- PROBLEM:
+-- The audit trigger fires for every single row change, which floods the audit log
+-- with hundreds of entries during a bulk import, making it unreadable.
 --
--- REAL SOLUTION: An audit log should not be bound by relational integrity that
--- prevents it from logging the deletion of parent records. This script removes
--- the foreign key constraint on `historial_cambios.empresa_id`, treating it
--- as a historical data point rather than a live relation. This allows the
--- cascade delete to complete successfully while preserving a full audit trail
--- of the deleted records.
+-- SOLUTION:
+-- 1. The `registrar_cambio` trigger function is modified to check for a special
+--    session variable (`servivent.source`).
+-- 2. If this variable is set to 'csv_import', the trigger immediately stops and
+--    does not log the individual change.
+-- 3. The bulk import functions are modified to set this variable at the beginning
+--    of their transaction and then insert a single, consolidated audit log entry
+--    at the end.
 --
 -- INSTRUCTIONS:
 -- Execute this script completely in your Supabase SQL Editor.
@@ -28,7 +32,7 @@ CREATE TABLE IF NOT EXISTS public.historial_cambios (
     usuario_nombre text,
     accion text NOT NULL,
     tabla_afectada text NOT NULL,
-    registro_id text NOT NULL,
+    registro_id text,
     datos_anteriores jsonb,
     datos_nuevos jsonb,
     empresa_id uuid NOT NULL -- NOTE: The foreign key is intentionally removed.
@@ -58,7 +62,7 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Step 2: Restore the generic trigger function `registrar_cambio` to its robust version
+-- Step 2: Update the generic trigger function `registrar_cambio` with context-awareness
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.registrar_cambio()
 RETURNS TRIGGER
@@ -67,11 +71,20 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
+    v_source text;
     v_empresa_id uuid;
     v_usuario_id uuid;
     v_usuario_nombre text;
     v_registro_id text;
 BEGIN
+    -- **NUEVA LÓGICA:** Check for a context variable to bypass logging for bulk operations.
+    v_source := current_setting('servivent.source', true);
+    IF v_source = 'csv_import' THEN
+        -- If the source is a CSV import, do nothing and return.
+        -- The bulk function will be responsible for creating a consolidated log entry.
+        RETURN COALESCE(NEW, OLD);
+    END IF;
+
     -- 1. Get user and company info from JWT (primary method)
     v_usuario_id := auth.uid();
     v_usuario_nombre := (auth.jwt() -> 'app_metadata' ->> 'nombre_completo')::text;

@@ -29,6 +29,7 @@ export const ICONS = {
     key: html`<${Icon} name="key" />`,
     upload_file: html`<${Icon} name="upload_file" />`,
     download: html`<${Icon} name="download" />`,
+    print: html`<${Icon} name="print" />`,
     storefront: html`<${Icon} name="storefront" />`,
     drag_handle: html`<${Icon} name="drag_indicator" />`,
     search: html`<${Icon} name="search" />`,
@@ -50,6 +51,7 @@ export const ICONS = {
     inventory_history: html`<${Icon} name="history_toggle_off" />`,
     phone: html`<${Icon} name="call" />`,
     account_circle: html`<${Icon} name="account_circle" />`,
+    more_vert: html`<${Icon} name="more_vert" />`,
 
 
     // Connectivity

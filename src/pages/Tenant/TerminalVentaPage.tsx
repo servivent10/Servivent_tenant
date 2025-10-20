@@ -757,17 +757,29 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
 
     const fetchData = useCallback(async () => {
         try {
-             const [posDataRes, optionsRes] = await Promise.all([ supabase.rpc('get_pos_data'), supabase.rpc('get_inventory_filter_data') ]);
+            const [posDataRes, optionsRes, clientsRes] = await Promise.all([
+                supabase.rpc('get_pos_data'),
+                supabase.rpc('get_inventory_filter_data'),
+                supabase.rpc('get_company_clients') // Added specific call for clients
+            ]);
+    
             if (posDataRes.error) throw posDataRes.error;
             if (optionsRes.error) throw optionsRes.error;
-
-            setPosData(posDataRes.data);
+            if (clientsRes.error) throw clientsRes.error; // Added error check for clients
+    
+            // Combine data, prioritizing the specific client fetch over the potentially failing one
+            const combinedData = {
+                ...(posDataRes.data || { products: [], price_lists: [] }),
+                clients: clientsRes.data || []
+            };
+    
+            setPosData(combinedData);
             setFilterOptions(optionsRes.data || { categories: [], brands: [] });
             
-            const defaultList = posDataRes.data.price_lists.find(pl => pl.es_predeterminada);
+            const defaultList = combinedData.price_lists.find(pl => pl.es_predeterminada);
             if (activePriceListId === null) {
                 if (defaultList) setActivePriceListId(defaultList.id);
-                else if (posDataRes.data.price_lists.length > 0) setActivePriceListId(posDataRes.data.price_lists[0].id);
+                else if (combinedData.price_lists.length > 0) setActivePriceListId(combinedData.price_lists[0].id);
             }
         } catch (err) {
             addToast({ message: `Error crítico al cargar datos: ${err.message}`, type: 'error', duration: 10000 });
@@ -998,28 +1010,31 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         startLoading();
         setIsCheckoutModalOpen(false);
         try {
-            const defaultListId = posData.price_lists.find(pl => pl.es_predeterminada)?.id;
-            const saleItems = cart.map(item => {
-                const originalPrice = getActivePriceForProduct(item.product);
-                const effectivePrice = customPrices[item.product.id]?.newPrice ?? originalPrice;
-                const fullProduct = posData.products.find(p => p.id === item.product.id);
-                const defaultPriceInfo = fullProduct?.prices?.[defaultListId];
-                return {
-                    producto_id: item.product.id,
-                    cantidad: item.quantity,
-                    precio_unitario_aplicado: effectivePrice,
-                    costo_unitario_en_venta: defaultPriceInfo ? (defaultPriceInfo.precio - defaultPriceInfo.ganancia_maxima) : 0,
-                };
-            });
             const { error } = await supabase.rpc('registrar_venta', {
                 p_venta: {
-                    cliente_id: selectedClientId, sucursal_id: user.sucursal_id, total: totals.finalTotal,
-                    subtotal: totals.subtotal, descuento: totals.totalDiscount, impuestos: totals.taxAmount,
-                    metodo_pago: saleDetails.metodoPago, tipo_venta: saleDetails.tipoVenta,
-                    abono_inicial: saleDetails.montoRecibido, fecha_vencimiento: saleDetails.fechaVencimiento,
+                    cliente_id: selectedClientId,
+                    sucursal_id: user.sucursal_id,
+                    total: saleDetails.total,
+                    subtotal: totals.subtotal,
+                    descuento: totals.totalDiscount,
+                    impuestos: totals.taxAmount,
+                    tipo_venta: saleDetails.tipoVenta,
+                    fecha_vencimiento: saleDetails.fechaVencimiento,
                 },
-                p_items: saleItems
+                p_items: cart.map(item => {
+                    const originalPrice = getActivePriceForProduct(item.product);
+                    const effectivePrice = customPrices[item.product.id]?.newPrice ?? originalPrice;
+                    const priceInfo = getPriceInfoForProduct(item.product);
+                    return {
+                        producto_id: item.product.id,
+                        cantidad: item.quantity,
+                        precio_unitario_aplicado: effectivePrice,
+                        costo_unitario_en_venta: (priceInfo.precio - priceInfo.ganancia_maxima) || 0,
+                    };
+                }),
+                p_pagos: saleDetails.pagos
             });
+
             if (error) throw error;
             addToast({ message: 'Venta registrada con éxito.', type: 'success' });
             handleClearCart();
@@ -1048,6 +1063,18 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         cart, customPrices, selectedClientId, setSelectedClientId, activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue,
         canUseCashRegister
     };
+    
+    const mobileActions = html`
+        <div class="flex lg:hidden items-center gap-2">
+            <button onClick=${() => setIsScannerOpen(true)} class="flex-shrink-0 flex items-center justify-center p-2.5 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors" title="Escanear código de barras con la cámara">
+                ${ICONS.qr_code_scanner}
+            </button>
+            <button onClick=${() => setCartSidebarOpen(true)} class="relative flex-shrink-0 flex items-center justify-center p-2.5 bg-primary text-white rounded-md hover:bg-primary-hover transition-colors" title="Ver carrito">
+                <span class="text-2xl">${ICONS.shopping_cart}</span>
+                ${totalItemsInCart > 0 && html`<div class="absolute -top-1 -right-1 flex items-center justify-center h-5 w-5 rounded-full bg-red-500 text-white text-xs font-bold">${totalItemsInCart > 9 ? '9+' : totalItemsInCart}</div>`}
+            </button>
+        </div>
+    `;
 
     return html`
         <${DashboardLayout} 
@@ -1058,7 +1085,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             <div class="h-full lg:grid lg:grid-cols-[1fr_450px] lg:gap-6 lg:p-6">
                 <div class="bg-white rounded-lg border shadow-sm h-full flex flex-col lg:h-auto overflow-hidden">
                     <div class="flex-shrink-0 p-4 border-b space-y-4">
-                        <div class="flex gap-2">
+                        <div class="hidden lg:flex gap-2">
                             <div class="relative flex-grow">
                                 <${FormInput}
                                     name="sku_input" type="text" label="" value=${skuInput} onInput=${e => setSkuInput(e.target.value)} onKeyDown=${handleSkuSubmit}
@@ -1073,6 +1100,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                             filters=${filters} onFilterChange=${handleFilterChange} onClear=${handleClearFilters}
                             onToggleAdvanced=${() => setIsAdvancedSearchOpen(p => !p)} isAdvancedOpen=${isAdvancedSearchOpen}
                             statusOptions=${posStatusOptions}
+                            rightActions=${mobileActions}
                         />
                         <${AdvancedFilterPanel} isOpen=${isAdvancedSearchOpen} filters=${filters} onFilterChange=${handleFilterChange} filterOptions=${filterOptions} />
                     </div>
@@ -1102,17 +1130,10 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
                 
                 <div class="hidden lg:block">
                      <div class="sticky top-6">
-                        <div class="flex flex-col bg-white rounded-lg border shadow-sm overflow-hidden max-h-[calc(100vh-7rem)]">
+                        <div class="flex flex-col bg-white rounded-lg border shadow-sm max-h-[calc(100vh-7rem)]">
                             <${CartPanel} ...${cartPanelProps} />
                         </div>
                     </div>
-                </div>
-
-                <div class="lg:hidden fixed bottom-4 right-4 z-30">
-                    <button onClick=${() => setCartSidebarOpen(true)} class="relative flex items-center justify-center bg-primary text-white rounded-full h-16 w-16 shadow-lg hover:bg-primary-hover transition-transform duration-200 hover:scale-105" aria-label="Ver carrito">
-                        <span class="text-3xl">${ICONS.shopping_cart}</span>
-                        ${totalItemsInCart > 0 && html`<div class="absolute -top-1 -right-1 flex flex-col items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full w-8 h-8 border-2 border-white"><span>${totalItemsInCart}</span></div>`}
-                    </button>
                 </div>
                 
                 <div class=${`fixed inset-0 z-40 flex justify-end lg:hidden transition-opacity duration-300 ${isCartSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} role="dialog" aria-modal="true">

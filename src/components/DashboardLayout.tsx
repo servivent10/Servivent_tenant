@@ -23,21 +23,41 @@ const NOTIFICATION_EVENT_ICONS = {
     'TRASPASO_RECIBIDO': ICONS.inventory,
     'NUEVO_PRODUCTO': ICONS.package_2,
     'NUEVO_CLIENTE': ICONS.person_add,
+    'PRODUCTO_STOCK_BAJO': ICONS.warning,
+    'MULTIPLE_PRODUCTOS_STOCK_BAJO': ICONS.inventory,
+    'NUEVO_PEDIDO_RETIRO': ICONS.storefront,
+    'NUEVO_PEDIDO_ENVIO': ICONS.suppliers,
+    'VENTA_PROXIMA_A_VENCER': ICONS.calendar_month,
+    'VENTA_VENCIDA': ICONS.error,
     DEFAULT: ICONS.bolt,
 };
 
 const getNotificationLink = (notification) => {
-    const { tipo_evento, entidad_id } = notification;
-    if (!entidad_id) return null;
+    const { tipo_evento, entidad_id, mensaje } = notification;
 
     switch (tipo_evento) {
         case 'NUEVA_VENTA':
-            return `#/ventas/${entidad_id}`;
+        case 'NUEVO_PEDIDO_RETIRO':
+        case 'NUEVO_PEDIDO_ENVIO':
+        case 'VENTA_PROXIMA_A_VENCER':
+        case 'VENTA_VENCIDA':
+            return entidad_id ? `#/ventas/${entidad_id}` : null;
         case 'NUEVA_COMPRA':
-            return `#/compras/${entidad_id}`;
+            return entidad_id ? `#/compras/${entidad_id}` : null;
         case 'TRASPASO_ENVIADO':
         case 'TRASPASO_RECIBIDO':
-            return `#/traspasos/${entidad_id}`;
+            return entidad_id ? `#/traspasos/${entidad_id}` : null;
+        case 'NUEVO_PRODUCTO':
+            return entidad_id ? `#/productos/${entidad_id}` : null;
+        case 'NUEVO_CLIENTE':
+            return '#/clientes';
+        case 'PRODUCTO_STOCK_BAJO': {
+            const skuMatch = mensaje.match(/\(SKU:\s*([^)]+)\)/);
+            const sku = skuMatch ? skuMatch[1] : null;
+            return sku ? `#/inventarios?search=${encodeURIComponent(sku)}` : '#/inventarios';
+        }
+        case 'MULTIPLE_PRODUCTOS_STOCK_BAJO':
+            return '#/inventarios?status=low_stock';
         default:
             return null;
     }
@@ -197,7 +217,6 @@ export function DashboardLayout({ user, onLogout, onProfileUpdate, sidebarLinks,
     const safeUser = user || { name: ' ', role: '', sucursal: ' ' };
     const safeCompanyInfo = companyInfo || { name: ' ', licenseStatus: '' };
 
-    // **MODIFIED:** Pass companyInfo to get dynamic links based on plan features
     const finalSidebarLinks = sidebarLinks || getTenantSidebarLinks(safeUser.role, safeCompanyInfo);
     const finalFooterLinks = footerLinks || TENANT_FOOTER_LINKS;
 

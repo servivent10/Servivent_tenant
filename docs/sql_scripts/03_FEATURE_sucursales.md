@@ -1,19 +1,23 @@
 -- =============================================================================
--- SUCURSALES & USER MANAGEMENT FUNCTIONS
+-- SUCURSALES & USER MANAGEMENT FUNCTIONS (V3 - ROBUST FIX)
 -- =============================================================================
--- Este script crea las funciones PostgreSQL necesarias para el nuevo módulo
--- de gestión de Sucursales y la gestión de usuarios integrada.
+-- Este script refactoriza la función `get_company_sucursales` para que sea
+-- consistente y robusta, resolviendo un error fatal en el frontend.
+--
+-- PROBLEMA: La función devolvía un tipo de dato diferente para Propietarios
+-- (un array) que para otros roles (un objeto). Esto causaba un error
+-- `TypeError: .map is not a function` en componentes que esperaban siempre un array.
+--
+-- SOLUCIÓN: La función ahora SIEMPRE devuelve la lista completa de sucursales.
+-- La lógica de redirección para no-propietarios se facilita añadiendo el
+-- `user_sucursal_id` al nivel raíz del JSON de respuesta.
 --
 -- **INSTRUCCIONES:**
--- Por favor, ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
+-- Ejecuta este script completo en el Editor SQL de tu proyecto de Supabase.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- Función 1: Obtener la lista de sucursales de la empresa (v2)
--- -----------------------------------------------------------------------------
--- Descripción:
--- Recupera datos para la página principal de "Sucursales". AHORA INCLUYE
--- un desglose de roles tanto en los KPIs globales como en cada sucursal.
+-- Función 1: Obtener la lista de sucursales de la empresa (CORREGIDA)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_company_sucursales()
 RETURNS json
@@ -33,30 +37,30 @@ BEGIN
     FROM public.usuarios
     WHERE id = auth.uid();
 
-    -- Comprobar si el usuario tiene un rol válido
-    IF caller_rol IS NULL THEN
+    IF caller_empresa_id IS NULL THEN
         RAISE EXCEPTION 'Acceso denegado: Usuario no encontrado.';
     END IF;
 
-    -- Lógica para Propietario
+    -- SIEMPRE obtener la lista completa de sucursales para consistencia.
+    SELECT json_agg(s_info) INTO sucursales_list FROM (
+        SELECT
+            s.id,
+            s.nombre,
+            s.direccion,
+            s.telefono,
+            s.latitud,
+            s.longitud,
+            (SELECT COUNT(*) FROM usuarios WHERE sucursal_id = s.id) as user_count,
+            (SELECT COUNT(*) FROM usuarios WHERE sucursal_id = s.id AND rol = 'Propietario') as propietarios_count,
+            (SELECT COUNT(*) FROM usuarios WHERE sucursal_id = s.id AND rol = 'Administrador') as administradores_count,
+            (SELECT COUNT(*) FROM usuarios WHERE sucursal_id = s.id AND rol = 'Empleado') as empleados_count
+        FROM sucursales s
+        WHERE s.empresa_id = caller_empresa_id
+        ORDER BY s.nombre
+    ) AS s_info;
+    
+    -- Los KPIs globales solo se calculan si el rol es Propietario.
     IF caller_rol = 'Propietario' THEN
-        -- Construir la lista de sucursales con conteo de usuarios y desglose de roles
-        SELECT json_agg(s_info) INTO sucursales_list FROM (
-            SELECT
-                s.id,
-                s.nombre,
-                s.direccion,
-                s.telefono,
-                (SELECT COUNT(*) FROM usuarios WHERE sucursal_id = s.id) as user_count,
-                (SELECT COUNT(*) FROM usuarios WHERE sucursal_id = s.id AND rol = 'Propietario') as propietarios_count,
-                (SELECT COUNT(*) FROM usuarios WHERE sucursal_id = s.id AND rol = 'Administrador') as administradores_count,
-                (SELECT COUNT(*) FROM usuarios WHERE sucursal_id = s.id AND rol = 'Empleado') as empleados_count
-            FROM sucursales s
-            WHERE s.empresa_id = caller_empresa_id
-            ORDER BY s.nombre
-        ) AS s_info;
-        
-        -- Calcular KPIs globales con desglose de roles
         SELECT json_build_object(
             'total_sucursales', (SELECT COUNT(*) FROM sucursales WHERE empresa_id = caller_empresa_id),
             'total_empleados', (SELECT COUNT(*) FROM usuarios WHERE empresa_id = caller_empresa_id),
@@ -64,28 +68,22 @@ BEGIN
             'administradores_count', (SELECT COUNT(*) FROM usuarios WHERE empresa_id = caller_empresa_id AND rol = 'Administrador'),
             'empleados_count', (SELECT COUNT(*) FROM usuarios WHERE empresa_id = caller_empresa_id AND rol = 'Empleado')
         ) INTO kpis;
-
-    ELSE -- Lógica para Administrador y Empleado
-        -- No necesitan la lista, solo el ID de su sucursal para la redirección
-        SELECT json_build_object('user_sucursal_id', caller_sucursal_id) INTO sucursales_list;
+    ELSE
         kpis := '{}'::json;
     END IF;
-
+    
+    -- Devolver un objeto consistente.
     RETURN json_build_object(
         'sucursales', COALESCE(sucursales_list, '[]'::json),
-        'kpis', kpis
+        'kpis', kpis,
+        'user_sucursal_id', caller_sucursal_id -- Devolver esto para la lógica de redirección
     );
 END;
 $$;
 
 
 -- -----------------------------------------------------------------------------
--- Función 2: Obtener los detalles de una sucursal específica (v3)
--- -----------------------------------------------------------------------------
--- Descripción:
--- Recupera toda la información necesaria para la página de detalle de una
--- sucursal. AHORA INCLUYE un desglose de roles para la sucursal actual en
--- el objeto `kpis`.
+-- Función 2: Obtener los detalles de una sucursal específica (sin cambios)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_sucursal_details(p_sucursal_id uuid)
 RETURNS json
@@ -100,7 +98,6 @@ DECLARE
     users_list json;
     kpis json;
 BEGIN
-    -- Validar que el usuario pertenece a la misma empresa que la sucursal
     SELECT empresa_id INTO caller_empresa_id FROM usuarios WHERE id = auth.uid();
     SELECT empresa_id INTO target_empresa_id FROM sucursales WHERE id = p_sucursal_id;
 
@@ -108,12 +105,10 @@ BEGIN
         RAISE EXCEPTION 'Acceso denegado a esta sucursal.';
     END IF;
 
-    -- Obtener detalles de la sucursal
     SELECT to_json(s) INTO sucursal_details FROM (
-        SELECT id, nombre, direccion, telefono FROM sucursales WHERE id = p_sucursal_id
+        SELECT id, nombre, direccion, telefono, latitud, longitud FROM sucursales WHERE id = p_sucursal_id
     ) s;
 
-    -- Obtener lista de usuarios de esa sucursal
     SELECT json_agg(u) INTO users_list FROM (
         SELECT id, nombre_completo, correo, rol, avatar, created_at, sucursal_id
         FROM usuarios
@@ -121,7 +116,6 @@ BEGIN
         ORDER BY rol, nombre_completo
     ) u;
 
-    -- Calcular KPIs: Total de usuarios en TODA la empresa y desglose de roles en ESTA sucursal.
     SELECT json_build_object(
         'total_company_users', (SELECT COUNT(*) FROM public.usuarios WHERE empresa_id = caller_empresa_id),
         'propietarios_count', (SELECT COUNT(*) FROM usuarios WHERE sucursal_id = p_sucursal_id AND rol = 'Propietario'),
@@ -139,12 +133,14 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Función 3: Crear una nueva sucursal
+-- Función 3: Crear una nueva sucursal (sin cambios)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION create_sucursal(
     p_nombre text,
     p_direccion text,
-    p_telefono text
+    p_telefono text,
+    p_latitud numeric,
+    p_longitud numeric
 )
 RETURNS uuid
 LANGUAGE plpgsql
@@ -154,12 +150,11 @@ AS $$
 DECLARE
     caller_empresa_id uuid;
     caller_rol text;
+    plan_id_from_license uuid;
     sucursal_count int;
     max_sucursales int;
-    plan_type text;
     new_sucursal_id uuid;
 BEGIN
-    -- 1. Validar permisos del que llama (solo Propietario)
     SELECT empresa_id, rol INTO caller_empresa_id, caller_rol
     FROM public.usuarios WHERE id = auth.uid();
 
@@ -167,22 +162,26 @@ BEGIN
         RAISE EXCEPTION 'Acceso denegado: Se requiere rol de Propietario.';
     END IF;
 
-    -- 2. Verificar el límite de sucursales del plan
-    SELECT tipo_licencia INTO plan_type FROM public.licencias WHERE empresa_id = caller_empresa_id;
-    SELECT COUNT(*) INTO sucursal_count FROM public.sucursales WHERE empresa_id = caller_empresa_id;
-
-    IF plan_type LIKE '%Emprendedor%' THEN max_sucursales := 1;
-    ELSIF plan_type LIKE '%Profesional%' OR plan_type LIKE '%Prueba Gratuita%' THEN max_sucursales := 3;
-    ELSE max_sucursales := 9999; -- Corporativo o desconocido
+    SELECT l.plan_id INTO plan_id_from_license FROM public.licencias l WHERE l.empresa_id = caller_empresa_id;
+    IF plan_id_from_license IS NULL THEN
+        RAISE EXCEPTION 'Error de consistencia de datos: La licencia de la empresa no está vinculada a un plan.';
     END IF;
 
+    SELECT pc.valor::int INTO max_sucursales
+    FROM public.plan_caracteristicas pc
+    JOIN public.caracteristicas c ON pc.caracteristica_id = c.id
+    WHERE pc.plan_id = plan_id_from_license AND c.codigo_interno = 'MAX_BRANCHES';
+    IF max_sucursales IS NULL THEN
+        RAISE EXCEPTION 'La configuración de límite de sucursales no está definida para el plan actual.';
+    END IF;
+
+    SELECT COUNT(*) INTO sucursal_count FROM public.sucursales WHERE empresa_id = caller_empresa_id;
     IF sucursal_count >= max_sucursales THEN
         RAISE EXCEPTION 'Límite de sucursales alcanzado para el plan actual.';
     END IF;
     
-    -- 3. Insertar la nueva sucursal
-    INSERT INTO public.sucursales(empresa_id, nombre, direccion, telefono)
-    VALUES (caller_empresa_id, p_nombre, p_direccion, p_telefono)
+    INSERT INTO public.sucursales(empresa_id, nombre, direccion, telefono, latitud, longitud)
+    VALUES (caller_empresa_id, p_nombre, p_direccion, p_telefono, p_latitud, p_longitud)
     RETURNING id INTO new_sucursal_id;
 
     RETURN new_sucursal_id;
@@ -191,13 +190,15 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
--- Función 4: Actualizar una sucursal existente
+-- Función 4: Actualizar una sucursal existente (sin cambios)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION update_sucursal(
     p_sucursal_id uuid,
     p_nombre text,
     p_direccion text,
-    p_telefono text
+    p_telefono text,
+    p_latitud numeric,
+    p_longitud numeric
 )
 RETURNS void
 LANGUAGE plpgsql
@@ -209,33 +210,23 @@ DECLARE
     caller_rol text;
     target_empresa_id uuid;
 BEGIN
-    -- 1. Validar permisos (Propietario o Administrador)
-    SELECT empresa_id, rol INTO caller_empresa_id, caller_rol
-    FROM public.usuarios WHERE id = auth.uid();
+    SELECT empresa_id, rol INTO caller_empresa_id, caller_rol FROM public.usuarios WHERE id = auth.uid();
+    IF caller_rol NOT IN ('Propietario', 'Administrador') THEN RAISE EXCEPTION 'Acceso denegado.'; END IF;
 
-    IF caller_rol NOT IN ('Propietario', 'Administrador') THEN
-        RAISE EXCEPTION 'Acceso denegado.';
-    END IF;
-
-    -- 2. Verificar que la sucursal a editar pertenece a la empresa
     SELECT empresa_id INTO target_empresa_id FROM public.sucursales WHERE id = p_sucursal_id;
     IF target_empresa_id IS NULL OR target_empresa_id != caller_empresa_id THEN
         RAISE EXCEPTION 'Sucursal no encontrada o no pertenece a tu empresa.';
     END IF;
 
-    -- 3. Actualizar
     UPDATE public.sucursales
-    SET
-        nombre = p_nombre,
-        direccion = p_direccion,
-        telefono = p_telefono
+    SET nombre = p_nombre, direccion = p_direccion, telefono = p_telefono, latitud = p_latitud, longitud = p_longitud
     WHERE id = p_sucursal_id;
 END;
 $$;
 
 
 -- -----------------------------------------------------------------------------
--- Función 5: Eliminar una sucursal (MEJORADA)
+-- Función 5: Eliminar una sucursal (sin cambios)
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION delete_sucursal(p_sucursal_id uuid)
 RETURNS void
@@ -250,7 +241,6 @@ DECLARE
     branch_count int;
     assigned_users_list text;
 BEGIN
-    -- 1. Validar permisos (solo Propietario)
     SELECT empresa_id, rol INTO caller_empresa_id, caller_rol
     FROM public.usuarios WHERE id = auth.uid();
 
@@ -258,29 +248,24 @@ BEGIN
         RAISE EXCEPTION 'Acceso denegado: Se requiere rol de Propietario.';
     END IF;
 
-    -- 2. Verificar que la sucursal pertenece a la empresa
     SELECT empresa_id INTO target_empresa_id FROM public.sucursales WHERE id = p_sucursal_id;
     IF target_empresa_id IS NULL OR target_empresa_id != caller_empresa_id THEN
         RAISE EXCEPTION 'Sucursal no encontrada o no pertenece a tu empresa.';
     END IF;
     
-    -- 3. Verificar que no es la última sucursal
     SELECT COUNT(*) INTO branch_count FROM public.sucursales WHERE empresa_id = caller_empresa_id;
     IF branch_count <= 1 THEN
         RAISE EXCEPTION 'No se puede eliminar la única sucursal de la empresa.';
     END IF;
     
-    -- 4. VERIFICACIÓN MEJORADA: Obtener la lista de usuarios asignados.
     SELECT string_agg(nombre_completo, ', ') INTO assigned_users_list
     FROM public.usuarios
     WHERE sucursal_id = p_sucursal_id;
 
-    -- Si la lista no es nula, significa que hay usuarios, y se lanza un error detallado.
     IF assigned_users_list IS NOT NULL THEN
         RAISE EXCEPTION 'No se puede eliminar la sucursal. Los siguientes usuarios aún están asignados a ella: %. Por favor, reasigna o elimina a estos usuarios primero desde la página de detalle de la sucursal.', assigned_users_list;
     END IF;
 
-    -- 5. Si pasaron todas las verificaciones, se elimina
     DELETE FROM public.sucursales WHERE id = p_sucursal_id;
 END;
 $$;

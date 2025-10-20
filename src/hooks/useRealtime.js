@@ -10,7 +10,6 @@ import { useToast } from './useToast.js';
 
 const RealtimeContext = createContext(null);
 
-// Debounce function to prevent excessive re-renders from rapid-fire events
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -31,19 +30,88 @@ export function RealtimeProvider({ children }) {
     const [changeCounter, setChangeCounter] = useState(0);
     const channelRef = useRef(null);
     const disconnectTimeRef = useRef(null);
-    const sessionUserIdRef = useRef(null); // FIX: Use a ref for the user ID
+    const sessionUserIdRef = useRef(null);
 
     const addLogEntry = useCallback((type, message) => {
         const newEntry = { type, message, time: new Date() };
-        setLog(prev => [newEntry, ...prev.slice(0, 9)]); // Keep last 10 entries
+        setLog(prev => [newEntry, ...prev.slice(0, 19)]);
     }, []);
 
-    const forceReconnect = useCallback(() => {
-        if (channelRef.current) {
-            addLogEntry('info', 'Intentando reconectar...');
-            channelRef.current.subscribe();
-        }
+    const incrementChangeCounter = useCallback(() => {
+        setChangeCounter(c => c + 1);
     }, []);
+
+    const debouncedIncrement = useCallback(debounce(incrementChangeCounter, 250), [incrementChangeCounter]);
+
+    const subscribeToChannel = useCallback(() => {
+        if (channelRef.current) {
+            supabase.removeChannel(channelRef.current);
+        }
+
+        const channel = supabase.channel('db-changes');
+
+        channel.on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+            console.log(
+                '%c[REALTIME EVENT RECEIVED]',
+                'color: lime; font-weight: bold; background-color: black; padding: 2px 5px; border-radius: 3px;',
+                payload
+            );
+
+            const tablesToTriggerRefresh = [
+                'productos', 'inventarios', 'precios_productos', 'ventas', 'venta_items',
+                'compras', 'compra_items', 'clientes', 'proveedores', 'gastos',
+                'pagos_ventas', 'pagos_compras', 'traspasos', 'sucursales', 'usuarios',
+                'notificaciones', 'sesiones_caja', 'empresas', 'historial_cambios',
+                'movimientos_inventario'
+            ];
+
+            if (tablesToTriggerRefresh.includes(payload.table)) {
+                addLogEntry('info', `Cambio detectado en tabla: ${payload.table}. Actualizando UI.`);
+                debouncedIncrement();
+            }
+
+            if (payload.table === 'notificaciones' && payload.eventType === 'INSERT') {
+                const generatingUserId = payload.new.usuario_generador_id;
+                
+                if (generatingUserId && generatingUserId !== sessionUserIdRef.current) {
+                     addLogEntry('info', `Mostrando notificación a usuario ${sessionUserIdRef.current}.`);
+                     addToast({ message: payload.new.mensaje, type: 'info', duration: 8000 });
+                }
+            }
+        });
+
+        channel.subscribe(async (status, err) => {
+            setSupabaseStatus(status);
+
+            if (err) {
+                addLogEntry('error', `Fallo la reconexión: ${err.message}`);
+            } else {
+                switch (status) {
+                    case 'SUBSCRIBED':
+                        addLogEntry('success', 'Conexión restablecida y estable.');
+                        break;
+                    case 'TIMED_OUT':
+                        addLogEntry('error', 'Fallo la reconexión: Tiempo de espera agotado.');
+                        break;
+                    case 'CHANNEL_ERROR':
+                        addLogEntry('error', 'Fallo la reconexión: Error en el canal del servidor.');
+                        break;
+                }
+            }
+        });
+        
+        channelRef.current = channel;
+    }, [addLogEntry, addToast, debouncedIncrement]);
+
+    const forceReconnect = useCallback(() => {
+        if (!navigator.onLine) {
+            addToast({ message: 'No hay conexión a internet para reconectar.', type: 'error' });
+            return;
+        }
+        setSupabaseStatus('CONNECTING');
+        addLogEntry('info', 'Intentando reconectar con el servidor...');
+        subscribeToChannel();
+    }, [addToast, addLogEntry, subscribeToChannel]);
 
     useEffect(() => {
         const handleOffline = () => {
@@ -64,19 +132,6 @@ export function RealtimeProvider({ children }) {
         window.addEventListener('offline', handleOffline);
         window.addEventListener('online', handleOnline);
         
-        return () => {
-            window.removeEventListener('offline', handleOffline);
-            window.removeEventListener('online', handleOnline);
-        };
-    }, [addToast, addLogEntry, forceReconnect]);
-
-    const incrementChangeCounter = useCallback(() => {
-        setChangeCounter(c => c + 1);
-    }, []);
-
-    const debouncedIncrement = useCallback(debounce(incrementChangeCounter, 250), [incrementChangeCounter]);
-
-    useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session) {
                 sessionUserIdRef.current = session.user.id;
@@ -87,69 +142,19 @@ export function RealtimeProvider({ children }) {
             sessionUserIdRef.current = session ? session.user.id : null;
         });
 
-
         addLogEntry('info', 'Inicializando conexión en tiempo real...');
-        const channel = supabase.channel('db-changes');
-
-        channel.on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
-            console.log(
-                '%c[REALTIME EVENT RECEIVED]',
-                'color: lime; font-weight: bold; background-color: black; padding: 2px 5px; border-radius: 3px;',
-                payload
-            );
-
-            // **DEFINITIVE REALTIME LOGIC**
-
-            // 1. Always trigger data refresh for everyone on relevant changes.
-            const tablesToTriggerRefresh = [
-                'productos', 'inventarios', 'precios_productos', 'ventas', 'venta_items',
-                'compras', 'compra_items', 'clientes', 'proveedores', 'gastos',
-                'pagos_ventas', 'pagos_compras', 'traspasos', 'sucursales', 'usuarios',
-                'notificaciones', 'sesiones_caja', 'empresas', 'historial_cambios',
-                'movimientos_inventario'
-            ];
-
-            if (tablesToTriggerRefresh.includes(payload.table)) {
-                addLogEntry('info', `Cambio detectado en tabla: ${payload.table}. Actualizando UI.`);
-                debouncedIncrement();
-            }
-
-            // 2. Show a toast notification ONLY to OTHER users.
-            if (payload.table === 'notificaciones' && payload.eventType === 'INSERT') {
-                const generatingUserId = payload.new.usuario_generador_id;
-                
-                // FIX: Use the ref to get the current user ID
-                if (generatingUserId && generatingUserId !== sessionUserIdRef.current) {
-                     addLogEntry('info', `Mostrando notificación a usuario ${sessionUserIdRef.current}.`);
-                     addToast({ message: payload.new.mensaje, type: 'info', duration: 8000 });
-                }
-            }
-        });
-
-        channel.subscribe(async (status, err) => {
-            setSupabaseStatus(status);
-
-            if (err) {
-                addLogEntry('error', `Error de canal: ${err.message}`);
-            } else if (status === 'SUBSCRIBED') {
-                addLogEntry('success', 'Conectado al servidor en tiempo real.');
-            } else if (status === 'TIMED_OUT') {
-                addLogEntry('error', 'Tiempo de conexión con el servidor agotado.');
-            } else if (status === 'CHANNEL_ERROR') {
-                addLogEntry('error', 'Error en el canal del servidor.');
-            }
-        });
-        
-        channelRef.current = channel;
+        subscribeToChannel();
 
         return () => {
+            window.removeEventListener('offline', handleOffline);
+            window.removeEventListener('online', handleOnline);
             subscription.unsubscribe();
             if (channelRef.current) {
                 supabase.removeChannel(channelRef.current);
             }
         };
-    }, [addToast, addLogEntry, debouncedIncrement]);
-    
+    }, []); // Este efecto solo se ejecuta una vez, ya que sus dependencias son estables.
+
     const value = { supabaseStatus, isOnline, log, forceReconnect, changeCounter };
 
     return html`
@@ -159,7 +164,13 @@ export function RealtimeProvider({ children }) {
     `;
 }
 
-export const useConnectivity = () => useContext(RealtimeContext);
+export const useConnectivity = () => {
+    const context = useContext(RealtimeContext);
+    if (!context) {
+        throw new Error('useConnectivity must be used within a RealtimeProvider');
+    }
+    return context;
+};
 
 export const useRealtimeListener = (callback) => {
     const { changeCounter } = useContext(RealtimeContext);

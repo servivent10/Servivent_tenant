@@ -1,17 +1,17 @@
 -- =============================================================================
--- INVENTORY ONBOARDING & MINIMUM STOCK FEATURE (V3 - FORM ENHANCEMENTS)
+-- INVENTORY ONBOARDING & MINIMUM STOCK FEATURE (V4 - Bulk Audit Logging)
 -- =============================================================================
 -- This script implements the backend infrastructure for the new inventory
 -- onboarding flow and minimum stock management.
--- VERSION 3: This version enhances the `upsert_product` and `import` functions
--- to handle initial price and costs more robustly, and definitively fixes
--- the function ambiguity error for `ajustar_inventario_lote`.
+-- VERSION 4: This version implements the context-aware auditing system for
+-- bulk imports to prevent flooding the audit log.
 --
 -- WHAT IT DOES:
 -- 1. Adds a `stock_minimo` column to the `inventarios` table.
 -- 2. Updates `upsert_product` to handle `costo_inicial` and `precio_base`.
 -- 3. Updates `ajustar_inventario_lote` to manage `stock_minimo`.
--- 4. Updates `import_products_in_bulk` to handle `costo_inicial` and set `ganancia_minima`.
+-- 4. Updates `import_products_in_bulk` to set a context variable to bypass
+--    individual audit logs and instead insert consolidated summary logs.
 -- 5. Fixes function ambiguity by cleaning up old types.
 --
 -- INSTRUCTIONS:
@@ -224,7 +224,7 @@ CREATE TYPE public.product_import_row AS (
     costo_inicial numeric
 );
 
--- Create the new version of the function
+-- Create the new version of the function with bulk audit logging
 CREATE OR REPLACE FUNCTION import_products_in_bulk(p_products product_import_row[])
 RETURNS json
 LANGUAGE plpgsql
@@ -233,17 +233,22 @@ SET search_path = public
 AS $$
 DECLARE
     caller_empresa_id uuid := public.get_empresa_id_from_jwt();
+    caller_user_id uuid := auth.uid();
     product_data product_import_row;
     v_categoria_id uuid;
     v_producto_id uuid;
     v_default_price_list_id uuid;
-    v_ganancia numeric; -- NEW
+    v_ganancia numeric;
     created_count integer := 0;
     updated_count integer := 0;
+    created_categories_count integer := 0; -- New counter for categories
     error_count integer := 0;
     error_messages text[] := ARRAY[]::text[];
     row_index integer := 1;
 BEGIN
+    -- Set a transaction-local variable to signal a bulk import is in progress.
+    PERFORM set_config('servivent.source', 'csv_import', true);
+
     -- Ensure default price list exists
     SELECT id INTO v_default_price_list_id FROM public.listas_precios WHERE empresa_id = caller_empresa_id AND es_predeterminada = true;
     IF v_default_price_list_id IS NULL THEN
@@ -258,6 +263,7 @@ BEGIN
                 SELECT id INTO v_categoria_id FROM public.categorias WHERE nombre = product_data.categoria_nombre AND empresa_id = caller_empresa_id;
                 IF v_categoria_id IS NULL THEN
                     INSERT INTO public.categorias (empresa_id, nombre) VALUES (caller_empresa_id, product_data.categoria_nombre) RETURNING id INTO v_categoria_id;
+                    created_categories_count := created_categories_count + 1; -- Increment counter
                 END IF;
             END IF;
 
@@ -288,7 +294,7 @@ BEGIN
                 v_ganancia := GREATEST(0, v_ganancia);
 
                 INSERT INTO public.precios_productos (producto_id, lista_precio_id, precio, ganancia_maxima, ganancia_minima)
-                VALUES (v_producto_id, v_default_price_list_id, product_data.precio_base, v_ganancia, v_ganancia) -- SET BOTH GAINS
+                VALUES (v_producto_id, v_default_price_list_id, product_data.precio_base, v_ganancia, v_ganancia)
                 ON CONFLICT (producto_id, lista_precio_id) DO UPDATE SET
                     precio = EXCLUDED.precio,
                     ganancia_maxima = EXCLUDED.ganancia_maxima,
@@ -302,6 +308,22 @@ BEGIN
         END;
         row_index := row_index + 1;
     END LOOP;
+
+    -- Insert consolidated audit logs
+    IF created_count > 0 THEN
+        INSERT INTO public.historial_cambios (usuario_id, usuario_nombre, accion, tabla_afectada, registro_id, datos_anteriores, datos_nuevos, empresa_id)
+        VALUES (caller_user_id, 'Importación CSV', 'INSERT (BULK)', 'productos', 'operacion_masiva', NULL, jsonb_build_object('resumen', 'Se crearon ' || created_count || ' productos nuevos mediante importación CSV.'), caller_empresa_id);
+    END IF;
+
+    IF updated_count > 0 THEN
+        INSERT INTO public.historial_cambios (usuario_id, usuario_nombre, accion, tabla_afectada, registro_id, datos_anteriores, datos_nuevos, empresa_id)
+        VALUES (caller_user_id, 'Importación CSV', 'UPDATE (BULK)', 'productos', 'operacion_masiva', NULL, jsonb_build_object('resumen', 'Se actualizaron ' || updated_count || ' productos existentes mediante importación CSV.'), caller_empresa_id);
+    END IF;
+    
+    IF created_categories_count > 0 THEN
+        INSERT INTO public.historial_cambios (usuario_id, usuario_nombre, accion, tabla_afectada, registro_id, datos_anteriores, datos_nuevos, empresa_id)
+        VALUES (caller_user_id, 'Importación CSV', 'INSERT (BULK)', 'categorias', 'operacion_masiva', NULL, jsonb_build_object('resumen', 'Se crearon ' || created_categories_count || ' categorías nuevas durante la importación.'), caller_empresa_id);
+    END IF;
 
     RETURN json_build_object('created', created_count, 'updated', updated_count, 'errors', error_count, 'error_messages', error_messages);
 END;

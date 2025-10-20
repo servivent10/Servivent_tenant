@@ -214,14 +214,47 @@ export function AuditoriaPage({ user, companyInfo, onLogout, onProfileUpdate, na
                         <ul class="space-y-4">
                             ${groupEntries.map(entry => {
                                 const entityName = ENTITY_NAMES[entry.tabla_afectada] || entry.tabla_afectada;
-                                let actionText;
-                                switch(entry.accion) {
-                                    case 'INSERT': actionText = 'creó un nuevo'; break;
-                                    case 'UPDATE': actionText = 'actualizó el'; break;
-                                    case 'DELETE': actionText = 'eliminó el'; break;
-                                    default: actionText = 'modificó el';
+                                let summary;
+
+                                if (entry.accion?.includes('(BULK)')) {
+                                    const resumen = entry.datos_nuevos?.resumen;
+                                    if (resumen) {
+                                        let action = '';
+                                        let details = resumen;
+                                        
+                                        if (resumen.startsWith('Se crearon')) {
+                                            action = 'inserto';
+                                            details = resumen.substring('Se crearon'.length);
+                                        } else if (resumen.startsWith('Se actualizaron')) {
+                                            action = 'Actualizo';
+                                            details = resumen.substring('Se actualizaron'.length);
+                                        }
+
+                                        // Fix pluralization if number is 1
+                                        if (details.trim().startsWith('1 ')) {
+                                            details = details.replace(/s\b/g, '');
+                                        }
+
+                                        if (action) {
+                                            summary = `${entry.usuario_nombre} ${action}${details}`.replace(' mediante importación CSV', '').replace(' existentes', '');
+                                        } else {
+                                             summary = `${entry.usuario_nombre} realizó una operación masiva.`;
+                                        }
+                                    } else {
+                                        summary = `${entry.usuario_nombre} realizó una operación masiva.`;
+                                    }
+                                } else {
+                                    // Original logic for non-bulk operations
+                                    let actionText;
+                                    switch(entry.accion) {
+                                        case 'INSERT': actionText = 'creó un nuevo'; break;
+                                        case 'UPDATE': actionText = 'actualizó el'; break;
+                                        case 'DELETE': actionText = 'eliminó el'; break;
+                                        default: actionText = 'modificó el';
+                                    }
+                                    summary = `${entry.usuario_nombre || 'Usuario del Sistema'} ${actionText} ${entityName.toLowerCase()}.`;
                                 }
-                                const summary = `${entry.usuario_nombre || 'Usuario del Sistema'} ${actionText} ${entityName.toLowerCase()}.`;
+                                
                                 return html`
                                     <li key=${entry.id} class="bg-white p-4 rounded-lg shadow-sm border flex items-start gap-4">
                                         <${Avatar} name=${entry.usuario_nombre} avatarUrl=${entry.avatar} />

@@ -7,15 +7,15 @@ import { useState, useEffect, useMemo } from 'preact/hooks';
 import { ICONS } from '../Icons.js';
 import { FormInput } from '../FormComponents.js';
 import { Spinner } from '../Spinner.js';
+import { ConfirmationModal } from '../ConfirmationModal.js';
 
-const PaymentButton = ({ icon, label, method, activeMethod, onClick }) => {
-    const isActive = method === activeMethod;
-    const baseClasses = "flex-1 flex flex-col items-center justify-center p-3 rounded-lg text-sm font-semibold transition-colors border";
-    const activeClasses = "bg-primary text-white border-primary-dark";
-    const inactiveClasses = "bg-slate-100 text-gray-700 border-gray-200 hover:bg-slate-200";
-
+const PaymentMethodButton = ({ icon, label, method, onClick }) => {
     return html`
-        <button onClick=${() => onClick(method)} class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}">
+        <button 
+            type="button"
+            onClick=${() => onClick(method)} 
+            class="flex-1 flex flex-col items-center justify-center p-3 rounded-lg text-sm font-semibold transition-colors border bg-slate-100 text-gray-700 border-gray-200 hover:bg-slate-200 hover:border-slate-300"
+        >
             ${icon}
             <span class="mt-1">${label}</span>
         </button>
@@ -25,8 +25,8 @@ const PaymentButton = ({ icon, label, method, activeMethod, onClick }) => {
 const SaleTypeButton = ({ label, type, activeType, onClick, disabled = false }) => {
     const isActive = type === activeType;
     const baseClasses = "flex-1 rounded-md px-3 py-2 text-sm font-semibold transition-colors";
-    const activeClasses = "bg-primary text-white";
-    const inactiveClasses = "bg-slate-100 text-gray-700 hover:bg-slate-200";
+    const activeClasses = "bg-primary text-white shadow-md";
+    const inactiveClasses = "bg-slate-200 text-gray-700 hover:bg-slate-300";
     const disabledClasses = "disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed";
 
     return html`
@@ -36,23 +36,8 @@ const SaleTypeButton = ({ label, type, activeType, onClick, disabled = false }) 
     `;
 };
 
-const QuickPayButton = ({ amount, label, icon, onClick, disabled }) => {
-    const baseClasses = "flex-1 flex items-center justify-center gap-2 p-2 rounded-md text-sm font-semibold transition-colors border";
-    const disabledClasses = "disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed";
-    const activeClasses = "bg-white hover:bg-slate-50 text-gray-800 border-gray-300";
-
-    return html`
-        <button onClick=${() => onClick(amount)} disabled=${disabled} class="${baseClasses} ${activeClasses} ${disabledClasses}">
-            ${icon}
-            <span>${label}</span>
-        </button>
-    `;
-};
-
-
 export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId, companyInfo }) {
-    const [montoRecibido, setMontoRecibido] = useState('');
-    const [metodoPago, setMetodoPago] = useState('Efectivo');
+    const [pagos, setPagos] = useState([]);
     const [tipoVenta, setTipoVenta] = useState('Contado');
     const [isProcessing, setIsProcessing] = useState(false);
     const [fechaVencimiento, setFechaVencimiento] = useState('');
@@ -63,187 +48,158 @@ export function CheckoutModal({ isOpen, onClose, onConfirm, total = 0, clienteId
         return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
     };
 
+    const totalPagado = useMemo(() => pagos.reduce((sum, p) => sum + Number(p.monto || 0), 0), [pagos]);
+    const montoRestante = useMemo(() => total - totalPagado, [total, totalPagado]);
+    const cambio = useMemo(() => (tipoVenta === 'Contado' && totalPagado > total) ? totalPagado - total : 0, [total, totalPagado, tipoVenta]);
+
     useEffect(() => {
         if (isOpen) {
-            setMontoRecibido(total > 0 ? total.toFixed(2) : '');
-            setMetodoPago('Efectivo');
             setTipoVenta('Contado');
             setFechaVencimiento('');
             setIsProcessing(false);
+            setPagos([{ id: Date.now(), metodo: 'Efectivo', monto: total > 0 ? total.toFixed(2) : '' }]);
         }
     }, [isOpen, total]);
     
     useEffect(() => {
-        if (!clienteId) {
-            setTipoVenta('Contado');
-        }
-    }, [clienteId]);
-
-    useEffect(() => {
         if (tipoVenta === 'Crédito') {
             const dueDate = new Date();
             dueDate.setDate(dueDate.getDate() + 30);
-            const year = dueDate.getFullYear();
-            const month = (dueDate.getMonth() + 1).toString().padStart(2, '0');
-            const day = dueDate.getDate().toString().padStart(2, '0');
-            setFechaVencimiento(`${year}-${month}-${day}`);
+            setFechaVencimiento(dueDate.toISOString().split('T')[0]);
+            // If user switches to credit with a full payment, clear it to represent an initial payment.
+            if (totalPagado.toFixed(2) === total.toFixed(2)) {
+                setPagos(prev => prev.map(p => ({...p, monto: ''})));
+            }
         } else {
             setFechaVencimiento('');
+            if (pagos.length === 1) {
+                setPagos(prev => [{...prev[0], monto: total.toFixed(2)}]);
+            }
         }
-    }, [tipoVenta]);
-    
-    const handleMetodoPagoChange = (newMethod) => {
-        setMetodoPago(newMethod);
-        if (newMethod !== 'Efectivo') {
-            setMontoRecibido(total.toFixed(2));
-        }
+    }, [tipoVenta, total]);
+
+    const handleAddPago = (metodo) => {
+        setPagos(prev => [...prev, {
+            id: Date.now(),
+            metodo,
+            monto: montoRestante > 0 ? montoRestante.toFixed(2) : ''
+        }]);
+    };
+
+    const handleUpdatePago = (id, newMonto) => {
+        setPagos(prev => prev.map(p => p.id === id ? { ...p, monto: newMonto } : p));
+    };
+
+    const handleRemovePago = (id) => {
+        setPagos(prev => prev.filter(p => p.id !== id));
     };
 
     const handleConfirm = () => {
         setIsProcessing(true);
+        const finalPayments = pagos.filter(p => Number(p.monto) > 0).map(({ id, ...rest }) => rest);
         onConfirm({
             total,
-            metodoPago,
             tipoVenta,
-            montoRecibido: Number(montoRecibido) || 0,
-            cambio: cambio,
+            pagos: finalPayments,
             fechaVencimiento: tipoVenta === 'Crédito' ? fechaVencimiento : null,
         });
     };
 
-    const cambio = Number(montoRecibido) - total;
-
-    const canConfirm = useMemo(() => {
-        if (isProcessing) return false;
-        if (total <= 0) return false;
-        if (tipoVenta === 'Crédito') return true;
-        if (metodoPago !== 'Efectivo') return true;
-        
-        // Corregir imprecisiones de punto flotante.
-        // `montoRecibido` es un string de 2 decimales, `total` puede tener más.
-        // Se compara con un pequeño margen de error para evitar fallos.
-        const MARGIN_DE_ERROR = 0.001; 
-        return Number(montoRecibido) >= total - MARGIN_DE_ERROR;
-    }, [isProcessing, total, tipoVenta, metodoPago, montoRecibido]);
-
-    const isConfirmDisabled = !canConfirm;
+    const isConfirmDisabled = useMemo(() => {
+        if (isProcessing || total <= 0) return true;
+        if (tipoVenta === 'Crédito' && clienteId) return false;
+        if (tipoVenta === 'Contado') return montoRestante > 0.005; // Allow for tiny float inaccuracies
+        return true;
+    }, [isProcessing, total, tipoVenta, montoRestante, clienteId]);
     
-    const [showModal, setShowModal] = useState(isOpen);
-    useEffect(() => {
-        if (isOpen) {
-            setShowModal(true);
-            document.body.style.overflow = 'hidden';
-        } else {
-            const timer = setTimeout(() => {
-                setShowModal(false);
-                document.body.style.overflow = 'auto';
-            }, 200);
-            return () => clearTimeout(timer);
-        }
-        return () => { document.body.style.overflow = 'auto'; };
-    }, [isOpen]);
+    const title = "Finalizar Venta";
 
-    if (!showModal) return null;
-
-    const overlayAnimation = isOpen ? 'animate-modal-fade-in' : 'animate-modal-fade-out';
-    const modalAnimation = isOpen ? 'animate-modal-scale-in' : 'animate-modal-scale-out';
-    
     return html`
-        <div 
-            class="fixed inset-0 z-50 flex items-center justify-center p-4 ${overlayAnimation}" 
-            onClick=${onClose}
-            role="dialog"
-            aria-modal="true"
-        >
-            <div class="fixed inset-0 bg-gray-500 bg-opacity-75" aria-hidden="true"></div>
-            
-            <div onClick=${e => e.stopPropagation()} class="relative w-full max-w-md rounded-xl bg-slate-50 text-gray-900 shadow-2xl ${modalAnimation} flex flex-col max-h-[90vh]">
-                
-                <header class="flex-shrink-0 flex items-start justify-between p-4 border-b border-gray-200">
-                    <h2 class="text-lg font-semibold">Finalizar Venta</h2>
-                    <button onClick=${onClose} class="p-1 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-colors" aria-label="Cerrar">
-                        ${ICONS.close}
+        <${ConfirmationModal}
+            isOpen=${isOpen}
+            onClose=${onClose}
+            onConfirm=${handleConfirm}
+            title=${title}
+            confirmText=${isProcessing ? html`<${Spinner}/>` : 'Confirmar Venta'}
+            icon=${ICONS.pos}
+            maxWidthClass="max-w-xl"
+            isProcessing=${isProcessing}
+            confirmVariant="primary"
+            customFooter=${html`
+                <div class="flex-shrink-0 flex justify-end items-center p-4 bg-gray-100 rounded-b-xl space-x-3 border-t">
+                    <button type="button" onClick=${onClose} class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Cancelar</button>
+                    <button type="button" onClick=${handleConfirm} disabled=${isConfirmDisabled} class="min-w-[150px] flex justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        ${isProcessing ? html`<${Spinner}/>` : 'Confirmar Venta'}
                     </button>
-                </header>
+                </div>
+            `}
+        >
+            <div class="space-y-6">
+                <div class="text-center p-4 bg-slate-100 rounded-lg">
+                    <p class="text-sm text-gray-600">Total a Pagar</p>
+                    <p class="text-5xl font-bold text-primary">${formatCurrency(total)}</p>
+                </div>
 
-                <div class="flex-grow p-6 overflow-y-auto space-y-6">
-                    <div class="text-center">
-                        <p class="text-sm text-gray-600">Total a Pagar</p>
-                        <p class="text-5xl font-bold text-primary">${formatCurrency(total)}</p>
+                <div>
+                    <label class="block text-sm font-medium text-gray-900 mb-2">Tipo de Venta</label>
+                    <div class="flex items-center gap-2">
+                        <${SaleTypeButton} label="Al Contado" type="Contado" activeType=${tipoVenta} onClick=${setTipoVenta} />
+                        <${SaleTypeButton} label="A Crédito" type="Crédito" activeType=${tipoVenta} onClick=${setTipoVenta} disabled=${!clienteId} />
                     </div>
+                    ${!clienteId && html`<p class="text-xs text-gray-500 mt-1">Selecciona un cliente para habilitar la venta a crédito.</p>`}
+                </div>
+                
+                ${tipoVenta === 'Crédito' && html`
+                    <div class="animate-fade-in-down">
+                        <${FormInput} label="Fecha de Vencimiento" name="fecha_vencimiento" type="date" value=${fechaVencimiento} onInput=${e => setFechaVencimiento(e.target.value)} />
+                    </div>
+                `}
 
-                    <div class="grid grid-cols-2 gap-4">
-                         <${FormInput} 
-                            label="Monto Recibido" 
-                            name="monto_recibido" 
-                            type="number" 
-                            value=${montoRecibido} 
-                            onInput=${e => setMontoRecibido(e.target.value)} 
-                            required=${false}
-                            disabled=${metodoPago !== 'Efectivo'}
-                        />
-                        <div>
-                            <label class="block text-sm font-medium leading-6 text-gray-900">Cambio</label>
-                            <div class="mt-2 p-2 rounded-md bg-gray-200 text-right h-[42px]">
-                                <span class="text-lg font-semibold text-gray-800">${formatCurrency(cambio > 0 ? cambio : 0)}</span>
+                <div>
+                    <label class="block text-sm font-medium text-gray-900 mb-2">Métodos de Pago</label>
+                    <div class="space-y-3">
+                        ${pagos.map(pago => html`
+                            <div key=${pago.id} class="flex items-center gap-2 animate-fade-in-down">
+                                <span class="font-semibold text-gray-700 w-24 text-right">${pago.metodo}</span>
+                                <div class="flex-grow">
+                                    <input 
+                                        type="number" 
+                                        value=${pago.monto} 
+                                        onInput=${e => handleUpdatePago(pago.id, e.target.value)}
+                                        onFocus=${e => e.target.select()}
+                                        placeholder="0.00"
+                                        class="block w-full rounded-md border border-gray-300 p-2 text-gray-900 bg-white shadow-sm placeholder:text-gray-400 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25"
+                                    />
+                                </div>
+                                <button onClick=${() => handleRemovePago(pago.id)} class="text-gray-400 hover:text-red-600" title="Eliminar método de pago">${ICONS.delete}</button>
                             </div>
-                        </div>
+                        `)}
                     </div>
-                    
-                     <div>
-                        <label class="block text-sm font-medium ${metodoPago === 'Efectivo' ? 'text-gray-700' : 'text-gray-400'} mb-2">Pagos Rápidos (Efectivo)</label>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            <${QuickPayButton} amount=${total.toFixed(2)} label="Exacto" icon=${ICONS.paid} onClick=${setMontoRecibido} disabled=${metodoPago !== 'Efectivo'} />
-                            <${QuickPayButton} amount="50.00" label="Bs 50" onClick=${setMontoRecibido} disabled=${metodoPago !== 'Efectivo'} />
-                            <${QuickPayButton} amount="100.00" label="Bs 100" onClick=${setMontoRecibido} disabled=${metodoPago !== 'Efectivo'} />
-                            <${QuickPayButton} amount="200.00" label="Bs 200" onClick=${setMontoRecibido} disabled=${metodoPago !== 'Efectivo'} />
-                        </div>
+                    <div class="mt-3 flex items-center gap-2">
+                        <${PaymentMethodButton} icon=${ICONS.payments} label="Efectivo" method="Efectivo" onClick=${handleAddPago} />
+                        <${PaymentMethodButton} icon=${ICONS.credit_card} label="Tarjeta" method="Tarjeta" onClick=${handleAddPago} />
+                        <${PaymentMethodButton} icon=${ICONS.qr_code_2} label="QR" method="QR" onClick=${handleAddPago} />
+                        <${PaymentMethodButton} icon=${ICONS.currency_exchange} label="Transf." method="Transferencia Bancaria" onClick=${handleAddPago} />
                     </div>
+                </div>
 
-                    <div>
-                        <label class="block text-sm font-medium leading-6 text-gray-900 mb-2">Método de Pago</label>
-                        <div class="flex items-center gap-2">
-                             <${PaymentButton} icon=${ICONS.payments} label="Efectivo" method="Efectivo" activeMethod=${metodoPago} onClick=${handleMetodoPagoChange} />
-                             <${PaymentButton} icon=${ICONS.credit_card} label="Tarjeta" method="Tarjeta" activeMethod=${metodoPago} onClick=${handleMetodoPagoChange} />
-                             <${PaymentButton} icon=${ICONS.qr_code_2} label="QR" method="QR" activeMethod=${metodoPago} onClick=${handleMetodoPagoChange} />
-                             <${PaymentButton} icon=${ICONS.currency_exchange} label="Transf." method="Transferencia Bancaria" activeMethod=${metodoPago} onClick=${handleMetodoPagoChange} />
-                        </div>
+                <div class="border-t pt-4 space-y-2">
+                    <div class="flex justify-between font-medium">
+                        <span>Total Pagado</span>
+                        <span>${formatCurrency(totalPagado)}</span>
                     </div>
-                    
-                     <div>
-                        <label class="block text-sm font-medium leading-6 text-gray-900 mb-2">Tipo de Venta</label>
-                        <div class="flex items-center gap-2">
-                            <${SaleTypeButton} label="Al Contado" type="Contado" activeType=${tipoVenta} onClick=${setTipoVenta} />
-                            <${SaleTypeButton} label="A Crédito" type="Crédito" activeType=${tipoVenta} onClick=${setTipoVenta} disabled=${!clienteId} />
-                        </div>
-                         ${!clienteId && tipoVenta !== 'Crédito' && html`<p class="text-xs text-gray-500 mt-1">Selecciona un cliente para habilitar la venta a crédito.</p>`}
+                    <div class="flex justify-between font-medium ${montoRestante > 0.005 ? 'text-red-600' : 'text-gray-800'}">
+                        <span>${tipoVenta === 'Crédito' ? 'Saldo Pendiente' : 'Monto Restante'}</span>
+                        <span>${formatCurrency(montoRestante)}</span>
                     </div>
-                    
-                    ${tipoVenta === 'Crédito' && html`
-                        <div class="animate-fade-in-down">
-                            <${FormInput}
-                                label="Fecha de Vencimiento"
-                                name="fecha_vencimiento"
-                                type="date"
-                                value=${fechaVencimiento}
-                                onInput=${e => setFechaVencimiento(e.target.value)}
-                            />
+                    ${tipoVenta === 'Contado' && html`
+                        <div class="flex justify-between font-bold text-lg text-green-600">
+                            <span>Cambio</span>
+                            <span>${formatCurrency(cambio)}</span>
                         </div>
                     `}
                 </div>
-
-                <footer class="flex-shrink-0 flex justify-end items-center p-4 bg-gray-100 rounded-b-xl space-x-3 border-t border-gray-200">
-                    <button type="button" onClick=${onClose} class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Cancelar</button>
-                    <button 
-                        type="button" 
-                        onClick=${handleConfirm}
-                        disabled=${isConfirmDisabled}
-                        class="min-w-[150px] flex justify-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                    >
-                        ${isProcessing ? html`<${Spinner}/>` : 'Confirmar Venta'}
-                    </button>
-                </footer>
             </div>
-        </div>
+        <//>
     `;
 }

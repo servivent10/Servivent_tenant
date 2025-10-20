@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { html } from 'htm/preact';
-import { useState, useEffect, useMemo, useCallback } from 'preact/hooks';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'preact/hooks';
 import { DashboardLayout } from '../../components/DashboardLayout.js';
 import { ICONS } from '../../components/Icons.js';
 import { supabase } from '../../lib/supabaseClient.js';
@@ -145,7 +145,7 @@ const CategoryManagerModal = ({ isOpen, onClose, onRefreshRequired }) => {
                     </div>
                 `}
             <//>
-        </${ConfirmationModal}>
+        <//>
     `;
 };
 
@@ -164,125 +164,6 @@ const StockPill = ({ stock }) => {
     }
     return html`<span class="${pillClass} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">${text} (${stock})</span>`;
 };
-
-const ProductCard = ({ product, navigate, onEdit, onDelete, onSetup, user, formatCurrency }) => {
-    const handleCardClick = () => {
-        if (window.getSelection().toString()) {
-            return;
-        }
-        navigate(`/productos/${product.id}`);
-    };
-
-    const handleActionClick = (e, actionFn) => {
-        e.stopPropagation();
-        actionFn(product);
-    };
-    
-    const stockToShow = user.role === 'Propietario' ? product.stock_total : product.stock_sucursal;
-    const showSetupButton = !product.has_sales && !product.has_purchases;
-
-    return html`
-        <div onClick=${handleCardClick} class="group bg-white rounded-lg shadow-sm border overflow-hidden flex flex-row transition-shadow hover:shadow-md cursor-pointer">
-            <div class="w-24 sm:w-28 flex-shrink-0 bg-gray-100 relative">
-                <img 
-                    src=${product.imagen_principal || NO_IMAGE_ICON_URL} 
-                    alt=${product.nombre} 
-                    class="w-full h-full object-cover" 
-                />
-            </div>
-            <div class="p-3 flex-grow flex flex-col justify-between w-full min-w-0">
-                 <div>
-                    <div class="flex justify-between items-start gap-2">
-                        <div class="flex-1 min-w-0">
-                            <h3 class="font-bold text-gray-800 group-hover:text-primary transition-colors truncate" title=${product.nombre}>${product.nombre}</h3>
-                            <p class="text-sm text-gray-500 truncate" title=${product.modelo || ''}>${product.modelo || 'Sin modelo'}</p>
-                        </div>
-                        <div class="flex items-center flex-shrink-0">
-                            ${showSetupButton && html`
-                                <button onClick=${(e) => handleActionClick(e, onSetup)} title="Configuración Inicial Rápida" class="text-gray-400 hover:text-amber-500 p-1 rounded-full">${ICONS.bolt}</button>
-                            `}
-                            <button onClick=${(e) => handleActionClick(e, onEdit)} title="Editar" class="text-gray-400 hover:text-primary p-1 rounded-full">${ICONS.edit}</button>
-                            <button onClick=${(e) => handleActionClick(e, onDelete)} title="Eliminar" class="text-gray-400 hover:text-red-600 p-1 rounded-full">${ICONS.delete}</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="mt-2 flex items-end justify-between">
-                    <p class="text-lg font-semibold text-gray-900">
-                        ${Number(product.precio_base) > 0 ? formatCurrency(product.precio_base) : html`<span class="text-sm text-amber-600 font-medium">Precio no asignado</span>`}
-                    </p>
-                    <${StockPill} stock=${stockToShow} />
-                </div>
-            </div>
-        </div>
-    `;
-};
-
-const ProductTable = ({ products, navigate, onEdit, onDelete, onSetup, user, formatCurrency }) => {
-    const handleRowClick = (product) => {
-        navigate(`/productos/${product.id}`);
-    };
-    
-    return html`
-    <div class="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-        <table class="min-w-full divide-y divide-gray-300 table-fixed">
-            <colgroup>
-                <col />
-                <col class="w-[150px]" />
-                <col class="w-[150px]" />
-                <col class="w-[100px]" />
-            </colgroup>
-            <thead class="bg-gray-50">
-                <tr>
-                    <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Producto</th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Precio Base</th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Stock</th>
-                    <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6 text-right text-sm font-semibold text-gray-900">Acciones</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-200 bg-white">
-            ${products.map(p => {
-                const stockToShow = user.role === 'Propietario' ? p.stock_total : p.stock_sucursal;
-                const showSetupButton = !p.has_sales && !p.has_purchases;
-                return html`
-                <tr key=${p.id} onClick=${() => handleRowClick(p)} class="group hover:bg-gray-50 cursor-pointer">
-                <td class="py-4 pl-4 pr-3 text-sm sm:pl-6">
-                    <div class="flex items-center">
-                    <div class="h-10 w-10 flex-shrink-0">
-                        <img class="h-10 w-10 rounded-md object-cover" src=${p.imagen_principal || NO_IMAGE_ICON_URL} alt=${p.nombre} />
-                    </div>
-                    <div class="ml-4 min-w-0">
-                        <div class="font-medium text-gray-900 group-hover:text-primary truncate" title=${p.nombre}>${p.nombre}</div>
-                        <div class="text-gray-500 truncate" title=${p.modelo || ''}>${p.modelo || 'Sin modelo'}</div>
-                    </div>
-                    </div>
-                </td>
-                
-                <td class="whitespace-nowrap px-3 py-4 text-sm font-semibold text-gray-800">
-                    ${Number(p.precio_base) > 0
-                    ? formatCurrency(p.precio_base)
-                    : html`<span class="text-xs text-amber-600 font-medium">Precio no asignado</span>`
-                    }
-                </td>
-                
-                <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                    <${StockPill} stock=${stockToShow} />
-                </td>
-                
-                <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                    <div class="flex items-center justify-end space-x-1">
-                    ${showSetupButton && html`
-                        <button onClick=${(e) => { e.stopPropagation(); onSetup(p); }} title="Configuración Inicial Rápida" class="text-gray-400 hover:text-amber-500 p-1 rounded-full hover:bg-gray-100">${ICONS.bolt}</button>
-                    `}
-                    <button onClick=${(e) => { e.stopPropagation(); onEdit(p); }} title="Editar" class="text-gray-400 hover:text-primary p-1 rounded-full hover:bg-gray-100">${ICONS.edit}</button>
-                    <button onClick=${(e) => { e.stopPropagation(); onDelete(p); }} title="Eliminar" class="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-gray-100">${ICONS.delete}</button>
-                    </div>
-                </td>
-                </tr>
-            `})}
-            </tbody>
-        </table>
-    </div>
-`};
 
 const initialFilters = {
     searchTerm: '',
@@ -318,6 +199,17 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
     const [isFabOpen, setIsFabOpen] = useState(false);
 
     const [allBranches, setAllBranches] = useState([]);
+    const [openMenuId, setOpenMenuId] = useState(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (openMenuId && !event.target.closest(`[data-menu-container-id="${openMenuId}"]`)) {
+                setOpenMenuId(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [openMenuId]);
 
 
     const formatCurrency = (value) => {
@@ -432,6 +324,7 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        addToast({ message: 'Exportación iniciada.', type: 'success' });
     };
     
     const filteredProducts = useMemo(() => {
@@ -470,17 +363,131 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
         setIsFabOpen(false);
         setIsCategoryManagerOpen(true);
     };
+    
+    const handleActionClick = (e, actionFn, product) => {
+        e.stopPropagation();
+        actionFn(product);
+        setOpenMenuId(null);
+    };
 
     const breadcrumbs = [ { name: 'Productos', href: '#/productos' } ];
 
-    const ProductList = () => html`
-        <div class="grid grid-cols-1 xl:hidden gap-4">
-            ${filteredProducts.map(p => html`
-                <${ProductCard} product=${p} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} onSetup=${handleSetupProduct} user=${user} formatCurrency=${formatCurrency} />
-            `)}
+    const ProductCard = ({ product }) => {
+        const handleCardClick = (e) => {
+            if (e.target.closest('button')) return;
+            if (window.getSelection().toString()) return;
+            navigate(`/productos/${product.id}`);
+        };
+        
+        const stockToShow = user.role === 'Propietario' ? product.stock_total : product.stock_sucursal;
+        const showSetupOption = !product.has_sales && !product.has_purchases;
+
+        return html`
+            <div onClick=${handleCardClick} class="group bg-white rounded-lg shadow-sm border flex flex-col transition-shadow hover:shadow-md cursor-pointer">
+                <div class="relative flex flex-row">
+                    <div class="w-24 sm:w-28 flex-shrink-0 bg-gray-100 relative rounded-l-lg">
+                        <img src=${product.imagen_principal || NO_IMAGE_ICON_URL} alt=${product.nombre} class="w-full h-full object-cover rounded-l-lg" />
+                    </div>
+                    <div class="p-3 flex-grow flex flex-col justify-between w-full min-w-0">
+                        <div>
+                            <div class="flex justify-between items-start gap-2">
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="font-bold text-gray-800 group-hover:text-primary transition-colors truncate" title=${product.nombre}>${product.nombre}</h3>
+                                    <p class="text-sm text-gray-500 truncate" title=${product.modelo || ''}>${product.modelo || 'Sin modelo'}</p>
+                                </div>
+                                <div class="relative flex-shrink-0" data-menu-container-id=${product.id}>
+                                    <button onClick=${(e) => { e.stopPropagation(); setOpenMenuId(prev => prev === product.id ? null : product.id); }} title="Acciones" class="text-gray-400 hover:text-primary p-1 rounded-full">${ICONS.more_vert}</button>
+                                    ${openMenuId === product.id && html`
+                                        <div class="absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-20">
+                                            <div class="py-1" role="menu">
+                                                <button type="button" onClick=${(e) => handleActionClick(e, handleEditProduct, product)} class="w-full text-left text-gray-700 px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-3" role="menuitem">${ICONS.edit} Editar</button>
+                                                <button type="button" onClick=${(e) => handleActionClick(e, handleDeleteProduct, product)} class="w-full text-left text-red-600 px-4 py-2 text-sm hover:bg-red-50 flex items-center gap-3" role="menuitem">${ICONS.delete} Eliminar</button>
+                                            </div>
+                                        </div>
+                                    `}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-2 flex items-end justify-between">
+                            <p class="text-lg font-semibold text-gray-900">
+                                ${Number(product.precio_base) > 0 ? formatCurrency(product.precio_base) : html`<span class="text-sm text-amber-600 font-medium">Precio no asignado</span>`}
+                            </p>
+                            <${StockPill} stock=${stockToShow} />
+                        </div>
+                    </div>
+                </div>
+                 ${showSetupOption && html`
+                    <div class="p-3 pt-2 border-t border-gray-200/80 bg-slate-50/50 rounded-b-lg">
+                        <button onClick=${(e) => { e.stopPropagation(); handleSetupProduct(product); }} class="w-full flex items-center justify-center gap-2 rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                            ${ICONS.bolt} Configuración Rápida
+                        </button>
+                    </div>
+                `}
+            </div>
+        `;
+    };
+
+    const ProductTable = ({ products }) => html`
+        <div class="shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+            <table class="min-w-full divide-y divide-gray-300">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Producto</th>
+                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Precio Base</th>
+                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Stock</th>
+                        <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-6 text-right text-sm font-semibold text-gray-900">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 bg-white">
+                ${products.map(p => {
+                    const stockToShow = user.role === 'Propietario' ? p.stock_total : p.stock_sucursal;
+                    const showSetupOption = !p.has_sales && !p.has_purchases;
+                    return html`
+                    <tr key=${p.id} onClick=${(e) => {
+                        if (e.target.closest('button')) return;
+                        navigate(`/productos/${p.id}`);
+                    }} class="group hover:bg-gray-50 cursor-pointer">
+                        <td class="py-4 pl-4 pr-3 text-sm sm:pl-6">
+                            <div class="flex items-center"><div class="h-10 w-10 flex-shrink-0"><img class="h-10 w-10 rounded-md object-cover" src=${p.imagen_principal || NO_IMAGE_ICON_URL} alt=${p.nombre} /></div><div class="ml-4 min-w-0"><div class="font-medium text-gray-900 group-hover:text-primary truncate" title=${p.nombre}>${p.nombre}</div><div class="text-gray-500 truncate" title=${p.modelo || ''}>${p.modelo || 'Sin modelo'}</div></div>
+                            </div>
+                        </td>
+                        <td class="whitespace-nowrap px-3 py-4 text-sm font-semibold text-gray-800">
+                            ${Number(p.precio_base) > 0 ? formatCurrency(p.precio_base) : html`<span class="text-xs text-amber-600 font-medium">Precio no asignado</span>`}
+                        </td>
+                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500"><${StockPill} stock=${stockToShow} /></td>
+                        <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                            <div class="flex items-center justify-end gap-2" data-menu-container-id=${p.id}>
+                                ${showSetupOption && html`
+                                    <button onClick=${(e) => handleActionClick(e, handleSetupProduct, p)} class="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                                        ${ICONS.bolt} Rápida
+                                    </button>
+                                `}
+                                <div class="relative">
+                                    <button onClick=${(e) => { e.stopPropagation(); setOpenMenuId(prev => (prev === p.id ? null : p.id)); }} title="Acciones" class="text-gray-400 hover:text-primary p-1 rounded-full hover:bg-gray-100">${ICONS.more_vert}</button>
+                                    ${openMenuId === p.id && html`
+                                        <div class="absolute right-0 mt-2 top-full w-48 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-20">
+                                            <div class="py-1" role="menu">
+                                                <button type="button" onClick=${(e) => handleActionClick(e, handleEditProduct, p)} class="w-full text-left text-gray-700 px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-3" role="menuitem">${ICONS.edit} Editar</button>
+                                                <button type="button" onClick=${(e) => handleActionClick(e, handleDeleteProduct, p)} class="w-full text-left text-red-600 px-4 py-2 text-sm hover:bg-red-50 flex items-center gap-3" role="menuitem">${ICONS.delete} Eliminar</button>
+                                            </div>
+                                        </div>
+                                    `}
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `})}
+                </tbody>
+            </table>
         </div>
-        <div class="hidden xl:block">
-            <${ProductTable} products=${filteredProducts} navigate=${navigate} onEdit=${handleEditProduct} onDelete=${handleDeleteProduct} onSetup=${handleSetupProduct} user=${user} formatCurrency=${formatCurrency} />
+    `;
+
+    const ProductList = ({ products }) => html`
+        <div class="grid grid-cols-1 lg:hidden gap-4">
+            ${products.map(p => html`<${ProductCard} product=${p} />`)}
+        </div>
+        <div class="hidden lg:block">
+            <${ProductTable} products=${products} />
         </div>
     `;
 
@@ -537,7 +544,7 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
                             <h3 class="text-lg font-medium text-gray-900">No se encontraron productos</h3>
                             <p class="mt-1 text-sm text-gray-500">Intenta con otro término de búsqueda o ajusta los filtros.</p>
                         </div>
-                    ` : html`<${ProductList} />`}
+                    ` : html`<${ProductList} products=${filteredProducts} />`}
                 </div>
             </div>
             
@@ -590,4 +597,5 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
                 onRefreshRequired=${fetchData}
             />
         <//>
-    `;}
+    `;
+}

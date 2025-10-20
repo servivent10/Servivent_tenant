@@ -60,6 +60,24 @@ export function InventariosPage({ user, onLogout, onProfileUpdate, companyInfo, 
         const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         return `${companyInfo.monedaSimbolo} ${formattedNumber}`;
     };
+    
+    useEffect(() => {
+        const hash = window.location.hash;
+        const queryParams = new URLSearchParams(hash.split('?')[1]);
+        const searchTermFromUrl = queryParams.get('search');
+        const statusFromUrl = queryParams.get('status');
+
+        if (searchTermFromUrl || statusFromUrl) {
+            setFilters(prev => ({
+                ...prev,
+                searchTerm: searchTermFromUrl || '',
+                status: statusFromUrl || 'all',
+            }));
+            // Clear URL params after applying them to avoid re-applying on navigation
+            const newUrl = window.location.pathname + '#/inventarios';
+            window.history.replaceState({}, '', newUrl);
+        }
+    }, []);
 
     const fetchData = useCallback(async () => {
         startLoading();

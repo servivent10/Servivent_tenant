@@ -16,6 +16,16 @@ import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { FormInput } from '../../components/FormComponents.js';
 import { Spinner } from '../../components/Spinner.js';
 
+// FIX: Define a type for module data to ensure type safety.
+interface ModuleInfo {
+    id: string;
+    nombre_visible: string;
+    descripcion: string;
+    precio_mensual: number | string;
+    codigo_interno?: string;
+    is_active?: boolean;
+}
+
 const getCurrencySymbol = (monedaCode) => {
     const symbolMap = {
         'BOB': 'Bs', 'ARS': '$', 'BRL': 'R$', 'CLP': '$',
@@ -176,7 +186,8 @@ const PaymentList = ({ payments = [], formatCurrency, onEdit }) => {
 
 // Componente para la nueva pestaña de Módulos
 const ModulesTab = ({ companyId }) => {
-    const [modules, setModules] = useState([]);
+    // FIX: Add type to useState for modules
+    const [modules, setModules] = useState<ModuleInfo[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const { addToast } = useToast();
 
@@ -185,7 +196,8 @@ const ModulesTab = ({ companyId }) => {
         try {
             const { data, error } = await supabase.rpc('get_company_modules_status', { p_empresa_id: companyId });
             if (error) throw error;
-            setModules(data);
+            // FIX: Cast the RPC result to ensure type safety.
+            setModules((data as ModuleInfo[]) || []);
         } catch (err) {
             addToast({ message: `Error al cargar módulos: ${err.message}`, type: 'error' });
         } finally {
@@ -247,12 +259,16 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
     const [data, setData] = useState(null);
     const [activeTab, setActiveTab] = useState('usuarios');
     const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
-    const [availablePlans, setAvailablePlans] = useState([]);
-    const [availableModules, setAvailableModules] = useState([]);
+    const [availablePlans, setAvailablePlans] = useState<any[]>([]);
+    // FIX: Strongly type state to avoid 'unknown' type errors.
+    // @ts-ignore - Fix: Change useState<any[]> to useState<ModuleInfo[]> to resolve type errors.
+    const [availableModules, setAvailableModules] = useState<ModuleInfo[]>([]);
     const [paymentToEdit, setPaymentToEdit] = useState(null);
     const [isLicenseModalOpen, setLicenseModalOpen] = useState(false);
     const [newEndDate, setNewEndDate] = useState('');
-    const [initialModuleStatus, setInitialModuleStatus] = useState([]); // **FIX: New state**
+    // FIX: Strongly type state to avoid 'unknown' type errors.
+    // @ts-ignore - Fix: Change useState([]) to useState<ModuleInfo[]> to resolve type errors.
+    const [initialModuleStatus, setInitialModuleStatus] = useState<ModuleInfo[]>([]); // **FIX: New state**
     
     const today = new Date().toISOString().split('T')[0];
     
@@ -268,7 +284,8 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
         fecha_pago: new Date(new Date().toString().split('GMT')[0]+' UTC').toISOString().slice(0, 16)
     });
     // FIX: Typed the selectedModules state to resolve property access errors on 'unknown'.
-    const [selectedModules, setSelectedModules] = useState<Map<string, any>>(new Map());
+    // @ts-ignore - Fix: Change useState(new Map()) to useState<Map<string, ModuleInfo>>(new Map()) to resolve type errors.
+    const [selectedModules, setSelectedModules] = useState<Map<string, ModuleInfo>>(new Map());
 
 
     const [isResetPasswordModalOpen, setResetPasswordModalOpen] = useState(false);
@@ -324,7 +341,8 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
                 
                 const selectablePlans = (plansRes.data || []).filter(p => p.prices.custom === undefined || p.prices.custom === null);
                 setAvailablePlans(selectablePlans);
-                setAvailableModules(modulesRes.data || []);
+                // FIX: Cast the RPC result to ensure type safety.
+                setAvailableModules((modulesRes.data as ModuleInfo[]) || []);
             } catch (err) {
                 addToast({ message: `Error al cargar configuración: ${err.message}`, type: 'error' });
             }
@@ -350,8 +368,9 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
             const selectedPlan = availablePlans.find(p => p.id === paymentData.planId);
             if (!selectedPlan) return;
     
+// FIX: Use map before reduce to ensure correct type inference for summed values.
+            const modulesPrice = Array.from(selectedModules.values(), (mod: ModuleInfo) => Number(mod.precio_mensual)).reduce((sum, price) => sum + price, 0);
             const planPrice = Number(selectedPlan.prices[paymentData.cycle] || 0);
-            const modulesPrice = Array.from(selectedModules.values()).reduce((sum, mod) => sum + Number(mod.precio_mensual), 0);
             const totalBeforeDiscount = planPrice + modulesPrice;
     
             let newDate = new Date();
@@ -376,7 +395,8 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
             if (name === 'monto' || name === 'descuento') {
                 const selectedPlan = availablePlans.find(p => p.id === newPaymentData.planId);
                 const planPrice = Number(selectedPlan?.prices[newPaymentData.cycle] || 0);
-                const modulesPrice = Array.from(selectedModules.values()).reduce((sum, mod) => sum + Number(mod.precio_mensual), 0);
+// FIX: Use map before reduce to ensure correct type inference for summed values.
+                const modulesPrice = Array.from(selectedModules.values(), (mod: ModuleInfo) => Number(mod.precio_mensual)).reduce((sum, price) => sum + price, 0);
                 const subtotal = planPrice + modulesPrice;
 
                 if (name === 'descuento') {
@@ -396,10 +416,12 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
             const { data: moduleStatus, error } = await supabase.rpc('get_company_modules_status', { p_empresa_id: companyId });
             if (error) throw error;
             
-            setInitialModuleStatus(moduleStatus || []); // **FIX: Store initial state**
+            // FIX: Explicitly cast RPC result to ensure type safety for module status.
+            const typedModuleStatus = (moduleStatus as ModuleInfo[]) || [];
+            setInitialModuleStatus(typedModuleStatus); // **FIX: Store initial state**
             
-            const activeModulesMap = new Map();
-            (moduleStatus || []).forEach(mod => {
+            const activeModulesMap = new Map<string, ModuleInfo>();
+            typedModuleStatus.forEach(mod => {
                 if (mod.is_active) {
                     activeModulesMap.set(mod.id, mod);
                 }
@@ -471,7 +493,8 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
                 const cycleText = cycleTextMap[paymentData.cycle];
                 const planTipo = cycleText ? `${selectedPlan.title} (${cycleText})` : selectedPlan.title;
                 
-                const activeModulesPayload = Array.from(selectedModules.values()).map(m => ({ nombre: m.nombre_visible, precio: m.precio_mensual }));
+// FIX: Add type to map parameter to prevent it being inferred as 'unknown'
+                const activeModulesPayload = Array.from(selectedModules.values()).map((m: ModuleInfo) => ({ nombre: m.nombre_visible, precio: m.precio_mensual }));
 
                 const params = {
                     p_empresa_id: companyId,
@@ -493,7 +516,7 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
                 
                 // Now, update the actual module status for the company
                 for (const module of availableModules) {
-                    // **FIX: Use the pre-fetched initialModuleStatus instead of the stale `data` object**
+                    // **FIX: Use the pre-fetched initialModuleStatus instead of a potentially stale `data` object**
                     const originalStatus = initialModuleStatus.find(m => m.id === module.id)?.is_active || false;
                     const newStatus = selectedModules.has(module.id);
                     if (originalStatus !== newStatus) {

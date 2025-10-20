@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { html } from 'htm/preact';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import { DashboardLayout } from '../../components/DashboardLayout.js';
 import { ICONS } from '../../components/Icons.js';
 import { FormInput } from '../../components/FormComponents.js';
@@ -11,12 +11,20 @@ import { Spinner } from '../../components/Spinner.js';
 import { useToast } from '../../hooks/useToast.js';
 import { supabase } from '../../lib/supabaseClient.js';
 import { useLoading } from '../../hooks/useLoading.js';
+import { PrintModal } from '../../components/modals/PrintModal.tsx';
+import { NotaVentaTemplate } from '../../components/receipts/NotaVentaTemplate.js';
+import { TicketTemplate } from '../../components/receipts/TicketTemplate.js';
+import { generatePdfFromComponent } from '../../lib/pdfGenerator.js';
 
 
 export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
     const [venta, setVenta] = useState(null);
     const { isLoading, startLoading, stopLoading } = useLoading();
     const { addToast } = useToast();
+
+    const [printModalState, setPrintModalState] = useState({ isOpen: false, title: '', content: null });
+    const [receiptForPdf, setReceiptForPdf] = useState(null);
+    const receiptRef = useRef(null);
 
     const formatCurrency = (value) => {
         const number = Number(value || 0);
@@ -41,6 +49,18 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
     useEffect(() => {
         fetchData();
     }, [ventaId]);
+
+    useEffect(() => {
+        if (receiptForPdf && receiptRef.current) {
+            const { format } = receiptForPdf;
+            const fileName = `${format === 'nota' ? 'NotaVenta' : 'Ticket'}-${venta.folio}.pdf`;
+            generatePdfFromComponent(receiptRef.current, fileName, format === 'nota' ? 'a4' : 'ticket')
+                .then(() => addToast({ message: 'Descarga iniciada.', type: 'success' }))
+                .catch(err => addToast({ message: `Error al generar PDF: ${err.message}`, type: 'error' }))
+                .finally(() => setReceiptForPdf(null));
+        }
+    }, [receiptForPdf, venta]);
+
 
     const breadcrumbs = [
         { name: 'Ventas', href: '#/ventas' },
@@ -145,18 +165,47 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
         
         const isWebOrder = venta.metodo_pago === 'Pedido Web' || venta.estado_pago === 'Pedido Web Pendiente';
         const isDelivery = isWebOrder && venta.direccion_entrega_id;
-        const isPickup = isWebOrder && !venta.direccion_entrega_id;
+        const isPickup = isWebOrder && !venta.sucursal_id;
+
+        const diasVencidos = Math.abs(venta.dias_diferencia);
+        const mensajeVencimiento = diasVencidos === 1 ? '1 día' : `${diasVencidos} días`;
 
         return html`
-            <div class="flex items-center gap-4 mb-4">
-                <button onClick=${() => navigate('/ventas')} class="p-2 rounded-full hover:bg-gray-200" aria-label="Volver a Ventas">
-                    ${ICONS.arrow_back}
-                </button>
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-900">Detalle de Venta: ${venta.folio}</h1>
-                    <p class="text-sm text-gray-500">Cliente: ${venta.cliente_nombre || 'Consumidor Final'}</p>
+            <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
+                <div class="flex items-center gap-4">
+                    <button onClick=${() => navigate('/ventas')} class="p-2 rounded-full hover:bg-gray-200" aria-label="Volver a Ventas">
+                        ${ICONS.arrow_back}
+                    </button>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Detalle de Venta: ${venta.folio}</h1>
+                        <p class="text-sm text-gray-500">Cliente: ${venta.cliente_nombre || 'Consumidor Final'}</p>
+                    </div>
+                </div>
+                <div class="relative group flex-shrink-0">
+                    <button class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-slate-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-600">
+                        ${ICONS.print} Recibo / Comprobante ${ICONS.chevron_down}
+                    </button>
+                    <div class="absolute right-0 top-full w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-10 hidden group-hover:block group-focus-within:block">
+                        <div class="py-1">
+                            <button onClick=${() => setPrintModalState({ isOpen: true, title: 'Previsualizar Nota de Venta', content: 'nota'})} class="w-full text-left text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100">Imprimir Nota de Venta</button>
+                            <button onClick=${() => setPrintModalState({ isOpen: true, title: 'Previsualizar Ticket', content: 'ticket'})} class="w-full text-left text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100">Imprimir Ticket</button>
+                            <div class="border-t my-1"></div>
+                            <button onClick=${() => setReceiptForPdf({ format: 'nota' })} class="w-full text-left text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100">Descargar Nota (PDF)</button>
+                            <button onClick=${() => setReceiptForPdf({ format: 'ticket' })} class="w-full text-left text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100">Descargar Ticket (PDF)</button>
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            ${venta.estado_vencimiento === 'Vencida' && html`
+                <div class="mb-6 p-4 rounded-md bg-red-50 text-red-800 border border-red-200 flex items-start gap-3" role="alert">
+                    <div class="text-2xl flex-shrink-0 mt-0.5">${ICONS.warning}</div>
+                    <div>
+                        <h3 class="font-bold">Venta Vencida</h3>
+                        <p class="text-sm">Esta venta tiene un retraso de ${mensajeVencimiento}.</p>
+                    </div>
+                </div>
+            `}
 
             ${venta.estado_pago === 'Pedido Web Pendiente' && html`
                 <div class="mb-6 p-4 rounded-md bg-cyan-50 text-cyan-800 border border-cyan-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4" role="alert">
@@ -182,7 +231,7 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                              <div><dt class="text-gray-500">Vendedor</dt><dd class="font-medium text-gray-800">${venta.usuario_nombre || 'N/A'}</dd></div>
                             <div><dt class="text-gray-500">Tipo de Venta</dt><dd class="font-medium text-gray-800">${venta.tipo_venta}</dd></div>
                             <div><dt class="text-gray-500">Método de Pago</dt><dd class="font-medium text-gray-800">${venta.metodo_pago}</dd></div>
-                            ${venta.fecha_vencimiento && html`<div><dt class="text-gray-500">Vencimiento</dt><dd class="font-medium text-red-600">${new Date(venta.fecha_vencimiento).toLocaleDateString()}</dd></div>`}
+                            ${venta.fecha_vencimiento && html`<div><dt class="text-gray-500">Vencimiento</dt><dd class="font-medium text-red-600">${new Date(venta.fecha_vencimiento.replace(/-/g, '/')).toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' })}</dd></div>`}
                         </dl>
                     </div>
 
@@ -256,7 +305,7 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                     </div>
                 </div>
 
-                <div class="lg:col-span-1">
+                <div class="lg:col-span-1 space-y-6">
                     <${PaymentManager} ventaData=${venta} />
                 </div>
             </div>
@@ -274,6 +323,25 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
             notifications=${notifications}
         >
             ${renderContent()}
+            
+            <${PrintModal}
+                isOpen=${printModalState.isOpen}
+                onClose=${() => setPrintModalState({ isOpen: false, title: '', content: null })}
+                title=${printModalState.title}
+            >
+                ${printModalState.content === 'nota' && html`<${NotaVentaTemplate} saleDetails=${venta} companyInfo=${companyInfo} />`}
+                ${printModalState.content === 'ticket' && html`<${TicketTemplate} saleDetails=${venta} companyInfo=${companyInfo} />`}
+            <//>
+
+            ${receiptForPdf && html`
+                <div style="position: fixed; left: -9999px; top: 0; font-family: 'Inter', sans-serif;">
+                    ${receiptForPdf.format === 'nota' ? html`
+                        <${NotaVentaTemplate} ref=${receiptRef} saleDetails=${venta} companyInfo=${companyInfo} />
+                    ` : html`
+                        <${TicketTemplate} ref=${receiptRef} saleDetails=${venta} companyInfo=${companyInfo} />
+                    `}
+                </div>
+            `}
         <//>
     `;
 }

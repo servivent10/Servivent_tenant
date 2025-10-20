@@ -285,6 +285,7 @@ function AppContent() {
     const isRegistrationRoute = currentPath.startsWith('/registro');
     const isAdminToolRoute = currentPath === '/admin-delete-tool';
     const isCatalogRoute = currentPath.startsWith('/catalogo');
+    const isLoginRoute = currentPath === '/login' || currentPath === '/';
 
     if (loading && !isLoggingOut) {
         // Show a shell layout only if a session exists but data is loading
@@ -322,7 +323,24 @@ function AppContent() {
     } else {
         if (isRegistrationRoute) content = html`<${RegistrationFlow} navigate=${navigate} />`;
         else if (isAdminToolRoute) content = html`<${AdminToolPage} navigate=${navigate} />`;
-        else if (!isCatalogRoute) content = html`<${LoginPage} onLogin=${handleLogin} navigate=${navigate} />`;
+        else if (isLoginRoute) {
+            const shellUser = { name: ' ', email: ' ', role: '', sucursal: ' ', avatar: null };
+            const shellCompany = { name: ' ', licenseStatus: 'Activa' };
+            content = html`
+                <div class="h-full">
+                    <${DashboardLayout} 
+                        user=${shellUser} 
+                        companyInfo=${shellCompany} 
+                        onLogout=${() => {}} 
+                        onProfileUpdate=${() => {}} 
+                        disableNavigation=${true}
+                    >
+                        <div />
+                    <//>
+                    <${LoginPage} onLogin=${handleLogin} navigate=${navigate} />
+                </div>
+            `;
+        }
     }
 
     return html`

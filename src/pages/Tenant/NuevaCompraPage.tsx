@@ -434,7 +434,14 @@ function PurchaseItemDetailModal({ isOpen, onClose, onSave, item, currency, exch
             <div class="space-y-4">
                 <div class="flex items-center gap-4 p-2 bg-slate-50 rounded-lg">
                     <img src=${item.imagen_principal || NO_IMAGE_ICON_URL} class="h-14 w-14 rounded-md object-cover flex-shrink-0 bg-white" />
-                    <p class="font-bold text-lg text-gray-800">${item.producto_nombre}</p>
+                    <div>
+                        <p class="font-bold text-lg text-gray-800">${item.producto_nombre}</p>
+                        <div class="text-xs text-gray-500 flex items-center gap-x-2">
+                            ${item.modelo && html`<span>Modelo: <span class="font-medium text-gray-700">${item.modelo}</span></span>`}
+                            ${item.modelo && item.sku && html`<span class="text-gray-300">|</span>`}
+                            ${item.sku && html`<span>SKU: <span class="font-mono text-gray-700">${item.sku}</span></span>`}
+                        </div>
+                    </div>
                 </div>
                 
                 <${Tabs} tabs=${tabs} activeTab=${activeTab} onTabClick=${setActiveTab} />
@@ -545,7 +552,6 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
 
     const { formData, setFormData } = useNuevaCompra();
     
-    // Effect to initialize sucursal_id from user prop if it's not set in the context
     useEffect(() => {
         if (user && user.sucursal_id && !formData.sucursal_id) {
             setFormData(prev => ({ ...prev, sucursal_id: user.sucursal_id }));
@@ -601,6 +607,8 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
             isNew: true,
             producto_id: product.id,
             producto_nombre: product.nombre,
+            modelo: product.modelo,
+            sku: product.sku,
             imagen_principal: product.imagen_principal,
             cantidad: 0,
             costo_unitario: '',
@@ -708,7 +716,6 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
             if (compraError) throw compraError;
 
             addToast({ message: 'Compra registrada con éxito.', type: 'success' });
-            // Clear form data from context after successful save
             setFormData({
                 proveedor_id: '', proveedor_nombre: '', sucursal_id: user.sucursal_id,
                 fecha: new Date().toISOString(), n_factura: '', moneda: 'BOB',
@@ -743,11 +750,30 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
             breadcrumbs=${breadcrumbs}
             companyInfo=${companyInfo}
         >
-            <div class="flex items-center gap-4 mb-6">
-                <button onClick=${() => navigate('/compras')} class="p-2 rounded-full hover:bg-gray-100" aria-label="Volver a Compras">
-                    ${ICONS.arrow_back}
-                </button>
-                <h1 class="text-2xl font-semibold text-gray-900">Registrar Nueva Compra</h1>
+            <div class="flex justify-between items-center gap-4 mb-6">
+                <div class="flex items-center gap-4">
+                    <button onClick=${() => navigate('/compras')} class="p-2 rounded-full hover:bg-gray-100" aria-label="Volver a Compras">
+                        ${ICONS.arrow_back}
+                    </button>
+                    <h1 class="text-2xl font-semibold text-gray-900">Registrar Nueva Compra</h1>
+                </div>
+                <div class="flex items-center gap-2">
+                     <button 
+                        type="button"
+                        onClick=${step === 1 ? () => navigate('/compras') : handleBack} 
+                        class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                    >
+                        ${step === 1 ? 'Cancelar' : 'Volver'}
+                    </button>
+                    <button 
+                        type="button"
+                        onClick=${step === 3 ? handleConfirmSave : handleNext}
+                        disabled=${isLoading}
+                        class="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400 min-w-[120px] flex justify-center"
+                    >
+                        ${isLoading ? html`<${Spinner}/>` : (step === 3 ? 'Guardar Compra' : 'Siguiente')}
+                    </button>
+                </div>
             </div>
 
             <div class="bg-white p-6 sm:p-8 rounded-xl shadow-sm border">
@@ -772,32 +798,12 @@ export function NuevaCompraPage({ user, onLogout, onProfileUpdate, companyInfo, 
                 </div>
             </div>
 
-            <div class="mt-6 flex justify-between items-center w-full">
-                <button 
-                    type="button"
-                    onClick=${step === 1 ? () => navigate('/compras') : handleBack} 
-                    class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                >
-                    ${step === 1 ? 'Cancelar' : 'Volver'}
-                </button>
-                <button 
-                    type="button"
-                    onClick=${step === 3 ? handleConfirmSave : handleNext}
-                    disabled=${isLoading}
-                    class="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400 min-w-[120px] flex justify-center"
-                >
-                    ${isLoading ? html`<${Spinner}/>` : (step === 3 ? 'Guardar Compra' : 'Siguiente')}
-                </button>
-            </div>
-
             <${ProveedorFormModal} 
                 isOpen=${isProveedorFormOpen} 
                 onClose=${() => setIsProveedorFormOpen(false)} 
                 onSave=${handleSaveProveedor} 
             />
             <${ProductFormModal}
-                isOpen=${isProductFormOpen}
-                onClose=${() => setIsProductFormOpen(false)}
                 onSave=${handleSaveProduct}
                 user=${user}
             />

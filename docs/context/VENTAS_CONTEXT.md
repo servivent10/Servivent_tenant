@@ -37,3 +37,56 @@ Este documento define la arquitectura, diseño y funcionalidad del módulo de **
 -   **`get_sale_details()`:** Recupera la información para la página de detalle.
 -   **`registrar_pago_venta()`:** Registra un abono y actualiza los saldos.
 -   **`get_sales_filter_data()`:** Carga los datos para los menús desplegables de los filtros.
+
+## 4. Pagos Múltiples para Ventas (Contado y Crédito)
+
+Para reflejar casos de uso reales donde un cliente paga con varios métodos (ej. parte en efectivo, parte con QR), o desea dar un abono inicial con múltiples métodos en una venta a crédito, se implementa una arquitectura de pagos múltiples.
+
+### 4.1. Visión y Objetivo
+Flexibilizar el proceso de cobro en el `CheckoutModal` para que una única venta pueda registrarse con múltiples métodos de pago, ya sea para cubrir el total en una venta al contado, o para registrar un abono inicial en una venta a crédito. La experiencia de usuario debe ser rápida e intuitiva.
+
+### 4.2. Cambios Arquitectónicos (Backend)
+-   **Reutilización de `pagos_ventas`:** Esta tabla se convierte en el registro central para **todos los pagos de todas las ventas**. Almacenará `venta_id`, `monto` y `metodo_pago` por cada transacción parcial.
+-   **Actualización de `ventas.metodo_pago`:** Esta columna pasa a ser un indicador. Si hay más de un pago, se almacena el valor **"Mixto"**.
+-   **Actualización de RPC `registrar_venta()`:** La función se modifica para aceptar un array de objetos de pago (`p_pagos json[]`).
+    -   Para ventas al **contado**, la RPC valida que la suma de los montos en `p_pagos` coincida con el total de la venta.
+    -   Para ventas a **crédito**, la suma de los montos en `p_pagos` se convierte en el `abono_inicial`.
+
+### 4.3. Cambios en Interfaz y Flujo de Usuario (`CheckoutModal.tsx`)
+
+El modal de finalización de venta se rediseñará para seguir un flujo claro y lógico:
+
+1.  **Orden de Elementos:** La interfaz se presentará en el siguiente orden:
+    1.  **Total a Pagar:** Mostrado de forma prominente.
+    2.  **Tipo de Venta:** Selector entre "Contado" (por defecto) y "Crédito".
+    3.  **Gestor de Métodos de Pago:** La nueva interfaz para añadir múltiples pagos.
+    4.  **Campos Adicionales:** Como el cálculo del cambio o la fecha de vencimiento.
+
+2.  **Flujo para Venta al Contado:**
+    *   El modal muestra el **"Total a Pagar"** y el **"Monto Restante"**.
+    *   El vendedor hace clic en un método de pago (ej. "Efectivo"), lo que añade una nueva entrada a una lista de pagos.
+    *   Ingresa el monto para ese método, y el "Monto Restante" se recalcula al instante.
+    *   Repite el proceso con otros métodos hasta que el "Monto Restante" sea cero.
+    *   El botón "Confirmar Venta" se habilita solo cuando el total está cubierto.
+
+3.  **Flujo para Venta a Crédito:**
+    *   Al seleccionar "A Crédito", el campo **"Fecha de Vencimiento"** se hace visible.
+    *   El **gestor de métodos de pago permanece activo**, permitiendo al vendedor registrar un **abono inicial**.
+    *   El vendedor puede añadir uno o más pagos (ej. parte en efectivo, parte con tarjeta) que constituirán el abono inicial.
+    *   El "Monto Restante" en este contexto representa el **saldo pendiente** de la deuda.
+    *   El botón "Confirmar Venta" está siempre habilitado (siempre que se haya seleccionado un cliente), ya que se puede realizar una venta a crédito sin abono inicial.
+
+### 4.4. Flujo de Usuario (Ejemplo)
+
+-   **Caso Contado (Venta de Bs 1000):**
+    1.  El vendedor agrega un pago de "Efectivo" por Bs 800. El "Monto Restante" muestra Bs 200.
+    2.  Agrega un pago de "QR" por Bs 200. El "Monto Restante" muestra Bs 0.
+    3.  Confirma. El backend recibe `p_pagos: [{metodo: 'Efectivo', monto: 800}, {metodo: 'QR', monto: 200}]`.
+
+-   **Caso Crédito (Venta de Bs 2000):**
+    1.  El vendedor selecciona "A Crédito".
+    2.  El cliente desea dar un abono de Bs 500.
+    3.  El vendedor agrega un pago de "Efectivo" por Bs 200.
+    4.  Agrega un pago de "Tarjeta" por Bs 300.
+    5.  El "Monto Restante" (saldo pendiente) muestra Bs 1500.
+    6.  Confirma. El backend recibe `p_pagos: [{metodo: 'Efectivo', monto: 200}, {metodo: 'Tarjeta', monto: 300}]` y lo registra como `abono_inicial`.

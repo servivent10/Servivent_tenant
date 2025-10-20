@@ -66,7 +66,7 @@ export function InitialSetupModal({ onSave, branches, companyInfo }) {
         setIsLoading(true);
         try {
             const ajustes = Object.entries(inventoryData)
-                .map(([sucursal_id, data]) => ({
+                .map(([sucursal_id, data]: [string, { cantidad?: string | number; stock_minimo?: string | number }]) => ({
                     sucursal_id,
                     cantidad_inicial: Number(data.cantidad) || 0,
                     stock_minimo: Number(data.stock_minimo) || 0,
@@ -103,7 +103,7 @@ export function InitialSetupModal({ onSave, branches, companyInfo }) {
             icon=${ICONS.bolt}
             maxWidthClass="max-w-3xl"
         >
-            <div class="md:flex md:flex-col md:max-h-[65vh] overflow-y-auto md:overflow-y-hidden">
+            <div class="md:flex md:flex-col md:max-h-[65vh] md:overflow-y-hidden">
                 <div class="md:flex-shrink-0">
                     <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                         <h3 class="text-lg font-bold text-blue-900">${product.nombre}</h3>

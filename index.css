@@ -164,18 +164,79 @@ input[type=number] {
   -moz-appearance: textfield;
 }
 
-/* Estilos de Impresión */
+/* Forzar la visibilidad del icono del calendario en campos de fecha/hora */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    filter: invert(0.5); /* Esto oscurece el icono si es blanco o claro */
+}
+
+/* Estilos para la Nota de Venta */
+.nota-venta-container {
+  width: 210mm;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Estilos para el Ticket */
+.ticket-container {
+  width: 72mm;
+  box-sizing: border-box;
+}
+
+/* Estilos de Impresión - Versión Definitiva 5.0 */
 @media print {
+  /* Oculta los elementos no imprimibles */
   .no-print {
     display: none !important;
   }
-  body {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-    background-color: white !important;
+  
+  /* [SOLUCIÓN 1] Anula el centrado Flexbox del modal para la impresión. */
+  div[role="dialog"] {
+      display: block !important;
+      padding: 0 !important; /* [SOLUCIÓN 2] Elimina el padding del modal que causa márgenes. */
   }
-  #root, body {
-    height: auto;
-    width: auto;
+  
+  /* [SOLUCIÓN 2] Elimina el fondo del body/html para que la hoja sea blanca. */
+  body, html {
+    background-color: #fff !important;
+    background-image: none !important; /* Quita cualquier imagen de fondo */
+    color: #000 !important; /* Asegura que el texto sea negro */
+  }
+
+  /* Técnica de aislamiento de impresión: */
+  /* 1. Oculta todo en la página por defecto. */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 2. Muestra únicamente la sección a imprimir y su contenido. */
+  .print-section, .print-section * {
+    visibility: visible;
+  }
+  
+  /* 3. Posiciona esta sección en la esquina superior izquierda del área de impresión. */
+  .print-section {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* [SOLUCIÓN 2] Se definen los márgenes de la página a cero para eliminar los bordes gruesos. */
+  @page {
+    size: A4;
+    margin: 0mm;
+  }
+
+  /* Se limpia el estilo del recibo para la impresión (sin sombras ni bordes) y se asegura que ocupe todo el espacio. */
+  .nota-venta-container, .ticket-container {
+    margin: 0 !important; /* Elimina cualquier margen automático */
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important; /* Asegura que el contenedor ocupe todo el ancho de la página */
+    max-width: 100% !important;
+    min-height: 100vh; /* Usa viewport height para asegurar que ocupe la página completa verticalmente */
+    box-sizing: border-box;
   }
 }

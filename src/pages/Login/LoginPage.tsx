@@ -42,13 +42,8 @@ export function LoginPage({ onLogin, navigate }) {
     };
 
     return html`
-        <div class="relative flex min-h-full w-full items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-            <div class="absolute inset-0 -z-20">
-                <img class="h-full w-full object-cover" src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2830&q=80" alt="Team working" />
-                <div class="absolute inset-0 bg-secondary-dark/70"></div>
-            </div>
-
-            <div class="max-w-md space-y-8 rounded-xl bg-black/20 p-8 shadow-2xl backdrop-blur-lg">
+        <div class="fixed inset-0 z-40 flex min-h-full w-full items-center justify-center p-4 backdrop-blur-sm bg-black/30 animate-modal-fade-in">
+            <div class="w-full max-w-md space-y-8 rounded-xl bg-slate-800/80 p-8 shadow-2xl backdrop-blur-lg border border-slate-700">
                  <div>
                     <${ServiVentLogo} className="mx-auto h-12 w-auto" textColor="text-white" accentColor="text-primary-light" />
                     <h2 class="mt-6 text-center text-3xl font-bold tracking-tight text-white">
@@ -97,7 +92,6 @@ export function LoginPage({ onLogin, navigate }) {
                         </a>
                     </p>
                 </div>
-
             </div>
         </div>
     `;

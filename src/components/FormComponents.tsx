@@ -6,7 +6,7 @@ import { html } from 'htm/preact';
 import { useState } from 'preact/hooks';
 import { ICONS } from './Icons.js';
 
-export const FormInput = ({ label, name, type, required = true, value, onInput, error, disabled = false, icon, rightElement, ...props }) => {
+export const FormInput = ({ label, name, type, required = true, value, onInput, error, disabled = false, icon, rightElement, theme = 'light', ...props }) => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const { className, ...restProps } = props;
 
@@ -18,19 +18,25 @@ export const FormInput = ({ label, name, type, required = true, value, onInput, 
   
   const hasError = !!error;
 
-  const labelClasses = 'text-gray-900';
-  const baseClasses = 'border border-gray-300 focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25';
+  const isDark = theme === 'dark';
+  const labelClasses = isDark ? 'text-gray-300' : 'text-gray-900';
+  const baseClasses = isDark 
+    ? 'border border-slate-600 focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25'
+    : 'border border-gray-300 focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25';
   const errorClasses = 'border border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-500/25';
     
-  const inputClasses = 'bg-white text-gray-900 disabled:bg-gray-100 disabled:text-gray-500';
+  const inputClasses = isDark
+    ? 'bg-slate-800/60 text-white placeholder:text-gray-400 disabled:bg-slate-700 disabled:text-gray-400'
+    : 'bg-white text-gray-900 placeholder:text-gray-400 disabled:bg-gray-100 disabled:text-gray-500';
+  
   const disabledClasses = disabled ? 'cursor-not-allowed' : '';
-  const buttonClasses = 'text-gray-500 hover:text-gray-700';
+  const buttonClasses = isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700';
   
   let paddingClasses = 'p-2';
   if (icon) paddingClasses += ' pl-10';
   if (type === 'password' || rightElement) paddingClasses += ' pr-10';
   
-  const fullClass = `block w-full rounded-md shadow-sm placeholder:text-gray-400 focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses} ${paddingClasses} ${className || ''}`;
+  const fullClass = `block w-full rounded-md shadow-sm focus:outline-none sm:text-sm sm:leading-6 transition-colors duration-200 ${inputClasses} ${hasError ? errorClasses : baseClasses} ${disabledClasses} ${paddingClasses} ${className || ''}`;
 
   return html`
     <div>

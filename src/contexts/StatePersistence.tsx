@@ -149,11 +149,17 @@ export const useNuevaCompra = () => {
 };
 
 export function NuevaCompraProvider({ children }) {
+    const getLocalISOString = (date: Date): string => {
+        const tzoffset = date.getTimezoneOffset() * 60000; //offset in milliseconds
+        const localISOTime = new Date(date.getTime() - tzoffset).toISOString().slice(0, 16);
+        return localISOTime;
+    };
+
     const [formData, setFormData] = useState<NuevaCompraFormData>({
         proveedor_id: '',
         proveedor_nombre: '',
-        sucursal_id: null, // Initialized as null, will be set by the page component
-        fecha: new Date().toISOString(),
+        sucursal_id: null,
+        fecha: getLocalISOString(new Date()),
         n_factura: '',
         moneda: 'BOB',
         tasa_cambio: '6.96',
