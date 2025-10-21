@@ -13,21 +13,7 @@ import { supabase } from '../../lib/supabaseClient.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 import { FilterBar, AdvancedFilterPanel } from '../../components/shared/FilterComponents.js';
 import { useRealtimeListener } from '../../hooks/useRealtime.js';
-
-const StockStatusPill = ({ stock, minStock = 0 }) => {
-    let pillClass, text;
-    if (stock <= 0) {
-        pillClass = 'bg-red-100 text-red-800';
-        text = 'Agotado';
-    } else if (stock <= minStock) {
-        pillClass = 'bg-yellow-100 text-yellow-800';
-        text = 'Bajo Stock';
-    } else {
-        pillClass = 'bg-green-100 text-green-800';
-        text = 'En Stock';
-    }
-    return html`<span class="${pillClass} inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium">${text}</span>`;
-};
+import { StockStatusPill } from '../../components/StockStatusPill.js';
 
 const initialFilters = {
     searchTerm: '',

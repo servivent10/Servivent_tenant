@@ -67,8 +67,7 @@ Esta carpeta contiene todos los scripts SQL para configurar y mantener la base d
 | `54_FIX_audit_trigger_fkey.md`| Auditoría | `[ACTIVO]` | Próximamente | Elimina la FK en `historial_cambios.usuario_id` para permitir auditoría de no-tenants. |
 | `55_FIX_notifications_fkey.md`| Core (Realtime) | `[ACTIVO]` | Próximamente | Elimina la FK en `notificaciones.usuario_generador_id` para permitir notificaciones de no-tenants. |
 | `56_FIX_web_order_sucursal_constraint.md`| Catálogo Web | `[ACTIVO]` | `56_REVERT_...` | Elimina la constraint `NOT NULL` en `ventas.sucursal_id` para permitir pedidos web de envío a domicilio. |
-| `56_REVERT_web_order_sucursal_constraint.md`| Catálogo Web | `[ACTIVO]` | Próximamente | Revierte la eliminación de la constraint `NOT NULL` en `ventas.sucursal_id`. |
-| `57_FIX_traspasos_cascade_delete.md`| Traspasos | `[CRÍTICO]` | `57_REVERT_traspasos_cascade_delete.md` | Corrige la restricción de clave foránea en `traspaso_items` para permitir la eliminación en cascada de productos. |
+| `57_FIX_traspasos_cascade_delete.md`| Traspasos | `[CRÍTICO]` | `57_REVERT_...` | Corrige la restricción de clave foránea en `traspaso_items` para permitir la eliminación en cascada de productos. |
 | `58_FEATURE_user_email_validation.md`| Sucursales y Usuarios | `[ACTIVO]` | `58_REVERT_...` | Añade la función para la validación de correo de usuario en tiempo real. |
 | `DATA_INTEGRITY_FIX.md`| Core | `[REPARACIÓN]` | N/A | Script maestro que unifica y corrige los problemas de datos más comunes. |
 | `FIX_remove_registration_trigger.md`| Core | `[OBSOLETO]` | N/A | Reemplazado por `DATA_INTEGRITY_FIX.md`. |
@@ -81,12 +80,20 @@ Esta carpeta contiene todos los scripts SQL para configurar y mantener la base d
 | `63_FEATURE_addon_modules.md` | Planes / Módulos | `[OBSOLETO]` | `64_REVERT_addon_modules.md` | Reemplazado por el script 68. |
 | `65_FEATURE_manage_modules.md` | SuperAdmin / Módulos | `[ACTIVO]` | `66_REVERT_manage_modules.md` | Añade funciones RPC para que el SuperAdmin pueda gestionar los módulos. |
 | `68_FEATURE_dynamic_plans_enforcement_V2.md`| Core / Planes | `[ACTIVO]` | `68_REVERT_...` | **Solución Definitiva:** Unifica la obtención de permisos de planes y módulos. |
-| `68_REVERT_dynamic_plans_enforcement_V2.md`| Core / Planes | `[ACTIVO]` | Próximamente | Revierte la lógica de permisos unificada al estado anterior. |
 | `69_FEATURE_tenant_module_view.md`| Licencia / Módulos | `[ACTIVO]` | `69_REVERT_...` | Permite a los tenants ver el estado de los módulos adicionales. |
-| `69_REVERT_tenant_module_view.md`| Licencia / Módulos | `[ACTIVO]` | Próximamente | Revierte la función de vista de estado de módulos. |
 | `70_FEATURE_downloadable_receipts.md`| SuperAdmin / Licencia |`[ACTIVO]` | `70_REVERT_...` | Implementa la lógica para recibos de pago con desglose de descuentos. |
-| `70_REVERT_downloadable_receipts.md`| SuperAdmin / Licencia |`[ACTIVO]` | Próximamente | Revierte la funcionalidad de recibos de pago con descuentos. |
 | `71_FIX_plan_limit_enforcement.md`| Core / Planes | `[ACTIVO]` | `71_REVERT_...` | Corrige la validación de límites de usuarios y sucursales según el plan. |
 | `72_FEATURE_sucursal_maps.md`| Sucursales / Catálogo Web |`[ACTIVO]` | `72_REVERT_...` | Implementa la gestión de ubicaciones con mapas para las sucursales. |
 | `73_FEATURE_stock_minimo_y_costo_inicial.md`| Inventarios / Productos |`[ACTIVO]` | Próximamente | Implementa la lógica para el stock mínimo y el costo inicial. |
 | `74_FEATURE_initial_product_setup.md`| Inventarios / Productos |`[ACTIVO]` | Próximamente | Implementa la lógica para la Configuración Inicial de Productos. |
+| `75_FEATURE_pagos_multiples.md`| Ventas (POS) |`[ACTIVO]` | Próximamente | Implementa el sistema de pagos múltiples en el checkout. |
+| `76_FEATURE_gestion_vencimientos.md`| Ventas (Dashboard) |`[ACTIVO]` | Próximamente | Implementa el sistema de gestión y visualización de vencimientos. |
+| `77_FEATURE_notificaciones_vencimiento.md`| Ventas / Notificaciones |`[ACTIVO]` | Próximamente | Implementa las notificaciones proactivas para ventas vencidas. |
+| `78_HOTFIX_get_sale_details.md`| Ventas (Detalle) |`[ACTIVO]` | Próximamente | Corrige un error de sintaxis en la función `get_sale_details`. |
+| `79_FIX_pos_stock_minimo.md`| Ventas (POS) |`[ACTIVO]` | Próximamente | Añade el `stock_minimo` a los datos del POS para una correcta visualización. |
+| `80_HOTFIX_pos_data_structure.md`| Ventas (POS) |`[ACTIVO]` | `80_REVERT_...` | Corrige un error crítico en el POS eliminando la redundancia de datos de clientes. |
+| `81_FEATURE_proformas.md`| Ventas (Proformas) |`[ACTIVO]` | `81_REVERT_...` | Implementa el módulo de Proformas (Cotizaciones). |
+| `82_FEATURE_proformas_filtros.md`| Ventas (Proformas) |`[ACTIVO]` | Próximamente | Añade los filtros avanzados al historial de proformas. |
+| `83_FIX_proforma_details_data.md`| Ventas (Proformas) |`[ACTIVO]` | Próximamente | Añade datos de cliente y sucursal a la vista de detalle de la proforma. |
+| `84_FEATURE_proforma_stock_check_v2.md`| Ventas (Proformas) |`[ACTIVO]` | `84_REVERT_...` | Mejora la verificación de stock para mostrar disponibilidad en otras sucursales y permitir solicitudes de traspaso. |
+| `85_FEATURE_proforma_intelligent_logistics.md`| Ventas (Proformas) |`[ACTIVO]` | `85_REVERT_...` | Implementa el flujo de logística inteligente para solicitudes de traspaso. |

@@ -48,6 +48,12 @@ Mi respuesta final siempre seguirá el formato establecido:
 -   **[✓] Preparar el XML:** Generaré el bloque `<changes>` conteniendo **únicamente** los archivos que han sido modificados.
 -   **[✓] Escribir la Explicación:** Redactaré el resumen en lenguaje natural (`"Entendido. He [acción]..."`) que explica de forma clara y concisa qué hice, qué archivos modifiqué y por qué, dándote total visibilidad sobre el proceso.
 
+#### 4.1. Red de Seguridad: Scripts de Reversión (Rollback)
+
+-   **[✓] Crear Script de Reversión:** Para cada script que modifique la lógica de la base de datos (funciones, políticas, etc.), crearé un script `[XX]_REVERT_...` complementario.
+-   **[✓] Funcionalidad del Revert:** Este script contendrá el código necesario para devolver la base de datos al estado **exactamente anterior** a la aplicación del cambio, proporcionándote una forma inmediata y segura de "deshacer" la actualización si algo no funciona como esperas.
+-   **[✓] Actualizar el Changelog:** Registraré tanto el script de cambio como su correspondiente script de reversión en el `docs/sql_scripts/README.md`, manteniendo un historial claro y auditable de todas las modificaciones del backend.
+
 ---
 
 Este proceso es mi "contrato de calidad" contigo. Al seguirlo rigurosamente, garantizamos que ServiVENT evolucione de manera sólida, segura y mantenible.

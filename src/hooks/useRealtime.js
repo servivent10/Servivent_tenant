@@ -62,7 +62,7 @@ export function RealtimeProvider({ children }) {
                 'compras', 'compra_items', 'clientes', 'proveedores', 'gastos',
                 'pagos_ventas', 'pagos_compras', 'traspasos', 'sucursales', 'usuarios',
                 'notificaciones', 'sesiones_caja', 'empresas', 'historial_cambios',
-                'movimientos_inventario'
+                'movimientos_inventario', 'proformas', 'proforma_items'
             ];
 
             if (tablesToTriggerRefresh.includes(payload.table)) {

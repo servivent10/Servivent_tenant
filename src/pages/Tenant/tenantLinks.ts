@@ -21,14 +21,18 @@ export function getTenantSidebarLinks(role, companyInfo) {
     if (role === 'Propietario' || role === 'Administrador') {
         links.push(
             { name: 'Compras', href: '#/compras', icon: ICONS.purchases },
-            { name: 'Ventas', href: '#/ventas', icon: ICONS.sales }
+            { name: 'Ventas', href: '#/ventas', icon: ICONS.sales },
+            { name: 'Proformas', href: '#/proformas', icon: ICONS.edit_note }
         );
         // **DYNAMIC MODULE based on plan features**
         if (companyInfo?.planDetails?.features?.aperturar_cajas) {
             links.push({ name: 'Historial de Cajas', href: '#/historial-cajas', icon: ICONS.history_edu });
         }
     } else if (role === 'Empleado') {
-        links.push({ name: 'Ventas', href: '#/ventas', icon: ICONS.sales });
+        links.push(
+            { name: 'Ventas', href: '#/ventas', icon: ICONS.sales },
+            { name: 'Proformas', href: '#/proformas', icon: ICONS.edit_note }
+        );
     }
     
     // Add Sucursales link with dynamic name

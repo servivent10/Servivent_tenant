@@ -68,6 +68,9 @@ DECLARE
     v_total_gastos_count bigint;
     v_prev_total_sales numeric;
     v_prev_gross_profit numeric;
+    v_total_cotizado numeric;
+    v_proformas_count bigint;
+    v_proformas_convertidas_count bigint;
 BEGIN
     -- 1. Get caller info and determine effective branch filter
     SELECT u.empresa_id, u.rol, u.sucursal_id INTO caller_empresa_id, caller_rol, caller_sucursal_id
@@ -150,6 +153,13 @@ BEGIN
     INTO v_total_gastos, v_total_gastos_count
     FROM gastos WHERE empresa_id = caller_empresa_id AND fecha >= p_start_date AND fecha <= p_end_date
       AND (effective_sucursal_id IS NULL OR sucursal_id = effective_sucursal_id);
+      
+    -- Calculate proforma KPIs
+    SELECT COALESCE(SUM(total), 0), COALESCE(COUNT(*), 0), COALESCE(COUNT(*) FILTER (WHERE estado = 'Convertida'), 0)
+    INTO v_total_cotizado, v_proformas_count, v_proformas_convertidas_count
+    FROM proformas WHERE empresa_id = caller_empresa_id AND fecha_emision >= v_start_utc AND fecha_emision < v_end_utc
+        AND (effective_sucursal_id IS NULL OR sucursal_id = effective_sucursal_id);
+
 
     SELECT jsonb_build_object(
         'total_sales', v_total_sales,
@@ -162,7 +172,10 @@ BEGIN
         'total_purchases', v_total_purchases,
         'total_purchases_count', v_total_purchases_count,
         'total_gastos', v_total_gastos,
-        'total_gastos_count', v_total_gastos_count
+        'total_gastos_count', v_total_gastos_count,
+        'total_cotizado', v_total_cotizado,
+        'proformas_count', v_proformas_count,
+        'conversion_rate', CASE WHEN v_proformas_count > 0 THEN round((v_proformas_convertidas_count::numeric / v_proformas_count::numeric) * 100, 2) ELSE 0 END
     ) INTO kpis;
     
     -- 4. Get low stock products (unaffected)

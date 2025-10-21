@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import { html } from 'htm/preact';
-import { useState, useEffect, useMemo } from 'preact/hooks';
+import { useState, useEffect, useMemo, useCallback } from 'preact/hooks';
 import { DashboardLayout } from '../../components/DashboardLayout.js';
 import { ICONS } from '../../components/Icons.js';
 import { FormInput } from '../../components/FormComponents.js';
@@ -28,19 +28,73 @@ export function NuevoTraspasoPage({ user, onLogout, onProfileUpdate, companyInfo
         notas: '',
         items: []
     });
+    
+    const [isPreloading, setIsPreloading] = useState(true);
+
+    const loadDataFromRequest = useCallback(async (requestId) => {
+        startLoading();
+        setIsPreloading(true);
+        try {
+            const { data, error } = await supabase.rpc('get_solicitud_traspaso_details', { p_solicitud_id: requestId });
+            if (error) throw error;
+            
+            if (data) {
+                setFormData({
+                    sucursal_origen_id: data.sucursal_origen_id,
+                    sucursal_destino_id: data.sucursal_destino_id,
+                    fecha: new Date().toISOString(),
+                    notas: `Traspaso generado a partir de la solicitud para la proforma ${data.proforma_folio}.`,
+                    items: data.items.map(item => ({
+                        producto_id: item.producto_id,
+                        nombre: item.producto_nombre,
+                        modelo: item.producto_modelo,
+                        imagen_principal: item.producto_imagen,
+                        stock_origen: item.stock_origen,
+                        cantidad: item.cantidad_solicitada > item.stock_origen ? item.stock_origen : item.cantidad_solicitada,
+                    }))
+                });
+                
+                if (data.items.some(item => item.cantidad_solicitada > item.stock_origen)) {
+                    addToast({ message: 'Advertencia: El stock de algunos productos es insuficiente para cubrir la solicitud. Las cantidades se han ajustado al máximo disponible.', type: 'warning', duration: 10000 });
+                }
+                
+                setStep(2); // Automatically advance to step 2
+            }
+        } catch (err) {
+            addToast({ message: `Error al cargar la solicitud: ${err.message}`, type: 'error' });
+            navigate('/traspasos');
+        } finally {
+            stopLoading();
+            setIsPreloading(false);
+        }
+    }, [startLoading, stopLoading, addToast, navigate]);
 
     useEffect(() => {
+        const hash = window.location.hash;
+        const queryParams = new URLSearchParams(hash.split('?')[1]);
+        const requestId = queryParams.get('solicitud');
+        
         const fetchInitialData = async () => {
+            startLoading();
             try {
                 const { data, error } = await supabase.rpc('get_data_for_new_traspaso');
                 if (error) throw error;
                 setBranches(data.sucursales);
+                if (requestId) {
+                    await loadDataFromRequest(requestId);
+                } else {
+                    setIsPreloading(false);
+                }
             } catch (err) {
-                addToast({ message: `Error al cargar sucursales: ${err.message}`, type: 'error' });
+                addToast({ message: `Error al cargar datos: ${err.message}`, type: 'error' });
+                setIsPreloading(false);
+            } finally {
+                stopLoading();
             }
         };
+
         fetchInitialData();
-    }, []);
+    }, [loadDataFromRequest]);
 
     useEffect(() => {
         const fetchProducts = async () => {
@@ -175,13 +229,36 @@ export function NuevoTraspasoPage({ user, onLogout, onProfileUpdate, companyInfo
     
     const breadcrumbs = [ { name: 'Traspasos', href: '#/traspasos' }, { name: 'Nuevo Traspaso', href: '#/traspasos/nuevo' } ];
 
+    if (isPreloading) {
+        return html`<${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink="Traspasos" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo} />`;
+    }
+
     return html`
         <${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink="Traspasos" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo}>
-            <div class="flex items-center gap-4 mb-6">
-                <button onClick=${() => navigate('/traspasos')} class="p-2 rounded-full hover:bg-gray-100" aria-label="Volver">
-                    ${ICONS.arrow_back}
-                </button>
-                <h1 class="text-2xl font-semibold text-gray-900">Nuevo Traspaso de Inventario</h1>
+            <div class="flex justify-between items-center gap-4 mb-6">
+                <div class="flex items-center gap-4">
+                    <button onClick=${() => navigate('/traspasos')} class="p-2 rounded-full hover:bg-gray-100" aria-label="Volver">
+                        ${ICONS.arrow_back}
+                    </button>
+                    <h1 class="text-2xl font-semibold text-gray-900">Nuevo Traspaso de Inventario</h1>
+                </div>
+                <div class="flex items-center gap-2">
+                     <button 
+                        type="button"
+                        onClick=${step === 1 ? () => navigate('/traspasos') : handleBack} 
+                        class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                    >
+                        ${step === 1 ? 'Cancelar' : 'Volver'}
+                    </button>
+                    <button 
+                        type="button"
+                        onClick=${step === 3 ? handleConfirmSave : handleNext}
+                        disabled=${isLoading}
+                        class="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400 min-w-[120px] flex justify-center"
+                    >
+                        ${isLoading ? html`<${Spinner}/>` : (step === 3 ? 'Confirmar y Guardar' : 'Siguiente')}
+                    </button>
+                </div>
             </div>
 
             <div class="bg-white p-6 sm:p-8 rounded-xl shadow-sm border">
@@ -206,15 +283,16 @@ export function NuevoTraspasoPage({ user, onLogout, onProfileUpdate, companyInfo
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label for="sucursal_origen_id" class="block text-sm font-medium text-gray-900">Enviar Desde (Origen)</label>
-                                    <select id="sucursal_origen_id" name="sucursal_origen_id" value=${formData.sucursal_origen_id} onInput=${handleInput} disabled class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-gray-100 text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
-                                        ${branches.filter(b => b.id === user.sucursal_id).map(b => html`<option value=${b.id}>${b.nombre} (Tu Sucursal)</option>`)}
+                                    <select id="sucursal_origen_id" name="sucursal_origen_id" value=${formData.sucursal_origen_id} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
+                                        <option value="">-- Selecciona Origen --</option>
+                                        ${branches.map(b => html`<option value=${b.id}>${b.nombre}</option>`)}
                                     </select>
                                 </div>
                                 <div>
                                     <label for="sucursal_destino_id" class="block text-sm font-medium text-gray-900">Enviar A (Destino)</label>
                                     <select id="sucursal_destino_id" name="sucursal_destino_id" value=${formData.sucursal_destino_id} onInput=${handleInput} class="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base bg-white text-gray-900 focus:outline-none focus:border-[#0d6efd] focus:ring-4 focus:ring-[#0d6efd]/25 sm:text-sm">
                                         <option value="">-- Selecciona Destino --</option>
-                                        ${branches.filter(b => b.id !== user.sucursal_id).map(b => html`<option value=${b.id}>${b.nombre}</option>`)}
+                                        ${branches.filter(b => b.id !== formData.sucursal_origen_id).map(b => html`<option value=${b.id}>${b.nombre}</option>`)}
                                     </select>
                                 </div>
                             </div>
@@ -292,15 +370,6 @@ export function NuevoTraspasoPage({ user, onLogout, onProfileUpdate, companyInfo
                         </div>
                     `}
                 </div>
-            </div>
-
-             <div class="mt-6 flex justify-between items-center w-full">
-                <button type="button" onClick=${step === 1 ? () => navigate('/traspasos') : handleBack} class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
-                    ${step === 1 ? 'Cancelar' : 'Volver'}
-                </button>
-                <button type="button" onClick=${step === 3 ? handleConfirmSave : handleNext} disabled=${isLoading} class="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400 min-w-[120px] flex justify-center">
-                    ${isLoading ? html`<${Spinner}/>` : (step === 3 ? 'Confirmar y Guardar' : 'Siguiente')}
-                </button>
             </div>
         <//>
     `;

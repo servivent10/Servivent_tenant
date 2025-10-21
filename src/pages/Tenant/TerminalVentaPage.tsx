@@ -22,6 +22,7 @@ import { AperturaCajaModal } from '../../components/modals/AperturaCajaModal.js'
 import { CierreCajaModal } from '../../components/modals/CierreCajaModal.js';
 import { Spinner } from '../../components/Spinner.js';
 import { useTerminalVenta } from '../../contexts/StatePersistence.js';
+import { StockStatusPill } from '../../components/StockStatusPill.js';
 
 const ClienteSelector = ({ clients, selectedClientId, onSelect, onAddNew }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -319,22 +320,6 @@ const ProductDetailModal = ({ isOpen, onClose, product, currentUserSucursal }) =
     `;
 };
 
-const StockPill = ({ stock }) => {
-    let pillClass, text;
-    if (stock > 10) {
-        pillClass = 'bg-green-100 text-green-800';
-        text = 'En Stock';
-    } else if (stock > 0) {
-        pillClass = 'bg-yellow-100 text-yellow-800';
-        text = 'Bajo Stock';
-    } else {
-        pillClass = 'bg-red-100 text-red-800';
-        text = 'Agotado';
-    }
-    return html`<span class="${pillClass} inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium">${text} (${stock})</span>`;
-};
-
-
 const ProductCard = ({ product, onAction, defaultPrice, quantityInCart, onShowDetails, formatCurrency }) => {
     const hasStock = product.stock_sucursal > 0;
     const hasPrice = defaultPrice > 0;
@@ -369,7 +354,7 @@ const ProductCard = ({ product, onAction, defaultPrice, quantityInCart, onShowDe
                 </div>
             </button>
             <div class="flex items-center justify-between px-2 pb-1 text-xs text-gray-500">
-                <${StockPill} stock=${product.stock_sucursal} />
+                <${StockStatusPill} stock=${product.stock_sucursal} minStock=${product.stock_minimo_sucursal || 0} />
                 <button onClick=${(e) => { e.stopPropagation(); onShowDetails(product); }} title="Ver detalles del producto" class="p-1 rounded-full hover:bg-gray-100 text-gray-400">
                     ${ICONS.info}
                 </button>
@@ -478,28 +463,18 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
     `;
 };
 
-function CartPanel({ companyInfo, posData, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, onDiscountChange, onFinalizeSale, onOpenPricePopover, isPriceRuleActive, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user,
-    cart, customPrices, selectedClientId, setSelectedClientId, activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue, canUseCashRegister
-}) {
+function CartPanel({ companyInfo, posData, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, onDiscountChange, onFinalizeSale, onOpenPricePopover, isPriceRuleActive, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user, cart, customPrices, selectedClientId, setSelectedClientId, activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue, canUseCashRegister }) {
     const activePriceListName = useMemo(() => {
         return posData.price_lists.find(pl => pl.id === activePriceListId)?.nombre || '';
     }, [activePriceListId, posData.price_lists]);
 
     const canCloseCaja = user.role !== 'Empleado' || currentModoCaja === 'por_usuario';
-    
     const { listas_precios, catalogo_web } = companyInfo.planDetails.features;
 
     const availablePriceLists = useMemo(() => {
-        if (listas_precios) {
-            return posData.price_lists; // Funcionalidad completa
-        }
-        if (!listas_precios && catalogo_web) {
-            return posData.price_lists.filter(
-                pl => pl.es_predeterminada || pl.nombre === 'Ofertas Web'
-            ); // Funcionalidad limitada
-        }
-        // !listas_precios && !catalogo_web
-        return posData.price_lists.filter(pl => pl.es_predeterminada); // Funcionalidad básica
+        if (listas_precios) return posData.price_lists;
+        if (!listas_precios && catalogo_web) return posData.price_lists.filter(pl => pl.es_predeterminada || pl.nombre === 'Ofertas Web');
+        return posData.price_lists.filter(pl => pl.es_predeterminada);
     }, [posData.price_lists, listas_precios, catalogo_web]);
 
     const isPriceListDisabled = !listas_precios && !catalogo_web;
@@ -631,7 +606,7 @@ function CartPanel({ companyInfo, posData, handleClearCart, getPriceForProduct, 
                     <span class="text-primary">${formatCurrency(totals.finalTotal)}</span>
                 </div>
             </div>
-            <button onClick=${onFinalizeSale} disabled=${cart.length === 0} class="w-full flex items-center justify-center gap-2 text-center rounded-lg bg-green-600 px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
+            <button onClick=${onFinalizeSale} disabled=${cart.length === 0} class="w-full flex items-center justify-center gap-2 text-center rounded-lg px-5 py-3 text-base font-semibold text-white shadow-sm bg-green-600 hover:bg-green-500 disabled:bg-gray-400 disabled:cursor-not-allowed">
                 ${ICONS.pos}
                 Finalizar Venta
             </button>
@@ -673,16 +648,16 @@ const posStatusOptions = [
 
 export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo, navigate }) {
     const breadcrumbs = [ { name: 'Punto de Venta', href: '#/terminal-venta' } ];
+    const activeLink = "Punto de Venta";
+
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
     
-    // State from Context
     const {
         cart, setCart, customPrices, setCustomPrices, selectedClientId, setSelectedClientId,
         activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue, setDiscountValue
     } = useTerminalVenta();
 
-    // Local UI State
     const [posData, setPosData] = useState({ products: [], price_lists: [], clients: [] });
     const [filters, setFilters] = useState(initialFilters);
     const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
@@ -760,14 +735,13 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
             const [posDataRes, optionsRes, clientsRes] = await Promise.all([
                 supabase.rpc('get_pos_data'),
                 supabase.rpc('get_inventory_filter_data'),
-                supabase.rpc('get_company_clients') // Added specific call for clients
+                supabase.rpc('get_company_clients')
             ]);
     
             if (posDataRes.error) throw posDataRes.error;
             if (optionsRes.error) throw optionsRes.error;
-            if (clientsRes.error) throw clientsRes.error; // Added error check for clients
+            if (clientsRes.error) throw clientsRes.error;
     
-            // Combine data, prioritizing the specific client fetch over the potentially failing one
             const combinedData = {
                 ...(posDataRes.data || { products: [], price_lists: [] }),
                 clients: clientsRes.data || []
@@ -1046,16 +1020,6 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         }
     };
     
-    if (canUseCashRegister) {
-        if (sessionState === 'checking') {
-            return html`<${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo} disablePadding=${true}><div class="h-full"></div><//>`;
-        }
-    
-        if (sessionState === 'closed') {
-            return html`<${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo} disablePadding=${true}><${AperturaCajaModal} onSessionOpen=${internalFetch} companyInfo=${companyInfo} user=${user} navigate=${navigate} modoCaja=${currentModoCaja} /><//>`;
-        }
-    }
-
     const cartPanelProps = {
         posData, companyInfo, handleClearCart, getPriceForProduct: getActivePriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals,
         onDiscountChange: handleDiscountChange, onFinalizeSale: () => setIsCheckoutModalOpen(true), onOpenPricePopover: handleOpenPricePopover,
@@ -1076,88 +1040,102 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         </div>
     `;
 
-    return html`
-        <${DashboardLayout} 
-            user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate}
-            activeLink="Punto de Venta" breadcrumbs=${breadcrumbs} companyInfo=${companyInfo}
-            disablePadding=${true}
-        >
-            <div class="h-full lg:grid lg:grid-cols-[1fr_450px] lg:gap-6 lg:p-6">
-                <div class="bg-white rounded-lg border shadow-sm h-full flex flex-col lg:h-auto overflow-hidden">
-                    <div class="flex-shrink-0 p-4 border-b space-y-4">
-                        <div class="hidden lg:flex gap-2">
-                            <div class="relative flex-grow">
-                                <${FormInput}
-                                    name="sku_input" type="text" label="" value=${skuInput} onInput=${e => setSkuInput(e.target.value)} onKeyDown=${handleSkuSubmit}
-                                    placeholder="Ingresar SKU y presionar Enter" required=${false} icon=${ICONS.search}
-                                />
-                            </div>
-                            <button onClick=${() => setIsScannerOpen(true)} class="flex-shrink-0 flex items-center justify-center p-2.5 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors" title="Escanear código de barras con la cámara">
-                                ${ICONS.qr_code_scanner}
-                            </button>
+    const pageContent = html`
+        <div class="h-full lg:grid lg:grid-cols-[1fr_450px] lg:gap-6 lg:p-6">
+            <div class="bg-white rounded-lg border shadow-sm h-full flex flex-col lg:h-auto overflow-hidden">
+                <div class="flex-shrink-0 p-4 border-b space-y-4">
+                    <div class="hidden lg:flex gap-2">
+                        <div class="relative flex-grow">
+                            <${FormInput}
+                                name="sku_input" type="text" label="" value=${skuInput} onInput=${e => setSkuInput(e.target.value)} onKeyDown=${handleSkuSubmit}
+                                placeholder="Ingresar SKU y presionar Enter" required=${false} icon=${ICONS.search}
+                            />
                         </div>
-                         <${FilterBar} 
-                            filters=${filters} onFilterChange=${handleFilterChange} onClear=${handleClearFilters}
-                            onToggleAdvanced=${() => setIsAdvancedSearchOpen(p => !p)} isAdvancedOpen=${isAdvancedSearchOpen}
-                            statusOptions=${posStatusOptions}
-                            rightActions=${mobileActions}
-                        />
-                        <${AdvancedFilterPanel} isOpen=${isAdvancedSearchOpen} filters=${filters} onFilterChange=${handleFilterChange} filterOptions=${filterOptions} />
+                        <button onClick=${() => setIsScannerOpen(true)} class="flex-shrink-0 flex items-center justify-center p-2.5 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors" title="Escanear código de barras con la cámara">
+                            ${ICONS.qr_code_scanner}
+                        </button>
                     </div>
+                        <${FilterBar} 
+                        filters=${filters} onFilterChange=${handleFilterChange} onClear=${handleClearFilters}
+                        onToggleAdvanced=${() => setIsAdvancedSearchOpen(p => !p)} isAdvancedOpen=${isAdvancedSearchOpen}
+                        statusOptions=${posStatusOptions}
+                        rightActions=${mobileActions}
+                    />
+                    <${AdvancedFilterPanel} isOpen=${isAdvancedSearchOpen} filters=${filters} onFilterChange=${handleFilterChange} filterOptions=${filterOptions} />
+                </div>
 
-                    <div class="p-4 flex-grow overflow-y-auto">
-                        ${quickAccessProducts.length > 0 && html`
-                            <div class="mb-6">
-                                <h3 class="text-sm font-semibold text-gray-600 mb-2">Acceso Rápido</h3>
-                                <div class="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
-                                    ${quickAccessProducts.map(p => html`
-                                        <${QuickAccessButton} product=${p} onClick=${() => handleProductAction(p, true)} formatCurrency=${formatCurrency}/>
-                                    `)}
-                                </div>
+                <div class="p-4 flex-grow overflow-y-auto">
+                    ${quickAccessProducts.length > 0 && html`
+                        <div class="mb-6">
+                            <h3 class="text-sm font-semibold text-gray-600 mb-2">Acceso Rápido</h3>
+                            <div class="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
+                                ${quickAccessProducts.map(p => html`
+                                    <${QuickAccessButton} product=${p} onClick=${() => handleProductAction(p, true)} formatCurrency=${formatCurrency}/>
+                                `)}
                             </div>
-                        `}
-                        <div class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));">
-                            ${filteredProducts.map(p => html`
-                                <${ProductCard} 
-                                    product=${p} onAction=${handleProductAction} onShowDetails=${handleShowDetails}
-                                    defaultPrice=${getDefaultPriceForProduct(p)} quantityInCart=${cartMap.get(p.id)?.quantity || 0}
-                                    formatCurrency=${formatCurrency}
-                                />
-                            `)}
                         </div>
-                    </div>
-                </div>
-                
-                <div class="hidden lg:block">
-                     <div class="sticky top-6">
-                        <div class="flex flex-col bg-white rounded-lg border shadow-sm max-h-[calc(100vh-7rem)]">
-                            <${CartPanel} ...${cartPanelProps} />
-                        </div>
-                    </div>
-                </div>
-                
-                <div class=${`fixed inset-0 z-40 flex justify-end lg:hidden transition-opacity duration-300 ${isCartSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} role="dialog" aria-modal="true">
-                    <div class="fixed inset-0 bg-black/60" aria-hidden="true" onClick=${() => setCartSidebarOpen(false)}></div>
-                    <div class=${`relative flex w-full max-w-md flex-1 flex-col bg-slate-50 transform transition duration-300 ${isCartSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-                       <div class="absolute top-0 left-0 -ml-12 pt-2">
-                            <button type="button" class="ml-1 flex h-10 w-10 items-center justify-center rounded-full text-white focus:outline-none" onClick=${() => setCartSidebarOpen(false)}>
-                                <span class="sr-only">Cerrar carrito</span>
-                                ${ICONS.close}
-                            </button>
-                        </div>
-                        <div class="flex flex-col h-full overflow-hidden">
-                            <${CartPanel} ...${cartPanelProps} />
-                        </div>
+                    `}
+                    <div class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));">
+                        ${filteredProducts.map(p => html`
+                            <${ProductCard} 
+                                product=${p} onAction=${handleProductAction} onShowDetails=${handleShowDetails}
+                                defaultPrice=${getDefaultPriceForProduct(p)} quantityInCart=${cartMap.get(p.id)?.quantity || 0}
+                                formatCurrency=${formatCurrency}
+                            />
+                        `)}
                     </div>
                 </div>
             </div>
             
-            ${pricePopover.isOpen && html`<${SetPricePopover} item=${pricePopover.item} targetElement=${pricePopover.target} onClose=${handleClosePricePopover} onApply=${handleApplyCustomPrice} getPriceInfo=${getPriceInfoForProduct} addToast=${addToast} formatCurrency=${formatCurrency} />`}
-            <${ClienteFormModal} isOpen=${isClienteFormOpen} onClose=${() => setIsClienteFormOpen(false)} onSave=${handleSaveCliente} clienteToEdit=${clienteToEdit} user=${user} />
-            <${ProductDetailModal} isOpen=${isDetailModalOpen} onClose=${() => setDetailModalOpen(false)} product=${productForDetailView} currentUserSucursal=${user.sucursal} />
-            <${CheckoutModal} isOpen=${isCheckoutModalOpen} onClose=${() => setIsCheckoutModalOpen(false)} onConfirm=${handleConfirmSale} total=${totals.finalTotal} clienteId=${selectedClientId} companyInfo=${companyInfo} />
-            <${CameraScanner} isOpen=${isScannerOpen} onClose=${() => setIsScannerOpen(false)} onScanSuccess=${handleScanSuccess} />
-            <${CierreCajaModal} isOpen=${isCierreModalOpen} onClose=${() => setIsCierreModalOpen(false)} onConfirm=${handleConfirmCierre} sessionSummary=${sessionSummary} companyInfo=${companyInfo} user=${user} modoCaja=${currentModoCaja} />
+            <div class="hidden lg:block">
+                    <div class="sticky top-6">
+                    <div class="flex flex-col bg-white rounded-lg border shadow-sm max-h-[calc(100vh-7rem)]">
+                        <${CartPanel} ...${cartPanelProps} />
+                    </div>
+                </div>
+            </div>
+            
+            <div class=${`fixed inset-0 z-40 flex justify-end lg:hidden transition-opacity duration-300 ${isCartSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} role="dialog" aria-modal="true">
+                <div class="fixed inset-0 bg-black/60" aria-hidden="true" onClick=${() => setCartSidebarOpen(false)}></div>
+                <div class=${`relative flex w-full max-w-md flex-1 flex-col bg-slate-50 transform transition duration-300 ${isCartSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                    <div class="absolute top-0 left-0 -ml-12 pt-2">
+                        <button type="button" class="ml-1 flex h-10 w-10 items-center justify-center rounded-full text-white focus:outline-none" onClick=${() => setCartSidebarOpen(false)}>
+                            <span class="sr-only">Cerrar carrito</span>
+                            ${ICONS.close}
+                        </button>
+                    </div>
+                    <div class="flex flex-col h-full overflow-hidden">
+                        <${CartPanel} ...${cartPanelProps} />
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        ${pricePopover.isOpen && html`<${SetPricePopover} item=${pricePopover.item} targetElement=${pricePopover.target} onClose=${handleClosePricePopover} onApply=${handleApplyCustomPrice} getPriceInfo=${getPriceInfoForProduct} addToast=${addToast} formatCurrency=${formatCurrency} />`}
+        <${ClienteFormModal} isOpen=${isClienteFormOpen} onClose=${() => setIsClienteFormOpen(false)} onSave=${handleSaveCliente} clienteToEdit=${clienteToEdit} user=${user} />
+        <${ProductDetailModal} isOpen=${isDetailModalOpen} onClose=${() => setDetailModalOpen(false)} product=${productForDetailView} currentUserSucursal=${user.sucursal} />
+        <${CheckoutModal} isOpen=${isCheckoutModalOpen} onClose=${() => setIsCheckoutModalOpen(false)} onConfirm=${handleConfirmSale} total=${totals.finalTotal} clienteId=${selectedClientId} companyInfo=${companyInfo} />
+        <${CameraScanner} isOpen=${isScannerOpen} onClose=${() => setIsScannerOpen(false)} onScanSuccess=${handleScanSuccess} />
+        <${CierreCajaModal} isOpen=${isCierreModalOpen} onClose=${() => setIsCierreModalOpen(false)} onConfirm=${handleConfirmCierre} sessionSummary=${sessionSummary} companyInfo=${companyInfo} user=${user} modoCaja=${currentModoCaja} />
+    `;
+
+    if (canUseCashRegister) {
+        if (sessionState === 'checking') {
+            return html`<${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink=${activeLink} breadcrumbs=${breadcrumbs} companyInfo=${companyInfo} disablePadding=${true}><div class="h-full"></div><//>`;
+        }
+    
+        if (sessionState === 'closed') {
+            return html`<${DashboardLayout} user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate} activeLink=${activeLink} breadcrumbs=${breadcrumbs} companyInfo=${companyInfo} disablePadding=${true}><${AperturaCajaModal} onSessionOpen=${internalFetch} companyInfo=${companyInfo} user=${user} navigate=${navigate} modoCaja=${currentModoCaja} /><//>`;
+        }
+    }
+    
+    return html`
+        <${DashboardLayout} 
+            user=${user} onLogout=${onLogout} onProfileUpdate=${onProfileUpdate}
+            activeLink=${activeLink} breadcrumbs=${breadcrumbs} companyInfo=${companyInfo}
+            disablePadding=${true}
+        >
+            ${pageContent}
         <//>
     `;
 }

@@ -34,6 +34,7 @@ interface TerminalVentaContextValue {
     setTaxRate: StateUpdater<string>;
     discountValue: string;
     setDiscountValue: StateUpdater<string>;
+    loadCartFromProforma: (proforma: any, allProducts: any[]) => void;
 }
 
 interface NuevaCompraFormData {
@@ -55,6 +56,23 @@ interface NuevaCompraContextValue {
     formData: NuevaCompraFormData;
     setFormData: StateUpdater<NuevaCompraFormData>;
 }
+
+interface NuevaProformaContextValue {
+    cart: CartItem[];
+    setCart: StateUpdater<CartItem[]>;
+    customPrices: { [key: string]: { newPrice: number } };
+    setCustomPrices: StateUpdater<{ [key: string]: { newPrice: number } }>;
+    selectedClientId: string | null;
+    setSelectedClientId: StateUpdater<string | null>;
+    activePriceListId: string | null;
+    setActivePriceListId: StateUpdater<string | null>;
+    taxRate: string;
+    setTaxRate: StateUpdater<string>;
+    discountValue: string;
+    setDiscountValue: StateUpdater<string>;
+    clearProformaCart: () => void;
+}
+
 
 interface ProductFormDraft {
     formData: {
@@ -126,13 +144,43 @@ export function TerminalVentaProvider({ children }) {
     const [taxRate, setTaxRate] = useState('');
     const [discountValue, setDiscountValue] = useState('');
 
+    const loadCartFromProforma = useCallback((proforma, allProducts) => {
+        if (!proforma || !proforma.items) return;
+
+        setSelectedClientId(proforma.cliente_id);
+
+        const newCart = proforma.items.map(item => {
+            const fullProduct = allProducts.find(p => p.id === item.producto_id);
+            return {
+                product: fullProduct,
+                quantity: item.cantidad
+            };
+        }).filter(item => item.product); // Filter out any items where the product might no longer exist
+
+        setCart(newCart);
+        
+        const customPricesData = {};
+        proforma.items.forEach(item => {
+            customPricesData[item.producto_id] = { newPrice: item.precio_unitario_aplicado };
+        });
+        setCustomPrices(customPricesData);
+        
+        const taxPercentage = (proforma.impuestos / (proforma.subtotal - proforma.descuento)) * 100;
+        setDiscountValue(String(proforma.descuento || ''));
+        setTaxRate(isNaN(taxPercentage) ? '' : taxPercentage.toFixed(2));
+        
+        // Reset active price list to default when loading a proforma to ensure consistent pricing
+        setActivePriceListId(null); 
+    }, []);
+
     const value: TerminalVentaContextValue = {
         cart, setCart,
         customPrices, setCustomPrices,
         selectedClientId, setSelectedClientId,
         activePriceListId, setActivePriceListId,
         taxRate, setTaxRate,
-        discountValue, setDiscountValue
+        discountValue, setDiscountValue,
+        loadCartFromProforma
     };
 
     return html`<${TerminalVentaContext.Provider} value=${value}>${children}<//>`;
@@ -174,6 +222,47 @@ export function NuevaCompraProvider({ children }) {
 
     return html`<${NuevaCompraContext.Provider} value=${value}>${children}<//>`;
 }
+
+// --- NuevaProforma Context ---
+const NuevaProformaContext = createContext<NuevaProformaContextValue | null>(null);
+export const useNuevaProforma = () => {
+    const context = useContext(NuevaProformaContext);
+    if (!context) {
+        throw new Error('useNuevaProforma must be used within a NuevaProformaProvider');
+    }
+    return context;
+};
+
+export function NuevaProformaProvider({ children }) {
+    const [cart, setCart] = useState<CartItem[]>([]);
+    const [customPrices, setCustomPrices] = useState<{ [key: string]: { newPrice: number } }>({});
+    const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+    const [activePriceListId, setActivePriceListId] = useState<string | null>(null);
+    const [taxRate, setTaxRate] = useState('');
+    const [discountValue, setDiscountValue] = useState('');
+
+    const clearProformaCart = useCallback(() => {
+        setCart([]);
+        setCustomPrices({});
+        setSelectedClientId(null);
+        setActivePriceListId(null);
+        setTaxRate('');
+        setDiscountValue('');
+    }, []);
+
+    const value: NuevaProformaContextValue = {
+        cart, setCart,
+        customPrices, setCustomPrices,
+        selectedClientId, setSelectedClientId,
+        activePriceListId, setActivePriceListId,
+        taxRate, setTaxRate,
+        discountValue, setDiscountValue,
+        clearProformaCart
+    };
+
+    return html`<${NuevaProformaContext.Provider} value=${value}>${children}<//>`;
+}
+
 
 // --- ProductForm Context ---
 const ProductFormContext = createContext<ProductFormContextValue | null>(null);

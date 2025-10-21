@@ -175,6 +175,10 @@ function PriceListsTab() {
             addToast({ message: 'La lista de precios general no se puede eliminar.', type: 'warning' });
             return;
         }
+        if (list.nombre === 'Ofertas Web') {
+            addToast({ message: 'La lista de precios "Ofertas Web" no se puede eliminar.', type: 'warning' });
+            return;
+        }
         setListToDelete(list);
         setIsDeleteModalOpen(true);
     };
@@ -233,7 +237,8 @@ function PriceListsTab() {
                             </thead>
                             <tbody class="divide-y divide-gray-200 bg-white">
                                 ${priceLists.map((list, index) => {
-                                    const isDraggable = !list.es_predeterminada;
+                                    const isSpecialList = list.es_predeterminada || list.nombre === 'Ofertas Web';
+                                    const isDraggable = !isSpecialList;
                                     const isBeingDragged = draggedItemIndex === index;
                                     const isDragOver = dragOverIndex === index;
 
@@ -258,8 +263,8 @@ function PriceListsTab() {
                                         <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${list.descripcion}</td>
                                         <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
                                             <div class="flex justify-end gap-2">
-                                                <button onClick=${() => handleEdit(list)} class="text-gray-400 hover:text-primary p-1 rounded-full hover:bg-gray-100">${ICONS.edit}</button>
-                                                <button onClick=${() => handleDelete(list)} disabled=${list.es_predeterminada} class="text-gray-400 p-1 rounded-full ${list.es_predeterminada ? 'opacity-50 cursor-not-allowed' : 'hover:text-red-600 hover:bg-gray-100'}">${ICONS.delete}</button>
+                                                <button onClick=${() => handleEdit(list)} disabled=${isSpecialList} title=${isSpecialList ? 'Esta lista es parte del sistema y no se puede editar.' : 'Editar'} class="text-gray-400 p-1 rounded-full ${isSpecialList ? 'opacity-50 cursor-not-allowed' : 'hover:text-primary hover:bg-gray-100'}">${ICONS.edit}</button>
+                                                <button onClick=${() => handleDelete(list)} disabled=${isSpecialList} title=${isSpecialList ? 'Esta lista es parte del sistema y no se puede eliminar.' : 'Eliminar'} class="text-gray-400 p-1 rounded-full ${isSpecialList ? 'opacity-50 cursor-not-allowed' : 'hover:text-red-600 hover:bg-gray-100'}">${ICONS.delete}</button>
                                             </div>
                                         </td>
                                     </tr>
@@ -755,11 +760,11 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                                                 ${slugStatus === 'available' && html`<div class="text-green-500">${ICONS.success}</div>`}
                                                 ${slugStatus === 'unavailable' && html`<div class="text-red-500">${ICONS.error}</div>`}
                                                 ${slugStatus === 'error' && html`<div class="text-red-500">${ICONS.error}</div>`}
-                                                <span class=${`
-                                                    ${slugStatus === 'available' ? 'text-green-600' : ''}
-                                                    ${slugStatus === 'unavailable' ? 'text-red-600' : ''}
-                                                    ${slugStatus === 'error' ? 'text-red-600' : ''}
-                                                `}>${slugMessage}</span>
+                                                {/* FIX: Refactored class attribute to avoid potential parsing issue with multi-line template literals. */}
+                                                <span class=${
+                                                    slugStatus === 'available' ? 'text-green-600' :
+                                                    (slugStatus === 'unavailable' || slugStatus === 'error') ? 'text-red-600' : ''
+                                                }>${slugMessage}</span>
                                             </div>
                                         `}
                                     </div>

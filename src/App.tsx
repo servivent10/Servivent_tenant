@@ -34,6 +34,9 @@ import { TraspasosPage } from './pages/Tenant/TraspasosPage.js';
 import { NuevoTraspasoPage } from './pages/Tenant/NuevoTraspasoPage.js';
 import { TraspasoDetailPage } from './pages/Tenant/TraspasoDetailPage.js';
 import { GastosPage } from './pages/Tenant/GastosPage.js';
+import { ProformasPage } from './pages/Tenant/ProformasPage.js';
+import { NuevaProformaPage } from './pages/Tenant/NuevaProformaPage.js';
+import { ProformaDetailPage } from './pages/Tenant/ProformaDetailPage.js';
 import { LicenciaPage } from './pages/Tenant/LicenciaPage.js';
 import { ConfiguracionPage } from './pages/Tenant/ConfiguracionPage.js';
 import { NotificacionesPage } from './pages/Tenant/NotificacionesPage.js';
@@ -45,39 +48,45 @@ import { ToastProvider, useToast } from './hooks/useToast.js';
 import { LoadingProvider } from './hooks/useLoading.js';
 import { RealtimeProvider } from './hooks/useRealtime.js';
 import { CatalogApp } from './pages/Public/CatalogApp.js';
-import { TerminalVentaProvider, NuevaCompraProvider, ProductFormProvider, CatalogCartProvider, InitialSetupProvider } from './contexts/StatePersistence.js';
+import { TerminalVentaProvider, NuevaCompraProvider, ProductFormProvider, CatalogCartProvider, InitialSetupProvider, NuevaProformaProvider } from './contexts/StatePersistence.js';
 
 function TenantRoutes({ currentPath, navigate, ...commonProps }) {
-    const sucursalDetailsMatch = currentPath.match(/^\/sucursales\/(.+)$/);
-    const productoDetailsMatch = currentPath.match(/^\/productos\/(.+)$/);
-    const compraDetailsMatch = currentPath.match(/^\/compras\/(.+)$/);
-    const ventaDetailsMatch = currentPath.match(/^\/ventas\/(.+)$/);
-    const traspasoDetailsMatch = currentPath.match(/^\/traspasos\/(.+)$/);
+    const pathOnly = currentPath.split('?')[0];
+
+    const sucursalDetailsMatch = pathOnly.match(/^\/sucursales\/(.+)$/);
+    const productoDetailsMatch = pathOnly.match(/^\/productos\/(.+)$/);
+    const compraDetailsMatch = pathOnly.match(/^\/compras\/(.+)$/);
+    const ventaDetailsMatch = pathOnly.match(/^\/ventas\/(.+)$/);
+    const traspasoDetailsMatch = pathOnly.match(/^\/traspasos\/(.+)$/);
+    const proformaDetailsMatch = pathOnly.match(/^\/proformas\/(.+)$/);
     
-    if (currentPath === '/dashboard') return html`<${DashboardPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/terminal-venta') return html`<${TerminalVentaPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/productos') return html`<${ProductosPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/dashboard') return html`<${DashboardPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/terminal-venta') return html`<${TerminalVentaPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/productos') return html`<${ProductosPage} ...${commonProps} navigate=${navigate} />`;
     if (productoDetailsMatch) return html`<${ProductoDetailPage} productoId=${productoDetailsMatch[1]} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/inventarios') return html`<${InventariosPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/historial-inventario') return html`<${HistorialInventarioPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/compras') return html`<${ComprasPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/compras/nueva') return html`<${NuevaCompraPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/inventarios') return html`<${InventariosPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/historial-inventario') return html`<${HistorialInventarioPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/compras') return html`<${ComprasPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/compras/nueva') return html`<${NuevaCompraPage} ...${commonProps} navigate=${navigate} />`;
     if (compraDetailsMatch) return html`<${CompraDetailPage} compraId=${compraDetailsMatch[1]} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/ventas') return html`<${VentasPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/ventas') return html`<${VentasPage} ...${commonProps} navigate=${navigate} />`;
     if (ventaDetailsMatch) return html`<${VentaDetailPage} ventaId=${ventaDetailsMatch[1]} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/historial-cajas') return html`<${HistorialCajasPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/sucursales') return html`<${SucursalesListPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/historial-cajas') return html`<${HistorialCajasPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/sucursales') return html`<${SucursalesListPage} ...${commonProps} navigate=${navigate} />`;
     if (sucursalDetailsMatch) return html`<${SucursalDetailPage} sucursalId=${sucursalDetailsMatch[1]} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/proveedores') return html`<${ProveedoresPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/clientes') return html`<${ClientesPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/traspasos') return html`<${TraspasosPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/traspasos/nuevo') return html`<${NuevoTraspasoPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/proveedores') return html`<${ProveedoresPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/clientes') return html`<${ClientesPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/traspasos') return html`<${TraspasosPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/traspasos/nuevo') return html`<${NuevoTraspasoPage} ...${commonProps} navigate=${navigate} />`;
     if (traspasoDetailsMatch) return html`<${TraspasoDetailPage} traspasoId=${traspasoDetailsMatch[1]} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/gastos') return html`<${GastosPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/auditoria') return html`<${AuditoriaPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/licencia') return html`<${LicenciaPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/configuracion') return html`<${ConfiguracionPage} ...${commonProps} navigate=${navigate} />`;
-    if (currentPath === '/notificaciones') return html`<${NotificacionesPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/gastos') return html`<${GastosPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/proformas') return html`<${ProformasPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/proformas/nueva') return html`<${NuevaProformaPage} ...${commonProps} navigate=${navigate} />`;
+    if (proformaDetailsMatch) return html`<${ProformaDetailPage} proformaId=${proformaDetailsMatch[1]} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/auditoria') return html`<${AuditoriaPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/licencia') return html`<${LicenciaPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/configuracion') return html`<${ConfiguracionPage} ...${commonProps} navigate=${navigate} />`;
+    if (pathOnly === '/notificaciones') return html`<${NotificacionesPage} ...${commonProps} navigate=${navigate} />`;
 
     navigate('/dashboard');
     return html`<${DashboardPage} ...${commonProps} navigate=${navigate} />`;
@@ -358,10 +367,12 @@ export function App() {
                 <${RealtimeProvider}>
                     <${TerminalVentaProvider}>
                         <${NuevaCompraProvider}>
-                            <${ProductFormProvider}>
-                                <${CatalogCartProvider}>
-                                    <${InitialSetupProvider}>
-                                        <${AppContent} />
+                            <${NuevaProformaProvider}>
+                                <${ProductFormProvider}>
+                                    <${CatalogCartProvider}>
+                                        <${InitialSetupProvider}>
+                                            <${AppContent} />
+                                        <//>
                                     <//>
                                 <//>
                             <//>

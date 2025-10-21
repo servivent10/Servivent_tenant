@@ -29,6 +29,7 @@ const NOTIFICATION_EVENT_ICONS = {
     'NUEVO_PEDIDO_ENVIO': ICONS.suppliers,
     'VENTA_PROXIMA_A_VENCER': ICONS.calendar_month,
     'VENTA_VENCIDA': ICONS.error,
+    'SOLICITUD_TRASPASO': ICONS.transfers,
     DEFAULT: ICONS.bolt,
 };
 
@@ -47,6 +48,8 @@ const getNotificationLink = (notification) => {
         case 'TRASPASO_ENVIADO':
         case 'TRASPASO_RECIBIDO':
             return entidad_id ? `#/traspasos/${entidad_id}` : null;
+        case 'SOLICITUD_TRASPASO':
+            return entidad_id ? `#/traspasos/nuevo?solicitud=${entidad_id}` : null;
         case 'NUEVO_PRODUCTO':
             return entidad_id ? `#/productos/${entidad_id}` : null;
         case 'NUEVO_CLIENTE':
