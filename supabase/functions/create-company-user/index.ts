@@ -20,9 +20,12 @@ interface UserPayload {
   sucursal_nombre?: string;
   sucursal_direccion?: string;
   sucursal_telefono?: string;
-  plan_tipo?: string; // This is now a descriptive string like "Profesional (Mensual)"
+  sucursal_latitud?: number;
+  sucursal_longitud?: number;
+  plan_tipo?: string;
   timezone?: string;
   moneda?: string;
+  selected_modules?: string[];
 }
 
 Deno.serve(async (req) => {
@@ -35,8 +38,9 @@ Deno.serve(async (req) => {
     const {
         nombre_completo, correo, password, rol, sucursal_id,
         empresa_nombre, empresa_nit,
-        sucursal_nombre, sucursal_direccion, sucursal_telefono, plan_tipo,
-        timezone, moneda
+        sucursal_nombre, sucursal_direccion, sucursal_telefono,
+        sucursal_latitud, sucursal_longitud,
+        plan_tipo, timezone, moneda, selected_modules
     } = payload;
     
     if (!nombre_completo || !correo || !password || !rol) {
@@ -67,7 +71,6 @@ Deno.serve(async (req) => {
         throw new Error(`El NIT "${empresa_nit}" ya ha sido registrado por otra empresa.`);
       }
 
-      // Find the plan ID from the descriptive name
       const planNameMatch = plan_tipo.match(/^([a-zA-Z\s]+)/);
       const planName = planNameMatch ? planNameMatch[1].trim() : null;
       if (!planName) throw new Error('No se pudo determinar el plan desde el tipo de licencia.');
@@ -88,7 +91,14 @@ Deno.serve(async (req) => {
       final_empresa_id = empresaData.id;
 
       const { data: sucursalData, error: sucursalError } = await supabaseAdmin
-        .from('sucursales').insert({ empresa_id: final_empresa_id, nombre: sucursal_nombre, direccion: sucursal_direccion, telefono: sucursal_telefono }).select('id').single();
+        .from('sucursales').insert({ 
+            empresa_id: final_empresa_id, 
+            nombre: sucursal_nombre, 
+            direccion: sucursal_direccion, 
+            telefono: sucursal_telefono,
+            latitud: sucursal_latitud,
+            longitud: sucursal_longitud
+        }).select('id').single();
       if (sucursalError) throw new Error(`Error al crear la sucursal: ${sucursalError.message}`);
       final_sucursal_id = sucursalData.id;
       
@@ -105,6 +115,18 @@ Deno.serve(async (req) => {
         });
        if (licenciaError) throw new Error(`Error al crear la licencia: ${licenciaError.message}`);
 
+       if (selected_modules && selected_modules.length > 0) {
+        const moduleInsertions = selected_modules.map(moduleId => ({
+            empresa_id: final_empresa_id,
+            modulo_id: moduleId,
+            estado: 'activo'
+        }));
+        const { error: modulesError } = await supabaseAdmin.from('empresa_modulos').insert(moduleInsertions);
+        if (modulesError) {
+          console.warn(`Warning: Could not activate modules during registration: ${modulesError.message}`);
+        }
+      }
+
     } else {
       // --- CREATING A NEW USER FOR AN EXISTING COMPANY ---
       const authHeader = req.headers.get('Authorization');
@@ -116,12 +138,10 @@ Deno.serve(async (req) => {
         { global: { headers: { Authorization: `Bearer ${jwt}` } } }
       );
       
-      // get_caller_profile_safely now returns planLimits
       const { data: callerProfile, error: callerError } = await supabaseClient.rpc('get_caller_profile_safely').single();
       if (callerError || !callerProfile) throw new Error('No se pudo verificar al usuario que realiza la llamada.');
       if (callerProfile.rol !== 'Propietario' && callerProfile.rol !== 'Administrador') throw new Error('Acceso denegado: Se requiere rol de Propietario o Administrador.');
       
-      // **ENFORCEMENT LOGIC**
       const { count: userCount, error: countError } = await supabaseAdmin
         .from('usuarios')
         .select('*', { count: 'exact', head: true })
@@ -139,13 +159,12 @@ Deno.serve(async (req) => {
       final_sucursal_id = sucursal_id;
     }
 
-    // --- COMMON USER CREATION LOGIC ---
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: correo,
       password: password,
       email_confirm: true,
       app_metadata: {
-        nombre_completo: nombre_completo, // Store name in app_metadata for notifications
+        nombre_completo: nombre_completo,
         empresa_id: final_empresa_id
       }
     });

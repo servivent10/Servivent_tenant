@@ -1,9 +1,19 @@
 -- =============================================================================
--- DATE & TIMEZONE CONSISTENCY FIX (V13 - Exclude Pending Web Orders)
+-- DATE & TIMEZONE CONSISTENCY FIX (V14 - Global Accounts Receivable Fix)
 -- =============================================================================
--- This script updates the dashboard function to exclude sales with a status of
--- 'Pedido Web Pendiente' from all KPI calculations, charts, and rankings.
--- This ensures the dashboard only reflects confirmed sales.
+-- This script provides the definitive fix for the "Cuentas por Cobrar" and
+-- "Cuentas Vencidas" KPIs on the dashboard.
+--
+-- PROBLEM SOLVED:
+-- The previous version of the function was incorrectly applying the date filters
+-- to the Accounts Receivable and Overdue Accounts calculations. These KPIs should
+-- be global and reflect the entire company's state, regardless of the selected
+-- date range.
+--
+-- SOLUTION:
+-- Two new queries have been added to the function that specifically calculate
+-- these totals from the `ventas` table WITHOUT applying the date filters. The
+-- results are then added to the main `kpis` JSON object.
 --
 -- INSTRUCTIONS:
 -- Execute this script completely in your Supabase SQL Editor.
@@ -25,7 +35,7 @@ UPDATE public.empresas SET timezone = 'America/La_Paz', moneda = 'BOB' WHERE tim
 CREATE OR REPLACE FUNCTION get_dashboard_data(
     p_start_date date,
     p_end_date date,
-    p_timezone text, -- Timezone parameter (e.g., 'America/La_Paz')
+    p_timezone text,
     p_sucursal_id uuid DEFAULT NULL
 )
 RETURNS jsonb
@@ -68,9 +78,10 @@ DECLARE
     v_total_gastos_count bigint;
     v_prev_total_sales numeric;
     v_prev_gross_profit numeric;
-    v_total_cotizado numeric;
-    v_proformas_count bigint;
-    v_proformas_convertidas_count bigint;
+    v_cuentas_por_cobrar numeric;
+    v_cuentas_por_cobrar_count bigint;
+    v_cuentas_vencidas numeric;
+    v_cuentas_vencidas_count bigint;
 BEGIN
     -- 1. Get caller info and determine effective branch filter
     SELECT u.empresa_id, u.rol, u.sucursal_id INTO caller_empresa_id, caller_rol, caller_sucursal_id
@@ -80,87 +91,54 @@ BEGIN
         RAISE EXCEPTION 'Usuario no encontrado.';
     END IF;
 
-    IF caller_rol = 'Propietario' THEN
-        effective_sucursal_id := p_sucursal_id;
-    ELSE
-        effective_sucursal_id := caller_sucursal_id;
-    END IF;
+    effective_sucursal_id := CASE WHEN caller_rol = 'Propietario' THEN p_sucursal_id ELSE caller_sucursal_id END;
 
-    -- 2. Calculate Sales & Profit KPIs, excluding pending web orders
+    -- 2. Calculate Sales & Profit KPIs
     WITH sales_with_profit_current AS (
-        SELECT
-            v.id,
-            v.total,
-            v.descuento,
-            SUM(vi.cantidad * (vi.precio_unitario_aplicado - vi.costo_unitario_en_venta)) as item_profit
-        FROM ventas v
-        JOIN venta_items vi ON v.id = vi.venta_id
-        WHERE v.empresa_id = caller_empresa_id
-          AND v.fecha >= v_start_utc AND v.fecha < v_end_utc
-          AND (effective_sucursal_id IS NULL OR v.sucursal_id = effective_sucursal_id)
-          AND v.estado_pago != 'Pedido Web Pendiente' -- **EXCLUDE PENDING WEB ORDERS**
+        SELECT v.id, v.total, v.descuento, SUM(vi.cantidad * (vi.precio_unitario_aplicado - vi.costo_unitario_en_venta)) as item_profit
+        FROM ventas v JOIN venta_items vi ON v.id = vi.venta_id
+        WHERE v.empresa_id = caller_empresa_id AND v.fecha >= v_start_utc AND v.fecha < v_end_utc AND (effective_sucursal_id IS NULL OR v.sucursal_id = effective_sucursal_id) AND v.estado_pago != 'Pedido Web Pendiente'
         GROUP BY v.id
     ),
     sales_in_period AS (
-        SELECT
-            SUM(total) as total_sales,
-            SUM(descuento) as total_discounts,
-            COUNT(*) as sales_count,
-            COUNT(*) FILTER (WHERE descuento > 0) as discount_sales_count,
-            SUM(item_profit - descuento) as gross_profit
+        SELECT SUM(total) as total_sales, SUM(descuento) as total_discounts, COUNT(*) as sales_count, COUNT(*) FILTER (WHERE descuento > 0) as discount_sales_count, SUM(item_profit - descuento) as gross_profit
         FROM sales_with_profit_current
     ),
     sales_with_profit_previous AS (
-        SELECT
-            v.id,
-            v.total,
-            v.descuento,
-            SUM(vi.cantidad * (vi.precio_unitario_aplicado - vi.costo_unitario_en_venta)) as item_profit
-        FROM ventas v
-        JOIN venta_items vi ON v.id = vi.venta_id
-        WHERE v.empresa_id = caller_empresa_id
-          AND v.fecha >= v_prev_start_utc AND v.fecha < v_prev_end_utc
-          AND (effective_sucursal_id IS NULL OR v.sucursal_id = effective_sucursal_id)
-          AND v.estado_pago != 'Pedido Web Pendiente' -- **EXCLUDE PENDING WEB ORDERS**
+        SELECT v.id, v.total, v.descuento, SUM(vi.cantidad * (vi.precio_unitario_aplicado - vi.costo_unitario_en_venta)) as item_profit
+        FROM ventas v JOIN venta_items vi ON v.id = vi.venta_id
+        WHERE v.empresa_id = caller_empresa_id AND v.fecha >= v_prev_start_utc AND v.fecha < v_prev_end_utc AND (effective_sucursal_id IS NULL OR v.sucursal_id = effective_sucursal_id) AND v.estado_pago != 'Pedido Web Pendiente'
         GROUP BY v.id
     ),
     sales_in_previous_period AS (
-        SELECT
-            SUM(total) as total_sales,
-            SUM(item_profit - descuento) as gross_profit
+        SELECT SUM(total) as total_sales, SUM(item_profit - descuento) as gross_profit
         FROM sales_with_profit_previous
     )
-    SELECT 
-        COALESCE(s_current.total_sales, 0),
-        COALESCE(s_current.gross_profit, 0),
-        COALESCE(s_current.sales_count, 0),
-        COALESCE(s_current.total_discounts, 0),
-        COALESCE(s_current.discount_sales_count, 0),
-        COALESCE(s_prev.total_sales, 0),
-        COALESCE(s_prev.gross_profit, 0)
-    INTO 
-        v_total_sales, v_gross_profit, v_total_sales_count, v_total_discounts, v_discount_sales_count,
-        v_prev_total_sales, v_prev_gross_profit
+    SELECT COALESCE(s_current.total_sales, 0), COALESCE(s_current.gross_profit, 0), COALESCE(s_current.sales_count, 0), COALESCE(s_current.total_discounts, 0), COALESCE(s_current.discount_sales_count, 0), COALESCE(s_prev.total_sales, 0), COALESCE(s_prev.gross_profit, 0)
+    INTO v_total_sales, v_gross_profit, v_total_sales_count, v_total_discounts, v_discount_sales_count, v_prev_total_sales, v_prev_gross_profit
     FROM sales_in_period s_current, sales_in_previous_period s_prev;
     
-    -- 3. Calculate other KPIs (Compras and Gastos are unaffected)
-    SELECT COALESCE(SUM(total_bob), 0), COALESCE(COUNT(*), 0)
-    INTO v_total_purchases, v_total_purchases_count
-    FROM compras WHERE empresa_id = caller_empresa_id AND fecha >= v_start_utc AND fecha < v_end_utc
-      AND (effective_sucursal_id IS NULL OR sucursal_id = effective_sucursal_id);
-
-    SELECT COALESCE(SUM(monto), 0), COALESCE(COUNT(*), 0)
-    INTO v_total_gastos, v_total_gastos_count
-    FROM gastos WHERE empresa_id = caller_empresa_id AND fecha >= p_start_date AND fecha <= p_end_date
-      AND (effective_sucursal_id IS NULL OR sucursal_id = effective_sucursal_id);
+    -- 3. Calculate other date-filtered KPIs
+    SELECT COALESCE(SUM(total_bob), 0), COALESCE(COUNT(*), 0) INTO v_total_purchases, v_total_purchases_count FROM compras WHERE empresa_id = caller_empresa_id AND fecha >= v_start_utc AND fecha < v_end_utc AND (effective_sucursal_id IS NULL OR sucursal_id = effective_sucursal_id);
+    SELECT COALESCE(SUM(monto), 0), COALESCE(COUNT(*), 0) INTO v_total_gastos, v_total_gastos_count FROM gastos WHERE empresa_id = caller_empresa_id AND fecha >= p_start_date AND fecha <= p_end_date AND (effective_sucursal_id IS NULL OR sucursal_id = effective_sucursal_id);
       
-    -- Calculate proforma KPIs
-    SELECT COALESCE(SUM(total), 0), COALESCE(COUNT(*), 0), COALESCE(COUNT(*) FILTER (WHERE estado = 'Convertida'), 0)
-    INTO v_total_cotizado, v_proformas_count, v_proformas_convertidas_count
-    FROM proformas WHERE empresa_id = caller_empresa_id AND fecha_emision >= v_start_utc AND fecha_emision < v_end_utc
-        AND (effective_sucursal_id IS NULL OR sucursal_id = effective_sucursal_id);
+    -- 4. **NEW**: Calculate GLOBAL Accounts Receivable KPIs (not date-filtered)
+    SELECT COALESCE(SUM(saldo_pendiente), 0), COALESCE(COUNT(*), 0)
+    INTO v_cuentas_por_cobrar, v_cuentas_por_cobrar_count
+    FROM ventas 
+    WHERE empresa_id = caller_empresa_id 
+      AND estado_pago IN ('Pendiente', 'Abono Parcial')
+      AND (effective_sucursal_id IS NULL OR sucursal_id = effective_sucursal_id);
 
+    SELECT COALESCE(SUM(saldo_pendiente), 0), COALESCE(COUNT(*), 0)
+    INTO v_cuentas_vencidas, v_cuentas_vencidas_count
+    FROM ventas 
+    WHERE empresa_id = caller_empresa_id 
+      AND estado_pago IN ('Pendiente', 'Abono Parcial')
+      AND fecha_vencimiento < (now() AT TIME ZONE p_timezone)::date
+      AND (effective_sucursal_id IS NULL OR sucursal_id = effective_sucursal_id);
 
+    -- 5. Build the KPIs JSON object
     SELECT jsonb_build_object(
         'total_sales', v_total_sales,
         'total_sales_count', v_total_sales_count,
@@ -173,12 +151,13 @@ BEGIN
         'total_purchases_count', v_total_purchases_count,
         'total_gastos', v_total_gastos,
         'total_gastos_count', v_total_gastos_count,
-        'total_cotizado', v_total_cotizado,
-        'proformas_count', v_proformas_count,
-        'conversion_rate', CASE WHEN v_proformas_count > 0 THEN round((v_proformas_convertidas_count::numeric / v_proformas_count::numeric) * 100, 2) ELSE 0 END
+        'cuentas_por_cobrar', v_cuentas_por_cobrar,
+        'cuentas_por_cobrar_count', v_cuentas_por_cobrar_count,
+        'cuentas_vencidas', v_cuentas_vencidas,
+        'cuentas_vencidas_count', v_cuentas_vencidas_count
     ) INTO kpis;
     
-    -- 4. Get low stock products (unaffected)
+    -- 6. Get low stock products
     SELECT json_agg(low_stock) INTO low_stock_products FROM (
         SELECT p.id, p.nombre, SUM(i.cantidad) as cantidad FROM inventarios i
         JOIN productos p ON i.producto_id = p.id WHERE p.empresa_id = caller_empresa_id
@@ -186,7 +165,7 @@ BEGIN
         GROUP BY p.id, p.nombre HAVING SUM(i.cantidad) <= SUM(COALESCE(i.stock_minimo, 0)) AND SUM(COALESCE(i.stock_minimo, 0)) > 0
         ORDER BY SUM(i.cantidad) ASC LIMIT 5 ) AS low_stock;
 
-    -- 5. Get recent activity (unaffected, still shows web order creation)
+    -- 7. Get recent activity
     SELECT json_agg(activity) INTO recent_activity FROM (
         (SELECT 'venta' as type, 'Venta <b>' || v.folio || '</b> a ' || COALESCE(c.nombre, 'Consumidor Final') as description, v.total as amount, v.created_at as timestamp, NULL as estado
         FROM ventas v LEFT JOIN clientes c ON v.cliente_id = c.id
@@ -206,13 +185,13 @@ BEGIN
         ORDER BY timestamp DESC LIMIT 5
     ) as activity;
 
-    -- 6. Get data for charts, excluding pending web orders
+    -- 8. Get data for charts
     IF caller_rol = 'Propietario' AND p_sucursal_id IS NULL THEN
         WITH branch_sales AS (
           SELECT v.sucursal_id, SUM(v.total) as total_sales, SUM(vi.cantidad * (vi.precio_unitario_aplicado - vi.costo_unitario_en_venta) - v.descuento / (SELECT COUNT(*) FROM venta_items WHERE venta_id = v.id)) as total_profit
           FROM ventas v JOIN venta_items vi ON v.id = vi.venta_id
           WHERE v.empresa_id = caller_empresa_id AND v.fecha >= v_start_utc AND v.fecha < v_end_utc
-            AND v.estado_pago != 'Pedido Web Pendiente' -- **EXCLUDE PENDING WEB ORDERS**
+            AND v.estado_pago != 'Pedido Web Pendiente'
           GROUP BY v.id, v.sucursal_id
         )
         SELECT json_agg(chart_points) INTO chart_data FROM ( SELECT s.nombre as label, COALESCE(SUM(bs.total_sales), 0) as sales, COALESCE(SUM(bs.total_profit), 0) as profit
@@ -222,39 +201,39 @@ BEGIN
         IF (p_end_date - p_start_date) > 31 THEN
             SELECT json_agg(chart_points) INTO chart_data FROM ( SELECT to_char(d.month, 'TMMonth') as label, COALESCE(SUM(v.total), 0) as sales, COALESCE(SUM(vi.cantidad * (vi.precio_unitario_aplicado - vi.costo_unitario_en_venta) - v.descuento / (SELECT COUNT(*) FROM venta_items WHERE venta_id = v.id)), 0) as profit
                 FROM generate_series(date_trunc('month', p_start_date), p_end_date, '1 month') d(month)
-                LEFT JOIN ventas v ON date_trunc('month', v.fecha AT TIME ZONE p_timezone) = d.month AND v.empresa_id = caller_empresa_id AND v.sucursal_id = effective_sucursal_id AND v.estado_pago != 'Pedido Web Pendiente' -- **EXCLUDE**
+                LEFT JOIN ventas v ON date_trunc('month', v.fecha AT TIME ZONE p_timezone) = d.month AND v.empresa_id = caller_empresa_id AND v.sucursal_id = effective_sucursal_id AND v.estado_pago != 'Pedido Web Pendiente'
                 LEFT JOIN venta_items vi ON vi.venta_id = v.id GROUP BY d.month ORDER BY d.month ASC ) as chart_points;
         ELSE
             SELECT json_agg(chart_points) INTO chart_data FROM ( SELECT to_char(d.day, 'DD Mon') as label, COALESCE(SUM(v.total), 0) as sales, COALESCE(SUM(vi.cantidad * (vi.precio_unitario_aplicado - vi.costo_unitario_en_venta) - v.descuento / (SELECT COUNT(*) FROM venta_items WHERE venta_id = v.id)), 0) as profit
                 FROM generate_series(p_start_date, p_end_date, '1 day') d(day)
-                LEFT JOIN ventas v ON (v.fecha AT TIME ZONE p_timezone)::date = d.day AND v.empresa_id = caller_empresa_id AND v.sucursal_id = effective_sucursal_id AND v.estado_pago != 'Pedido Web Pendiente' -- **EXCLUDE**
+                LEFT JOIN ventas v ON (v.fecha AT TIME ZONE p_timezone)::date = d.day AND v.empresa_id = caller_empresa_id AND v.sucursal_id = effective_sucursal_id AND v.estado_pago != 'Pedido Web Pendiente'
                 LEFT JOIN venta_items vi ON vi.venta_id = v.id GROUP BY d.day ORDER BY d.day ASC ) as chart_points;
         END IF;
     END IF;
 
-    -- 7. Get all branches if owner (unaffected)
+    -- 9. Get all branches if owner
     IF caller_rol = 'Propietario' THEN
         SELECT json_agg(s) INTO all_branches FROM (SELECT id, nombre FROM sucursales WHERE empresa_id = caller_empresa_id ORDER BY nombre) s;
     END IF;
     
-    -- 8. Get Top Selling Products, excluding pending web orders
+    -- 10. Get Top Selling Products
     SELECT json_agg(top_prods) INTO top_selling_products FROM (
         SELECT p.id, p.nombre, SUM(vi.cantidad * vi.precio_unitario_aplicado) as total_vendido FROM venta_items vi
         JOIN productos p ON vi.producto_id = p.id JOIN ventas v ON vi.venta_id = v.id
         WHERE v.empresa_id = caller_empresa_id AND v.fecha >= v_start_utc AND v.fecha < v_end_utc
         AND (effective_sucursal_id IS NULL OR v.sucursal_id = effective_sucursal_id)
-        AND v.estado_pago != 'Pedido Web Pendiente' -- **EXCLUDE PENDING WEB ORDERS**
+        AND v.estado_pago != 'Pedido Web Pendiente'
         GROUP BY p.id, p.nombre ORDER BY total_vendido DESC LIMIT 5 ) as top_prods;
 
-    -- 9. Get Top Customers, excluding pending web orders
+    -- 11. Get Top Customers
     SELECT json_agg(top_cust) INTO top_customers FROM (
         SELECT c.id, c.nombre, c.avatar_url, SUM(v.total) as total_comprado FROM ventas v JOIN clientes c ON v.cliente_id = c.id
         WHERE v.empresa_id = caller_empresa_id AND v.fecha >= v_start_utc AND v.fecha < v_end_utc
         AND v.cliente_id IS NOT NULL AND c.nombre <> 'Consumidor Final' AND (effective_sucursal_id IS NULL OR v.sucursal_id = effective_sucursal_id)
-        AND v.estado_pago != 'Pedido Web Pendiente' -- **EXCLUDE PENDING WEB ORDERS**
+        AND v.estado_pago != 'Pedido Web Pendiente'
         GROUP BY c.id, c.nombre, c.avatar_url ORDER BY total_comprado DESC LIMIT 3 ) as top_cust;
 
-    -- 10. Build final response object
+    -- 12. Build final response object
     RETURN jsonb_build_object(
         'kpis', kpis,
         'low_stock_products', COALESCE(low_stock_products, '[]'::json),

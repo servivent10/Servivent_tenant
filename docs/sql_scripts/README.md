@@ -67,8 +67,7 @@ Esta carpeta contiene todos los scripts SQL para configurar y mantener la base d
 | `54_FIX_audit_trigger_fkey.md`| Auditoría | `[ACTIVO]` | Próximamente | Elimina la FK en `historial_cambios.usuario_id` para permitir auditoría de no-tenants. |
 | `55_FIX_notifications_fkey.md`| Core (Realtime) | `[ACTIVO]` | Próximamente | Elimina la FK en `notificaciones.usuario_generador_id` para permitir notificaciones de no-tenants. |
 | `56_FIX_web_order_sucursal_constraint.md`| Catálogo Web | `[ACTIVO]` | `56_REVERT_...` | Elimina la constraint `NOT NULL` en `ventas.sucursal_id` para permitir pedidos web de envío a domicilio. |
-| `57_FIX_traspasos_cascade_delete.md`| Traspasos | `[CRÍTICO]` | `57_REVERT_...` | Corrige la restricción de clave foránea en `traspaso_items` para permitir la eliminación en cascada de productos. |
-| `58_FEATURE_user_email_validation.md`| Sucursales y Usuarios | `[ACTIVO]` | `58_REVERT_...` | Añade la función para la validación de correo de usuario en tiempo real. |
+| `57_FIX_traspasos_cascade_delete.md`| Traspasos / Proformas | `[CRÍTICO]` | `57_REVERT_...` | Corrige la restricción de clave foránea en `traspaso_items` y `proforma_items` para permitir la eliminación en cascada de productos. |
 | `DATA_INTEGRITY_FIX.md`| Core | `[REPARACIÓN]` | N/A | Script maestro que unifica y corrige los problemas de datos más comunes. |
 | `FIX_remove_registration_trigger.md`| Core | `[OBSOLETO]` | N/A | Reemplazado por `DATA_INTEGRITY_FIX.md`. |
 | `FIX_assign_owners_to_branch.md`| Sucursales y Usuarios | `[OBSOLETO]` | N/A | Reemplazado por `DATA_INTEGRITY_FIX.md`. |
@@ -97,3 +96,12 @@ Esta carpeta contiene todos los scripts SQL para configurar y mantener la base d
 | `83_FIX_proforma_details_data.md`| Ventas (Proformas) |`[ACTIVO]` | Próximamente | Añade datos de cliente y sucursal a la vista de detalle de la proforma. |
 | `84_FEATURE_proforma_stock_check_v2.md`| Ventas (Proformas) |`[ACTIVO]` | `84_REVERT_...` | Mejora la verificación de stock para mostrar disponibilidad en otras sucursales y permitir solicitudes de traspaso. |
 | `85_FEATURE_proforma_intelligent_logistics.md`| Ventas (Proformas) |`[ACTIVO]` | `85_REVERT_...` | Implementa el flujo de logística inteligente para solicitudes de traspaso. |
+| `86_FEATURE_google_contacts_integration.md`| Integraciones |`[ACTIVO]` | N/A | **ELIMINACIÓN:** Elimina la infraestructura de base de datos para la integración con Google Contacts. |
+| `87_FEATURE_public_modules.md`| Registro / Módulos | `[ACTIVO]` | `87_REVERT_...` | Permite que la lista de módulos sea consultada públicamente. |
+| `88_FEATURE_user_email_validation.md`| Registro / Usuarios | `[ACTIVO]` | `88_REVERT_...` | Añade validación de correo en tiempo real para nuevos usuarios del sistema. |
+| `89_FEATURE_superadmin_sucursal_maps.md`| SuperAdmin / Sucursales | `[ACTIVO]` | `89_REVERT_...` | Enriquece los datos de las sucursales en el panel de SuperAdmin con coordenadas. |
+| `90_FEATURE_compra_detail_user.md`| Compras (Detalle) | `[ACTIVO]` | `90_REVERT_...` | Añade el nombre del usuario que registró la compra a la vista de detalle. |
+| `DATA_INTEGRITY_FIX.md`| Core | `[REPARACIÓN]` | N/A | Script maestro que unifica y corrige los problemas de datos más comunes. |
+| `FIX_remove_registration_trigger.md`| Core | `[OBSOLETO]` | N/A | Reemplazado por `DATA_INTEGRITY_FIX.md`. |
+| `FIX_assign_owners_to_branch.md`| Sucursales y Usuarios | `[OBSOLETO]` | N/A | Reemplazado por `DATA_INTEGRITY_FIX.md`. |
+| `FIX_link_owner_to_company.md`| Core | `[OBSOLETO]` | N/A | Reemplazado por `DATA_INTEGRITY_FIX.md`. |

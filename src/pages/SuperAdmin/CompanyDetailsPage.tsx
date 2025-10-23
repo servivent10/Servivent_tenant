@@ -15,6 +15,7 @@ import { FloatingActionButton } from '../../components/FloatingActionButton.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { FormInput } from '../../components/FormComponents.js';
 import { Spinner } from '../../components/Spinner.js';
+import { WhatsAppIcon } from '../../components/WhatsAppIcon.js';
 
 // FIX: Define a type for module data to ensure type safety.
 interface ModuleInfo {
@@ -92,42 +93,66 @@ const UserList = ({ users = [], onResetPassword }) => {
     `;
 };
 
-// Componente para renderizar la lista de sucursales
 const BranchList = ({ branches = [] }) => {
-     if (branches.length === 0) return html`<p class="text-gray-500 mt-4">No hay sucursales registradas para esta empresa.</p>`;
+    if (branches.length === 0) return html`<p class="text-gray-500 mt-4">No hay sucursales registradas para esta empresa.</p>`;
     
-    return html`
-        <!-- Vista de tarjetas para móvil y tablet -->
-        <div class="space-y-4 lg:hidden">
-            ${branches.map(branch => html`
-                <div class="bg-white p-4 rounded-lg shadow border">
-                    <div class="font-bold text-gray-800">${branch.nombre}</div>
-                    <div class="text-sm text-gray-600">${branch.direccion}</div>
-                    <div class="text-sm text-gray-500 mt-1">Teléfono: <span class="font-medium text-gray-700">${branch.telefono || 'N/A'}</span></div>
-                </div>
-            `)}
-        </div>
+    const GOOGLE_MAPS_API_KEY = 'AIzaSyDcOzOJnV2qJWsXeCGqBfWiORfUa4ZIBtw';
 
-        <!-- Vista de tabla para escritorio -->
-        <div class="hidden lg:block mt-4 overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-             <table class="min-w-full divide-y divide-gray-300">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Nombre</th>
-                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Dirección</th>
-                        <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Teléfono</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200 bg-white">
-                    ${branches.map(branch => html`
-                        <tr key=${branch.id}>
-                            <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">${branch.nombre}</td>
-                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${branch.direccion}</td>
-                            <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">${branch.telefono}</td>
-                        </tr>
-                    `)}
-                </tbody>
-            </table>
+    return html`
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            ${branches.map(branch => {
+                const staticMapUrl = (branch.latitud && branch.longitud)
+                    ? `https://maps.googleapis.com/maps/api/staticmap?center=${branch.latitud},${branch.longitud}&zoom=15&size=400x300&markers=color:red%7C${branch.latitud},${branch.longitud}&key=${GOOGLE_MAPS_API_KEY}`
+                    : null;
+                const googleMapsUrl = (branch.latitud && branch.longitud)
+                    ? `https://maps.google.com/?q=${branch.latitud},${branch.longitud}`
+                    : null;
+                
+                return html`
+                <div key=${branch.id} class="bg-white rounded-lg shadow-sm border overflow-hidden transition-shadow hover:shadow-md flex flex-col">
+                    <div class="p-4 border-b flex items-center gap-3 bg-gray-50">
+                        <div class="text-primary text-2xl">${ICONS.storefront}</div>
+                        <h3 class="text-lg font-bold text-gray-800 truncate" title=${branch.nombre}>${branch.nombre}</h3>
+                    </div>
+                    <div class="p-4 space-y-4 flex-grow">
+                        <div>
+                            ${staticMapUrl ? html`
+                                <a href=${googleMapsUrl} target="_blank" rel="noopener noreferrer" class="block rounded-md overflow-hidden border transition-shadow hover:shadow-lg">
+                                    <img src=${staticMapUrl} alt="Mapa de ${branch.nombre}" class="w-full h-40 object-cover" />
+                                </a>
+                            ` : html`
+                                <div class="w-full h-40 flex items-center justify-center bg-slate-100 text-slate-400 rounded-md border">
+                                    <p>Ubicación no establecida</p>
+                                </div>
+                            `}
+                        </div>
+                        <div class="text-sm space-y-2">
+                             <p class="flex items-start gap-2 text-gray-600">
+                                <span class="text-gray-400 mt-0.5">${ICONS.storefront}</span>
+                                <span class="flex-1">${branch.direccion || 'Dirección no especificada'}</span>
+                             </p>
+                             <p class="flex items-center gap-2 text-gray-500">
+                                <span class="text-gray-400">${ICONS.phone}</span>
+                                <span>${branch.telefono || 'Teléfono no especificado'}</span>
+                                ${branch.telefono && html`
+                                    <a href=${`https://wa.me/${branch.telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" class="text-green-500 hover:text-green-600">
+                                        <${WhatsAppIcon} />
+                                    </a>
+                                `}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-5 py-3 border-t">
+                        <div class="flex items-center justify-between text-sm">
+                            <div class="flex items-center gap-2 text-gray-600">
+                                ${ICONS.users}
+                                <span>${branch.user_count} ${branch.user_count === 1 ? 'Usuario' : 'Usuarios'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `
+            })}
         </div>
     `;
 };
@@ -261,13 +286,11 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
     const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
     const [availablePlans, setAvailablePlans] = useState<any[]>([]);
     // FIX: Strongly type state to avoid 'unknown' type errors.
-    // @ts-ignore - Fix: Change useState<any[]> to useState<ModuleInfo[]> to resolve type errors.
     const [availableModules, setAvailableModules] = useState<ModuleInfo[]>([]);
     const [paymentToEdit, setPaymentToEdit] = useState(null);
     const [isLicenseModalOpen, setLicenseModalOpen] = useState(false);
     const [newEndDate, setNewEndDate] = useState('');
     // FIX: Strongly type state to avoid 'unknown' type errors.
-    // @ts-ignore - Fix: Change useState([]) to useState<ModuleInfo[]> to resolve type errors.
     const [initialModuleStatus, setInitialModuleStatus] = useState<ModuleInfo[]>([]); // **FIX: New state**
     
     const today = new Date().toISOString().split('T')[0];
@@ -284,7 +307,6 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
         fecha_pago: new Date(new Date().toString().split('GMT')[0]+' UTC').toISOString().slice(0, 16)
     });
     // FIX: Typed the selectedModules state to resolve property access errors on 'unknown'.
-    // @ts-ignore - Fix: Change useState(new Map()) to useState<Map<string, ModuleInfo>>(new Map()) to resolve type errors.
     const [selectedModules, setSelectedModules] = useState<Map<string, ModuleInfo>>(new Map());
 
 
@@ -662,7 +684,17 @@ export function CompanyDetailsPage({ companyId, user, onLogout, navigate }) {
                 <h3 class="text-lg font-semibold text-gray-800 mb-4">Información de la Empresa y Sucursal Principal</h3>
                 <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-3">
                     <div class="sm:col-span-1"><dt class="text-sm font-medium text-gray-500">Dirección</dt><dd class="mt-1 text-sm text-gray-900">${details.direccion || 'No especificada'}</dd></div>
-                    <div class="sm:col-span-1"><dt class="text-sm font-medium text-gray-500">Teléfono</dt><dd class="mt-1 text-sm text-gray-900">${details.telefono || 'No especificado'}</dd></div>
+                    <div class="sm:col-span-1">
+                        <dt class="text-sm font-medium text-gray-500">Teléfono</dt>
+                        <dd class="mt-1 text-sm text-gray-900 flex items-center gap-2">
+                            <span>${details.telefono || 'No especificado'}</span>
+                            ${details.telefono && html`
+                                <a href=${`https://wa.me/${details.telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" class="text-green-500 hover:text-green-600">
+                                    <${WhatsAppIcon} />
+                                </a>
+                            `}
+                        </dd>
+                    </div>
                     <div class="sm:col-span-1"><dt class="text-sm font-medium text-gray-500">Propietario</dt><dd class="mt-1 text-sm text-gray-900">${details.propietario_nombre || 'No asignado'}</dd><dd class="text-xs text-gray-500">${details.propietario_email || ''}</dd></div>
                     <div class="sm:col-span-1"><dt class="text-sm font-medium text-gray-500">Moneda Principal</dt><dd class="mt-1 text-sm text-gray-900">${details.moneda || 'No especificada'}</dd></div>
                     <div class="sm:col-span-1"><dt class="text-sm font-medium text-gray-500">País / Zona Horaria</dt><dd class="mt-1 text-sm text-gray-900">${details.timezone?.split('/')[1]?.replace('_', ' ') || 'No especificado'}</dd></div>

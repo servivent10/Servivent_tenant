@@ -7,14 +7,9 @@
 -- VERSION 3:
 --  - Adds `SECURITY DEFINER` to RPCs to bypass RLS, fixing infinite loading.
 --  - Adds a new trigger on `clientes` to notify of new web sign-ups.
---
--- WHAT IT DOES:
--- 1.  Adds an `auth_user_id` column to `clientes`.
--- 2.  Creates a trigger to auto-create client profiles on new sign-ups.
--- 3.  Creates `validate_client_email_status` for the "smart" registration form.
--- 4.  Creates secure `get_my_web_orders` and `get_my_client_profile` RPCs.
--- 5.  Adds RLS policies on `clientes` for self-management.
--- 6.  Adds a trigger to `clientes` to generate notifications on new web sign-ups.
+-- VERSION 4 (THIS CHANGE):
+--  - Adds robust format validation to `validate_client_email_status` to prevent
+--    premature UI changes while the user is typing their email.
 --
 -- INSTRUCTIONS:
 -- Execute this script completely in your Supabase SQL Editor.
@@ -75,7 +70,7 @@ EXECUTE FUNCTION public.create_client_profile_for_new_user();
 
 
 -- -----------------------------------------------------------------------------
--- Step 3: RPC for the "smart" registration form
+-- Step 3: RPC for the "smart" registration form (UPDATED)
 -- -----------------------------------------------------------------------------
 -- This function checks an email's status to determine the registration flow.
 CREATE OR REPLACE FUNCTION public.validate_client_email_status(p_slug text, p_correo text)
@@ -88,6 +83,14 @@ DECLARE
     v_empresa_id uuid;
     client_record record;
 BEGIN
+    -- **DEFINITIVE FIX**: Add robust format validation before querying the database.
+    -- If the format is incomplete (e.g., user is still typing "user@gmail."), return 'idle'
+    -- to prevent premature UI changes. The regex checks for a standard email format ending in .com.
+    IF p_correo IS NULL OR TRIM(p_correo) = '' OR NOT (p_correo ~* '^[^\s@]+@[^\s@]+\.com$') THEN
+        RETURN json_build_object('status', 'idle', 'nombre', null);
+    END IF;
+
+    -- From here on, the email has a complete format. Proceed with database checks.
     SELECT id INTO v_empresa_id FROM public.empresas WHERE slug = p_slug;
     IF v_empresa_id IS NULL THEN
         RAISE EXCEPTION 'Catálogo no encontrado.';

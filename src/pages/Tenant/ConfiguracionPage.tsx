@@ -525,13 +525,12 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
     ];
     
     const tabs = useMemo(() => {
-        const baseTabs = [
+        return [
             { id: 'empresa', label: 'Datos de la Empresa' },
             { id: 'precios', label: 'Listas de Precios' },
             { id: 'terminal', label: 'Terminal de Venta' },
             { id: 'catalogo', label: 'Catálogo Web' },
         ];
-        return baseTabs;
     }, []);
 
     const canEdit = user.role === 'Propietario';
@@ -760,7 +759,6 @@ export function ConfiguracionPage({ user, onLogout, onProfileUpdate, companyInfo
                                                 ${slugStatus === 'available' && html`<div class="text-green-500">${ICONS.success}</div>`}
                                                 ${slugStatus === 'unavailable' && html`<div class="text-red-500">${ICONS.error}</div>`}
                                                 ${slugStatus === 'error' && html`<div class="text-red-500">${ICONS.error}</div>`}
-                                                {/* FIX: Refactored class attribute to avoid potential parsing issue with multi-line template literals. */}
                                                 <span class=${
                                                     slugStatus === 'available' ? 'text-green-600' :
                                                     (slugStatus === 'unavailable' || slugStatus === 'error') ? 'text-red-600' : ''

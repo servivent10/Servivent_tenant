@@ -34,7 +34,9 @@ interface TerminalVentaContextValue {
     setTaxRate: StateUpdater<string>;
     discountValue: string;
     setDiscountValue: StateUpdater<string>;
+    proformaId: string | null;
     loadCartFromProforma: (proforma: any, allProducts: any[]) => void;
+    clearCart: () => void;
 }
 
 interface NuevaCompraFormData {
@@ -143,10 +145,24 @@ export function TerminalVentaProvider({ children }) {
     const [activePriceListId, setActivePriceListId] = useState<string | null>(null);
     const [taxRate, setTaxRate] = useState('');
     const [discountValue, setDiscountValue] = useState('');
+    const [proformaId, setProformaId] = useState<string | null>(null);
+
+    const clearCart = useCallback(() => {
+        setCart([]);
+        setCustomPrices({});
+        setSelectedClientId(null);
+        setActivePriceListId(null);
+        setTaxRate('');
+        setDiscountValue('');
+        setProformaId(null);
+    }, []);
 
     const loadCartFromProforma = useCallback((proforma, allProducts) => {
         if (!proforma || !proforma.items) return;
 
+        clearCart();
+        
+        setProformaId(proforma.id);
         setSelectedClientId(proforma.cliente_id);
 
         const newCart = proforma.items.map(item => {
@@ -155,7 +171,7 @@ export function TerminalVentaProvider({ children }) {
                 product: fullProduct,
                 quantity: item.cantidad
             };
-        }).filter(item => item.product); // Filter out any items where the product might no longer exist
+        }).filter(item => item.product);
 
         setCart(newCart);
         
@@ -165,13 +181,17 @@ export function TerminalVentaProvider({ children }) {
         });
         setCustomPrices(customPricesData);
         
-        const taxPercentage = (proforma.impuestos / (proforma.subtotal - proforma.descuento)) * 100;
+        // **FIX**: The tax calculation in the POS is inclusive and based on the SUB-TOTAL BEFORE discount.
+        // The reverse calculation must use the same base value to be accurate.
+        let taxPercentage = 0;
+        if (proforma.impuestos > 0 && proforma.subtotal > 0) {
+            // Reverse formula for inclusive tax: taxRate = (1 - (base / (base + taxAmount))) * 100
+            taxPercentage = (1 - (proforma.subtotal / (proforma.subtotal + proforma.impuestos))) * 100;
+        }
+
         setDiscountValue(String(proforma.descuento || ''));
         setTaxRate(isNaN(taxPercentage) ? '' : taxPercentage.toFixed(2));
-        
-        // Reset active price list to default when loading a proforma to ensure consistent pricing
-        setActivePriceListId(null); 
-    }, []);
+    }, [clearCart]);
 
     const value: TerminalVentaContextValue = {
         cart, setCart,
@@ -180,7 +200,9 @@ export function TerminalVentaProvider({ children }) {
         activePriceListId, setActivePriceListId,
         taxRate, setTaxRate,
         discountValue, setDiscountValue,
-        loadCartFromProforma
+        proformaId,
+        loadCartFromProforma,
+        clearCart
     };
 
     return html`<${TerminalVentaContext.Provider} value=${value}>${children}<//>`;

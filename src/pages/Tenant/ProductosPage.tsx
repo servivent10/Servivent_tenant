@@ -379,8 +379,9 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
             navigate(`/productos/${product.id}`);
         };
         
+        const canManage = user.role === 'Propietario' || user.role === 'Administrador';
         const stockToShow = user.role === 'Propietario' ? product.stock_total : product.stock_sucursal;
-        const showSetupOption = !product.has_sales && !product.has_purchases;
+        const showSetupOption = !product.has_sales && !product.has_purchases && canManage;
 
         return html`
             <div onClick=${handleCardClick} class="group bg-white rounded-lg shadow-sm border flex flex-col transition-shadow hover:shadow-md cursor-pointer">
@@ -396,14 +397,16 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
                                     <p class="text-sm text-gray-500 truncate" title=${product.modelo || ''}>${product.modelo || 'Sin modelo'}</p>
                                 </div>
                                 <div class="relative flex-shrink-0" data-menu-container-id=${product.id}>
-                                    <button onClick=${(e) => { e.stopPropagation(); setOpenMenuId(prev => prev === product.id ? null : product.id); }} title="Acciones" class="text-gray-400 hover:text-primary p-1 rounded-full">${ICONS.more_vert}</button>
-                                    ${openMenuId === product.id && html`
-                                        <div class="absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-20">
-                                            <div class="py-1" role="menu">
-                                                <button type="button" onClick=${(e) => handleActionClick(e, handleEditProduct, product)} class="w-full text-left text-gray-700 px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-3" role="menuitem">${ICONS.edit} Editar</button>
-                                                <button type="button" onClick=${(e) => handleActionClick(e, handleDeleteProduct, product)} class="w-full text-left text-red-600 px-4 py-2 text-sm hover:bg-red-50 flex items-center gap-3" role="menuitem">${ICONS.delete} Eliminar</button>
+                                    ${canManage && html`
+                                        <button onClick=${(e) => { e.stopPropagation(); setOpenMenuId(prev => prev === product.id ? null : product.id); }} title="Acciones" class="text-gray-400 hover:text-primary p-1 rounded-full">${ICONS.more_vert}</button>
+                                        ${openMenuId === product.id && html`
+                                            <div class="absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-20">
+                                                <div class="py-1" role="menu">
+                                                    <button type="button" onClick=${(e) => handleActionClick(e, handleEditProduct, product)} class="w-full text-left text-gray-700 px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-3" role="menuitem">${ICONS.edit} Editar</button>
+                                                    <button type="button" onClick=${(e) => handleActionClick(e, handleDeleteProduct, product)} class="w-full text-left text-red-600 px-4 py-2 text-sm hover:bg-red-50 flex items-center gap-3" role="menuitem">${ICONS.delete} Eliminar</button>
+                                                </div>
                                             </div>
-                                        </div>
+                                        `}
                                     `}
                                 </div>
                             </div>
@@ -427,7 +430,10 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
         `;
     };
 
-    const ProductTable = ({ products }) => html`
+    const ProductTable = ({ products }) => {
+        const canManage = user.role === 'Propietario' || user.role === 'Administrador';
+
+        return html`
         <div class="shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
             <table class="min-w-full divide-y divide-gray-300">
                 <thead class="bg-gray-50">
@@ -441,7 +447,7 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
                 <tbody class="divide-y divide-gray-200 bg-white">
                 ${products.map(p => {
                     const stockToShow = user.role === 'Propietario' ? p.stock_total : p.stock_sucursal;
-                    const showSetupOption = !p.has_sales && !p.has_purchases;
+                    const showSetupOption = !p.has_sales && !p.has_purchases && canManage;
                     return html`
                     <tr key=${p.id} onClick=${(e) => {
                         if (e.target.closest('button')) return;
@@ -462,17 +468,19 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
                                         ${ICONS.bolt} Rápida
                                     </button>
                                 `}
-                                <div class="relative">
-                                    <button onClick=${(e) => { e.stopPropagation(); setOpenMenuId(prev => (prev === p.id ? null : p.id)); }} title="Acciones" class="text-gray-400 hover:text-primary p-1 rounded-full hover:bg-gray-100">${ICONS.more_vert}</button>
-                                    ${openMenuId === p.id && html`
-                                        <div class="absolute right-0 mt-2 top-full w-48 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-20">
-                                            <div class="py-1" role="menu">
-                                                <button type="button" onClick=${(e) => handleActionClick(e, handleEditProduct, p)} class="w-full text-left text-gray-700 px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-3" role="menuitem">${ICONS.edit} Editar</button>
-                                                <button type="button" onClick=${(e) => handleActionClick(e, handleDeleteProduct, p)} class="w-full text-left text-red-600 px-4 py-2 text-sm hover:bg-red-50 flex items-center gap-3" role="menuitem">${ICONS.delete} Eliminar</button>
+                                ${canManage && html`
+                                    <div class="relative">
+                                        <button onClick=${(e) => { e.stopPropagation(); setOpenMenuId(prev => (prev === p.id ? null : p.id)); }} title="Acciones" class="text-gray-400 hover:text-primary p-1 rounded-full hover:bg-gray-100">${ICONS.more_vert}</button>
+                                        ${openMenuId === p.id && html`
+                                            <div class="absolute right-0 mt-2 top-full w-48 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-20">
+                                                <div class="py-1" role="menu">
+                                                    <button type="button" onClick=${(e) => handleActionClick(e, handleEditProduct, p)} class="w-full text-left text-gray-700 px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-3" role="menuitem">${ICONS.edit} Editar</button>
+                                                    <button type="button" onClick=${(e) => handleActionClick(e, handleDeleteProduct, p)} class="w-full text-left text-red-600 px-4 py-2 text-sm hover:bg-red-50 flex items-center gap-3" role="menuitem">${ICONS.delete} Eliminar</button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    `}
-                                </div>
+                                        `}
+                                    </div>
+                                `}
                             </div>
                         </td>
                     </tr>
@@ -480,7 +488,7 @@ export function ProductosPage({ user, onLogout, onProfileUpdate, companyInfo, na
                 </tbody>
             </table>
         </div>
-    `;
+    `;}
 
     const ProductList = ({ products }) => html`
         <div class="grid grid-cols-1 lg:hidden gap-4">

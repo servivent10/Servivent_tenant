@@ -15,6 +15,16 @@ import { useTerminalVenta } from '../../contexts/StatePersistence.js';
 import { PrintModal } from '../../components/modals/PrintModal.tsx';
 import { generatePdfFromComponent } from '../../lib/pdfGenerator.js';
 import { ProformaTemplate } from '../../components/receipts/ProformaTemplate.js';
+import { WhatsAppIcon } from '../../components/WhatsAppIcon.js';
+
+// FIX: Defined an interface for stock issue items to provide strong typing.
+interface StockIssue {
+    producto_id: string;
+    producto_nombre: string;
+    cantidad_requerida: number;
+    cantidad_disponible: number;
+    other_branches_stock: { id: string; nombre: string; cantidad: number }[];
+}
 
 export function ProformaDetailPage({ proformaId, user, onLogout, onProfileUpdate, companyInfo, navigate }) {
     const [proforma, setProforma] = useState(null);
@@ -24,7 +34,8 @@ export function ProformaDetailPage({ proformaId, user, onLogout, onProfileUpdate
 
     const [isAnularModalOpen, setIsAnularModalOpen] = useState(false);
     const [isStockModalOpen, setIsStockModalOpen] = useState(false);
-    const [stockIssues, setStockIssues] = useState([]);
+    // FIX: Applied the StockIssue type to the useState hook for type safety.
+    const [stockIssues, setStockIssues] = useState<StockIssue[]>([]);
     
     const [popoverState, setPopoverState] = useState({ openFor: null, target: null });
     const popoverRef = useRef(null);
@@ -76,8 +87,9 @@ export function ProformaDetailPage({ proformaId, user, onLogout, onProfileUpdate
     const handleConvertToVenta = async () => {
         startLoading();
         try {
-            const { data: allProducts, error: productsError } = await supabase.rpc('get_company_products_with_stock_and_cost');
+            const { data: posData, error: productsError } = await supabase.rpc('get_pos_data');
             if (productsError) throw productsError;
+            const allProducts = posData.products;
 
             const { data, error } = await supabase.rpc('verificar_stock_proforma', { p_proforma_id: proformaId });
             if (error) throw error;
@@ -111,12 +123,46 @@ export function ProformaDetailPage({ proformaId, user, onLogout, onProfileUpdate
         }
     }, [isDownloading, proforma]);
 
+    const handleSendWhatsApp = () => {
+        if (!proforma?.cliente_telefono) {
+            addToast({ message: 'Este cliente no tiene un número de teléfono registrado.', type: 'error' });
+            return;
+        }
+
+        const phoneNumber = proforma.cliente_telefono.replace(/\D/g, '');
+        const fullPhoneNumber = phoneNumber.length > 8 ? phoneNumber : `591${phoneNumber}`;
+
+        const itemsText = (proforma.items || [])
+            .map(item => `• ${item.cantidad} x ${item.producto_nombre}`)
+            .join('\n');
+
+        let message = `¡Hola ${proforma.cliente_nombre || 'Cliente'}! 👋\n\nTe compartimos los detalles de tu Proforma de *${companyInfo.name}*:\n\n`;
+        message += `📄 *Folio:* ${proforma.folio}\n`;
+        message += `🗓️ *Fecha:* ${new Date(proforma.fecha_emision).toLocaleDateString()}\n`;
+        message += `💰 *Total:* ${formatCurrency(proforma.total)}\n`;
+        if (proforma.fecha_vencimiento) {
+            message += `*Válida hasta:* ${new Date(proforma.fecha_vencimiento.replace(/-/g, '/')).toLocaleDateString()}\n`;
+        }
+        message += `\n🛒 *Productos:*\n${itemsText}\n\n`;
+        message += `Quedamos atentos a tu confirmación.\n\nAtentamente,\n*${companyInfo.name}*`;
+
+        if (companyInfo?.planDetails?.features?.catalogo_web && companyInfo.slug) {
+            const catalogUrl = `https://servivent-tenant-627784733720.us-west1.run.app/#/catalogo/${companyInfo.slug}`;
+            message += `\n\n---\nVisita nuestro catálogo y haz tu próximo pedido en línea:\n${catalogUrl}`;
+        }
+
+        const whatsappUrl = `https://wa.me/${fullPhoneNumber}?text=${encodeURIComponent(message)}`;
+
+        window.open(whatsappUrl, '_blank');
+    };
+
     const handleContinueAnyway = async () => {
         setIsStockModalOpen(false);
         startLoading();
         try {
-            const { data: allProducts, error: productsError } = await supabase.rpc('get_company_products_with_stock_and_cost');
+            const { data: posData, error: productsError } = await supabase.rpc('get_pos_data');
             if (productsError) throw productsError;
+            const allProducts = posData.products;
     
             setSelectedClientId(proforma.cliente_id);
     
@@ -290,7 +336,7 @@ export function ProformaDetailPage({ proformaId, user, onLogout, onProfileUpdate
         >
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                 <div class="flex items-center gap-4">
-                    <button onClick=${() => navigate('/proformas')} class="p-2 rounded-full hover:bg-gray-100" aria-label="Volver">
+                    <button onClick=${() => navigate('/proformas')} class="p-2 rounded-full hover:bg-gray-200" aria-label="Volver">
                         ${ICONS.arrow_back}
                     </button>
                     <div>
@@ -299,6 +345,9 @@ export function ProformaDetailPage({ proformaId, user, onLogout, onProfileUpdate
                     </div>
                 </div>
                 <div class="w-full sm:w-auto flex items-center justify-end gap-2">
+                    <button onClick=${handleSendWhatsApp} title="Enviar por WhatsApp" class="inline-flex items-center justify-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">
+                        <${WhatsAppIcon} />
+                    </button>
                     <div class="relative" ref=${actionsMenuRef}>
                          <button onClick=${() => setIsActionsMenuOpen(p => !p)} class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-slate-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-600">
                              ${ICONS.settings} Acciones ${ICONS.chevron_down}

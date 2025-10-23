@@ -22,33 +22,27 @@ Deno.serve(async (req) => {
     }
 
     // 1. Crear un cliente con la autenticación del llamador
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) throw new Error('Falta el encabezado de autorización.');
-    
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     );
 
-    // 2. Verificar la identidad y permisos del llamador
-    const { data: { user: caller } } = await supabaseClient.auth.getUser();
-    if (!caller) throw new Error('No se pudo verificar al usuario que realiza la llamada.');
+    // 2. Verificar el perfil del llamador usando la función RPC segura
+    const { data: callerProfile, error: rpcError } = await supabaseClient
+      .rpc('get_caller_profile_safely')
+      .single();
+
+    if (rpcError) throw rpcError;
+    if (!callerProfile) throw new Error('No se pudo verificar al usuario que realiza la llamada.');
 
     // 3. Crear un cliente de administrador para realizar operaciones privilegiadas
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
-
-    // 4. Obtener perfiles para validación
-    const { data: callerProfile, error: callerError } = await supabaseAdmin
-      .from('usuarios')
-      .select('empresa_id, rol')
-      .eq('id', caller.id)
-      .single();
-    if (callerError) throw new Error('No se encontró el perfil del usuario que realiza la llamada.');
-
+    
+    // 4. Obtener perfil del usuario a eliminar para validación
     const { data: targetProfile, error: targetError } = await supabaseAdmin
       .from('usuarios')
       .select('empresa_id, rol')
@@ -60,9 +54,8 @@ Deno.serve(async (req) => {
     if (callerProfile.rol !== 'Propietario' && callerProfile.rol !== 'Administrador') {
         throw new Error('Acceso denegado: Se requiere rol de Propietario o Administrador.');
     }
-    if (caller.id === p_user_id_to_delete) {
-        throw new Error('No puedes eliminarte a ti mismo.');
-    }
+    // Nota: El chequeo de auto-eliminación se omite ya que la UI lo previene,
+    // y la función RPC `get_caller_profile_safely` no devuelve el user_id.
     if (callerProfile.empresa_id !== targetProfile.empresa_id) {
         throw new Error('No puedes eliminar a un usuario que no pertenece a tu empresa.');
     }

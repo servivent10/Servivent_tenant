@@ -373,6 +373,13 @@ const ProductCard = ({ product, onAction, defaultPrice, quantityInCart, onShowDe
 const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice, onOpenPricePopover, priceSource, activePriceListName, formatCurrency }) => {
     const effectivePrice = customPrice ?? originalPrice;
     const hasCustomPrice = customPrice !== null && customPrice !== undefined;
+
+    // A price is considered "modified" only if the custom price is different from the original.
+    const isPriceModified = hasCustomPrice && Math.abs(originalPrice - effectivePrice) > 0.01;
+    
+    // The original price should only be shown strikethrough if the price has been modified.
+    const showOriginalPriceStrikethrough = isPriceModified && originalPrice > 0;
+
     const priceListTooltip = `Precio ${activePriceListName} aplicado`;
 
     const [translateX, setTranslateX] = useState(0);
@@ -427,8 +434,8 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
                     <p class="text-sm font-semibold text-gray-800">${item.product.nombre}</p>
                      <div class="flex items-center gap-1.5">
                         <p class="text-xs text-gray-500">
-                            ${hasCustomPrice && html`<span class="line-through mr-1">${formatCurrency(originalPrice)}</span>`}
-                            <span class=${hasCustomPrice ? 'font-bold text-primary' : ''}>${formatCurrency(effectivePrice)} c/u</span>
+                            ${showOriginalPriceStrikethrough && html`<span class="line-through mr-1">${formatCurrency(originalPrice)}</span>`}
+                            <span class=${isPriceModified ? 'font-bold text-primary' : ''}>${formatCurrency(effectivePrice)} c/u</span>
                         </p>
                         ${priceSource === 'specific' && activePriceListName && html`
                             <span title=${priceListTooltip} class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
@@ -463,7 +470,16 @@ const CartItem = ({ item, onUpdateQuantity, onRemove, originalPrice, customPrice
     `;
 };
 
-function CartPanel({ companyInfo, posData, handleClearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, onDiscountChange, onFinalizeSale, onOpenPricePopover, isPriceRuleActive, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user, cart, customPrices, selectedClientId, setSelectedClientId, activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue, canUseCashRegister }) {
+function CartPanel({ companyInfo, posData, clearCart, getPriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals, onDiscountChange, onFinalizeSale, onOpenPricePopover, isPriceRuleActive, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user, cart, customPrices, selectedClientId, setSelectedClientId, activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue, canUseCashRegister }) {
+    if (!posData) {
+        return html`
+            <div class="p-4 flex-shrink-0 border-b"><h2 class="text-lg font-semibold text-gray-800">Carrito de Venta</h2></div>
+            <div class="flex-grow flex items-center justify-center">
+                <${Spinner} color="text-primary" />
+            </div>
+        `;
+    }
+
     const activePriceListName = useMemo(() => {
         return posData.price_lists.find(pl => pl.id === activePriceListId)?.nombre || '';
     }, [activePriceListId, posData.price_lists]);
@@ -498,7 +514,7 @@ function CartPanel({ companyInfo, posData, handleClearCart, getPriceForProduct, 
                     </div>
                 `}
 
-                <button onClick=${handleClearCart} disabled=${cart.length === 0} class="p-2 rounded-full text-gray-500 hover:bg-red-100 hover:text-red-600 disabled:text-gray-300 disabled:bg-transparent disabled:cursor-not-allowed transition-colors" title="Vaciar Carrito">
+                <button onClick=${clearCart} disabled=${cart.length === 0} class="p-2 rounded-full text-gray-500 hover:bg-red-100 hover:text-red-600 disabled:text-gray-300 disabled:bg-transparent disabled:cursor-not-allowed transition-colors" title="Vaciar Carrito">
                     ${ICONS.delete}
                 </button>
             </div>
@@ -654,11 +670,14 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const { startLoading, stopLoading } = useLoading();
     
     const {
-        cart, setCart, customPrices, setCustomPrices, selectedClientId, setSelectedClientId,
-        activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue, setDiscountValue
+        cart, customPrices, setCustomPrices, selectedClientId, setSelectedClientId,
+        activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue,
+        setDiscountValue, proformaId, clearCart
     } = useTerminalVenta();
+    
+    const setCart = useTerminalVenta().setCart; // Get the raw setter
 
-    const [posData, setPosData] = useState({ products: [], price_lists: [], clients: [] });
+    const [posData, setPosData] = useState(null);
     const [filters, setFilters] = useState(initialFilters);
     const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
     const [filterOptions, setFilterOptions] = useState({ categories: [], brands: [] });
@@ -790,6 +809,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const totalItemsInCart = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
 
     const filteredProducts = useMemo(() => {
+        if (!posData) return [];
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -817,14 +837,15 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         }
 
         return baseFiltered;
-    }, [posData.products, filters, posData.price_lists]);
+    }, [posData, filters]);
 
     const quickAccessProducts = useMemo(() => {
+        if (!posData) return [];
         return [...posData.products]
             .filter(p => p.stock_sucursal > 0)
             .sort((a, b) => (b.unidades_vendidas_90_dias || 0) - (a.unidades_vendidas_90_dias || 0))
             .slice(0, 8);
-    }, [posData.products]);
+    }, [posData]);
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
@@ -839,17 +860,20 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     const isPriceRuleActive = (priceInfo) => priceInfo && Number(priceInfo.ganancia_maxima) > 0;
 
     const getDefaultPriceForProduct = (product) => {
+        if (!posData) return 0;
         const defaultListId = posData.price_lists.find(pl => pl.es_predeterminada)?.id;
         return product.prices?.[defaultListId]?.precio ?? 0;
     };
 
     const getActivePriceForProduct = (product) => {
+        if (!posData) return 0;
         const activePriceInfo = product.prices?.[activePriceListId];
         if (isPriceRuleActive(activePriceInfo)) return activePriceInfo.precio;
         return getDefaultPriceForProduct(product);
     };
     
     const getPriceInfoForProduct = (product) => {
+        if (!posData) return { precio: 0, ganancia_maxima: 0, ganancia_minima: 0 };
         const activePriceInfo = product.prices?.[activePriceListId];
         if (isPriceRuleActive(activePriceInfo)) return activePriceInfo;
         const defaultListId = posData.price_lists.find(pl => pl.es_predeterminada)?.id;
@@ -925,7 +949,6 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         setCustomPrices(prev => { const newPrices = { ...prev }; delete newPrices[productId]; return newPrices; });
     };
 
-    const handleClearCart = () => { setCart([]); setTaxRate(''); setDiscountValue(''); setCustomPrices({}); setSelectedClientId(null); };
     const handleOpenPricePopover = (e, item) => { e.stopPropagation(); setPricePopover({ isOpen: true, item, target: e.currentTarget }); };
     const handleClosePricePopover = () => setPricePopover({ isOpen: false, item: null, target: null });
 
@@ -945,6 +968,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     };
 
     const totals = useMemo(() => {
+        if (!posData) return { subtotal: 0, taxAmount: 0, totalDiscount: 0, maxGlobalDiscount: 0, finalTotal: 0 };
         const subtotal = cart.reduce((total, item) => {
             const originalPrice = getActivePriceForProduct(item.product);
             const effectivePrice = customPrices[item.product.id]?.newPrice ?? originalPrice;
@@ -968,7 +992,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         const totalDiscount = globalDiscountAmount;
         const finalTotal = subtotal + taxAmount - totalDiscount;
         return { subtotal, taxAmount, totalDiscount, maxGlobalDiscount, finalTotal: Math.max(0, finalTotal) };
-    }, [cart, activePriceListId, taxRate, discountValue, customPrices, getActivePriceForProduct, getPriceInfoForProduct]);
+    }, [cart, activePriceListId, taxRate, discountValue, customPrices, getActivePriceForProduct, getPriceInfoForProduct, posData]);
     
     const handleDiscountChange = (e) => {
         const rawValue = e.target.value;
@@ -984,7 +1008,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
         startLoading();
         setIsCheckoutModalOpen(false);
         try {
-            const { error } = await supabase.rpc('registrar_venta', {
+            const { data: newVentaId, error } = await supabase.rpc('registrar_venta', {
                 p_venta: {
                     cliente_id: selectedClientId,
                     sucursal_id: user.sucursal_id,
@@ -1011,7 +1035,17 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
 
             if (error) throw error;
             addToast({ message: 'Venta registrada con éxito.', type: 'success' });
-            handleClearCart();
+            
+            if (proformaId && newVentaId) {
+                const { error: conversionError } = await supabase.rpc('convertir_proforma_a_venta', {
+                    p_proforma_id: proformaId,
+                    p_venta_id: newVentaId
+                });
+                if (conversionError) throw conversionError;
+                addToast({ message: 'El estado de la proforma ha sido actualizado a "Convertida".', type: 'info' });
+            }
+
+            clearCart();
             await fetchData();
         } catch (err) {
             addToast({ message: `Error al registrar la venta: ${err.message}`, type: 'error' });
@@ -1021,7 +1055,7 @@ export function TerminalVentaPage({ user, onLogout, onProfileUpdate, companyInfo
     };
     
     const cartPanelProps = {
-        posData, companyInfo, handleClearCart, getPriceForProduct: getActivePriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals,
+        posData, companyInfo, clearCart, getPriceForProduct: getActivePriceForProduct, handleUpdateQuantity, handleRemoveFromCart, totals,
         onDiscountChange: handleDiscountChange, onFinalizeSale: () => setIsCheckoutModalOpen(true), onOpenPricePopover: handleOpenPricePopover,
         isPriceRuleActive, setIsClienteFormOpen, formatCurrency, handleOpenCierreModal, currentModoCaja, user,
         cart, customPrices, selectedClientId, setSelectedClientId, activePriceListId, setActivePriceListId, taxRate, setTaxRate, discountValue,

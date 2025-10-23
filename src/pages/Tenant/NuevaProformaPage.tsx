@@ -184,10 +184,9 @@ const SetPricePopover = ({ item, targetElement, onClose, onApply, getPriceInfo, 
 };
 
 const ProductCard = ({ product, onAction, defaultPrice, quantityInCart, formatCurrency }) => {
-    const hasStock = product.stock_sucursal > 0;
     const hasPrice = defaultPrice > 0;
-    const isAvailable = hasStock && hasPrice;
-    
+    const isAvailable = hasPrice; // Stock check removed for proformas
+
     return html`
         <div class="group relative flex flex-col rounded-lg bg-white shadow-md border overflow-hidden ${!isAvailable ? 'opacity-75' : ''}">
             <button 
@@ -219,10 +218,10 @@ const ProductCard = ({ product, onAction, defaultPrice, quantityInCart, formatCu
             <div class="flex items-center justify-between px-2 pb-1 text-xs text-gray-500">
                 <${StockStatusPill} stock=${product.stock_sucursal} minStock=${product.stock_minimo_sucursal || 0} />
             </div>
-            ${!isAvailable && html`
+            ${!hasPrice && html`
                 <div class="absolute inset-0 bg-white/60 flex items-center justify-center pointer-events-none">
                     <span class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full">
-                        ${!hasPrice ? 'SIN PRECIO' : 'AGOTADO'}
+                        SIN PRECIO
                     </span>
                 </div>
             `}
@@ -403,14 +402,12 @@ export function NuevaProformaPage({ user, onLogout, onProfileUpdate, companyInfo
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [pricePopover, setPricePopover] = useState({ isOpen: false, item: null, target: null });
     
-    // State for the finalize modal, now managed by the parent page
     const [fechaVencimiento, setFechaVencimiento] = useState('');
     const [notas, setNotas] = useState('');
 
     const handleOpenFinalizeModal = () => {
-        // Reset state here before opening the modal
         const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + 7); // Default 7 days validity
+        dueDate.setDate(dueDate.getDate() + 7);
         setFechaVencimiento(dueDate.toISOString().split('T')[0]);
         setNotas('Tenga en cuenta que los precios y el stock pueden variar, gracias.');
         setIsFinalizeModalOpen(true);
@@ -473,17 +470,18 @@ export function NuevaProformaPage({ user, onLogout, onProfileUpdate, companyInfo
         setCart((currentCart) => {
             const existingItem = currentCart.find(item => item.product.id === product.id);
             if (existingItem) {
-                 if (existingItem.quantity < product.stock_sucursal) return currentCart.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
-                 addToast({ message: `Stock máximo alcanzado para ${product.nombre}`, type: 'warning' });
-                 return currentCart;
+                return currentCart.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
             }
             return [...currentCart, { product, quantity: 1 }];
         });
     };
 
     const handleProductAction = (product, isAvailable) => {
-        if (isAvailable) handleAddToCart(product);
-        else addToast({ message: 'Este producto no tiene precio asignado o está agotado.', type: 'warning' });
+        if (isAvailable) {
+            handleAddToCart(product);
+        } else {
+            addToast({ message: 'Este producto no tiene un precio asignado.', type: 'warning' });
+        }
     };
     
     const handleUpdateQuantity = (productId, newQuantity) => {
@@ -492,10 +490,6 @@ export function NuevaProformaPage({ user, onLogout, onProfileUpdate, companyInfo
         setCart(currentCart => {
             const itemToUpdate = currentCart.find(item => item.product.id === productId);
             if (!itemToUpdate) return currentCart;
-            if (newQuantity > itemToUpdate.product.stock_sucursal) {
-                addToast({ message: `Stock máximo (${itemToUpdate.product.stock_sucursal}) alcanzado.`, type: 'warning' });
-                return currentCart.map(item => item.product.id === productId ? { ...item, quantity: itemToUpdate.product.stock_sucursal } : item);
-            }
             return currentCart.map(item => item.product.id === productId ? { ...item, quantity: newQuantity } : item);
         });
     };
@@ -520,8 +514,15 @@ export function NuevaProformaPage({ user, onLogout, onProfileUpdate, companyInfo
         const subtotal = cart.reduce((total, item) => (customPrices[item.product.id]?.newPrice ?? getActivePriceForProduct(item.product)) * item.quantity + total, 0);
         const tax = Number(taxRate) || 0;
         const taxAmount = (tax > 0 && tax < 100) ? (subtotal / (1 - tax / 100)) - subtotal : 0;
+        const implicitDiscountTotal = cart.reduce((total, item) => {
+            const originalPrice = getActivePriceForProduct(item.product);
+            const customPrice = customPrices[item.product.id]?.newPrice;
+            if (customPrice !== undefined) total += (originalPrice - customPrice) * item.quantity;
+            return total;
+        }, 0);
         const totalAvailableMargin = cart.reduce((margin, item) => margin + ((Number(getPriceInfoForProduct(item.product).ganancia_maxima || 0) - Number(getPriceInfoForProduct(item.product).ganancia_minima || 0)) * item.quantity), 0);
-        const globalDiscountAmount = Math.max(0, Math.min(Number(discountValue) || 0, totalAvailableMargin));
+        const maxGlobalDiscount = Math.max(0, totalAvailableMargin - implicitDiscountTotal);
+        const globalDiscountAmount = Math.max(0, Math.min(Number(discountValue) || 0, maxGlobalDiscount));
         const finalTotal = subtotal + taxAmount - globalDiscountAmount;
         return { subtotal, taxAmount, totalDiscount: globalDiscountAmount, maxGlobalDiscount: totalAvailableMargin, finalTotal: Math.max(0, finalTotal) };
     }, [cart, activePriceListId, taxRate, discountValue, customPrices, getActivePriceForProduct, getPriceInfoForProduct]);
@@ -565,7 +566,7 @@ export function NuevaProformaPage({ user, onLogout, onProfileUpdate, companyInfo
             if (!term) return;
             const product = posData.products.find(p => p.sku === term);
             if (product) {
-                handleProductAction(product, product.stock_sucursal > 0 && getDefaultPriceForProduct(product) > 0);
+                handleProductAction(product, getDefaultPriceForProduct(product) > 0);
                 setSkuInput('');
             } else {
                 addToast({ message: `Producto con SKU "${term}" no encontrado.`, type: 'error' });
@@ -578,13 +579,13 @@ export function NuevaProformaPage({ user, onLogout, onProfileUpdate, companyInfo
         const product = posData.products.find(p => p.sku === scannedSku);
         if (product) {
             addToast({ message: `Producto "${product.nombre}" añadido.`, type: 'success' });
-            handleProductAction(product, product.stock_sucursal > 0 && getDefaultPriceForProduct(product) > 0);
+            handleProductAction(product, getDefaultPriceForProduct(product) > 0);
         } else {
             addToast({ message: `Producto con código "${scannedSku}" no encontrado.`, type: 'error' });
         }
     };
     
-    const quickAccessProducts = useMemo(() => [...posData.products].filter(p => p.stock_sucursal > 0).sort((a, b) => (b.unidades_vendidas_90_dias || 0) - (a.unidades_vendidas_90_dias || 0)).slice(0, 8), [posData.products]);
+    const quickAccessProducts = useMemo(() => [...posData.products].sort((a, b) => (b.unidades_vendidas_90_dias || 0) - (a.unidades_vendidas_90_dias || 0)).slice(0, 8), [posData.products]);
     const cartMap = useMemo(() => new Map(cart.map(item => [item.product.id, item])), [cart]);
     const totalItemsInCart = useMemo(() => cart.reduce((sum, item) => sum + item.quantity, 0), [cart]);
     
@@ -661,7 +662,7 @@ export function NuevaProformaPage({ user, onLogout, onProfileUpdate, companyInfo
                             <h3 class="text-sm font-semibold text-gray-600 mb-2">Acceso Rápido</h3>
                             <div class="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
                                 ${quickAccessProducts.map(p => html`
-                                    <${QuickAccessButton} product=${p} onClick=${() => handleProductAction(p, true)} formatCurrency=${formatCurrency}/>
+                                    <${QuickAccessButton} product=${p} onClick=${() => handleProductAction(p, getDefaultPriceForProduct(p) > 0)} formatCurrency=${formatCurrency}/>
                                 `)}
                             </div>
                         </div>

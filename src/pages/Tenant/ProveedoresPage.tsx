@@ -58,7 +58,7 @@ export function ProveedoresPage({ user, onLogout, onProfileUpdate, companyInfo, 
         setFormModalOpen(true);
     };
 
-    const handleSave = (action, newId) => {
+    const handleSave = (action, savedProveedor) => {
         setFormModalOpen(false);
         addToast({ message: `Proveedor ${action === 'edit' ? 'actualizado' : 'creado'} con éxito.`, type: 'success' });
         fetchData();

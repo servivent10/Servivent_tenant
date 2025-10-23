@@ -212,6 +212,7 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
 
     const { kpis, low_stock_products, recent_activity, chart_data, top_selling_products, top_customers, all_branches } = data;
     const isAllBranchesView = user.role === 'Propietario' && !filters.sucursalId;
+    const canViewFinancials = user.role === 'Propietario' || user.role === 'Administrador';
 
     const gananciaNeta = (kpis.gross_profit || 0) - (kpis.total_gastos || 0);
 
@@ -262,13 +263,13 @@ export function DashboardPage({ user, onLogout, onProfileUpdate, companyInfo, no
             
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <${KPI_Card} title="Ventas Totales" value=${formatCurrency(kpis.total_sales)} icon=${ICONS.sales} color="primary" count=${kpis.total_sales_count} countLabel="Nº de Ventas" />
-                <${KPI_Card} title="Ganancia Bruta" value=${formatCurrency(kpis.gross_profit)} icon=${ICONS.dollar} color="green" />
+                ${canViewFinancials && html`<${KPI_Card} title="Ganancia Bruta" value=${formatCurrency(kpis.gross_profit)} icon=${ICONS.dollar} color="green" />`}
                 <${KPI_Card} title="Cuentas por Cobrar" value=${formatCurrency(kpis.cuentas_por_cobrar)} icon=${ICONS.credit_score} color="amber" count=${kpis.cuentas_por_cobrar_count} countLabel="Ventas a Crédito Pendientes" />
                 <${KPI_Card} title="Cuentas Vencidas" value=${formatCurrency(kpis.cuentas_vencidas)} icon=${ICONS.warning} color="red" count=${kpis.cuentas_vencidas_count} countLabel="Ventas a Crédito Vencidas" />
-                <${KPI_Card} title="Compras Totales" value=${formatCurrency(kpis.total_purchases)} icon=${ICONS.purchases} color="primary" count=${kpis.total_purchases_count} countLabel="Nº de Compras" />
+                ${canViewFinancials && html`<${KPI_Card} title="Compras Totales" value=${formatCurrency(kpis.total_purchases)} icon=${ICONS.purchases} color="primary" count=${kpis.total_purchases_count} countLabel="Nº de Compras" />`}
                 <${KPI_Card} title="Gastos Totales" value=${formatCurrency(kpis.total_gastos)} icon=${ICONS.expenses} color="primary" count=${kpis.total_gastos_count} countLabel="Nº de Gastos" />
                 <${KPI_Card} title="Descuentos Otorgados" value=${formatCurrency(kpis.total_discounts)} icon=${ICONS.local_offer} count=${kpis.discount_sales_count} countLabel="Ventas con Descuento" />
-                <${KPI_Card} title="Ganancia NETA" value=${formatCurrency(gananciaNeta)} icon=${ICONS.emoji_events} color="green" subtext="(Ganancia Bruta - Gastos)" />
+                ${canViewFinancials && html`<${KPI_Card} title="Ganancia NETA" value=${formatCurrency(gananciaNeta)} icon=${ICONS.emoji_events} color="green" subtext="(Ganancia Bruta - Gastos)" />`}
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">

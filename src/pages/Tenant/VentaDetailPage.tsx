@@ -15,6 +15,7 @@ import { PrintModal } from '../../components/modals/PrintModal.tsx';
 import { NotaVentaTemplate } from '../../components/receipts/NotaVentaTemplate.js';
 import { TicketTemplate } from '../../components/receipts/TicketTemplate.js';
 import { generatePdfFromComponent } from '../../lib/pdfGenerator.js';
+import { WhatsAppIcon } from '../../components/WhatsAppIcon.js';
 
 
 export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, companyInfo, navigate, notifications }) {
@@ -60,6 +61,37 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                 .finally(() => setReceiptForPdf(null));
         }
     }, [receiptForPdf, venta]);
+
+    const handleSendWhatsApp = () => {
+        if (!venta?.cliente_telefono) {
+            addToast({ message: 'Este cliente no tiene un número de teléfono registrado.', type: 'error' });
+            return;
+        }
+
+        const phoneNumber = venta.cliente_telefono.replace(/\D/g, '');
+        const fullPhoneNumber = phoneNumber.length > 8 ? phoneNumber : `591${phoneNumber}`;
+        
+        const itemsText = (venta.items || [])
+            .map(item => `• ${item.cantidad} x ${item.producto_nombre}`)
+            .join('\n');
+
+        let message = `¡Hola ${venta.cliente_nombre || 'Cliente'}! 👋\n\nTe compartimos los detalles de tu Venta de *${companyInfo.name}*:\n\n`;
+        message += `📄 *Folio:* ${venta.folio}\n`;
+        message += `🗓️ *Fecha:* ${new Date(venta.fecha).toLocaleDateString()}\n`;
+        message += `💰 *Total:* ${formatCurrency(venta.total)}\n`;
+        message += `*Estado:* ${venta.estado_pago}\n\n`;
+        message += `🛒 *Productos:*\n${itemsText}\n\n`;
+        message += `Cualquier consulta, estamos a tu disposición.\n¡Gracias por tu preferencia!`;
+
+        if (companyInfo?.planDetails?.features?.catalogo_web && companyInfo.slug) {
+            const catalogUrl = `https://servivent-tenant-627784733720.us-west1.run.app/#/catalogo/${companyInfo.slug}`;
+            message += `\n\n---\nVisita nuestro catálogo y haz tu próximo pedido en línea:\n${catalogUrl}`;
+        }
+        
+        const whatsappUrl = `https://wa.me/${fullPhoneNumber}?text=${encodeURIComponent(message)}`;
+
+        window.open(whatsappUrl, '_blank');
+    };
 
 
     const breadcrumbs = [
@@ -181,17 +213,22 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                         <p class="text-sm text-gray-500">Cliente: ${venta.cliente_nombre || 'Consumidor Final'}</p>
                     </div>
                 </div>
-                <div class="relative group flex-shrink-0">
-                    <button class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-slate-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-600">
-                        ${ICONS.print} Recibo / Comprobante ${ICONS.chevron_down}
+                <div class="flex items-center gap-2">
+                    <button onClick=${handleSendWhatsApp} title="Enviar por WhatsApp" class="inline-flex items-center justify-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">
+                        <${WhatsAppIcon} />
                     </button>
-                    <div class="absolute right-0 top-full w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-10 hidden group-hover:block group-focus-within:block">
-                        <div class="py-1">
-                            <button onClick=${() => setPrintModalState({ isOpen: true, title: 'Previsualizar Nota de Venta', content: 'nota'})} class="w-full text-left text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100">Imprimir Nota de Venta</button>
-                            <button onClick=${() => setPrintModalState({ isOpen: true, title: 'Previsualizar Ticket', content: 'ticket'})} class="w-full text-left text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100">Imprimir Ticket</button>
-                            <div class="border-t my-1"></div>
-                            <button onClick=${() => setReceiptForPdf({ format: 'nota' })} class="w-full text-left text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100">Descargar Nota (PDF)</button>
-                            <button onClick=${() => setReceiptForPdf({ format: 'ticket' })} class="w-full text-left text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100">Descargar Ticket (PDF)</button>
+                    <div class="relative group flex-shrink-0">
+                        <button class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-slate-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-600">
+                            ${ICONS.print} Recibo / Comprobante ${ICONS.chevron_down}
+                        </button>
+                        <div class="absolute right-0 top-full w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-10 hidden group-hover:block group-focus-within:block">
+                            <div class="py-1">
+                                <button onClick=${() => setPrintModalState({ isOpen: true, title: 'Previsualizar Nota de Venta', content: 'nota'})} class="w-full text-left text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100">Imprimir Nota de Venta</button>
+                                <button onClick=${() => setPrintModalState({ isOpen: true, title: 'Previsualizar Ticket', content: 'ticket'})} class="w-full text-left text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100">Imprimir Ticket</button>
+                                <div class="border-t my-1"></div>
+                                <button onClick=${() => setReceiptForPdf({ format: 'nota' })} class="w-full text-left text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100">Descargar Nota (PDF)</button>
+                                <button onClick=${() => setReceiptForPdf({ format: 'ticket' })} class="w-full text-left text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100">Descargar Ticket (PDF)</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -225,7 +262,7 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-6">
                 <div class="lg:col-span-2 space-y-6">
                     <div class="bg-white p-6 rounded-lg shadow-md border">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-2">Detalles Generales</h3>
+                            <h3 class="text-lg font-semibold text-gray-800 mb-2">Detalles Generales</h3>
                         <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                             <div><dt class="text-gray-500">Fecha de Venta</dt><dd class="font-medium text-gray-800">${new Date(venta.fecha).toLocaleString()}</dd></div>
                              <div><dt class="text-gray-500">Vendedor</dt><dd class="font-medium text-gray-800">${venta.usuario_nombre || 'N/A'}</dd></div>
@@ -305,7 +342,7 @@ export function VentaDetailPage({ ventaId, user, onLogout, onProfileUpdate, comp
                     </div>
                 </div>
 
-                <div class="lg:col-span-1 space-y-6">
+                <div class="lg:col-span-1">
                     <${PaymentManager} ventaData=${venta} />
                 </div>
             </div>

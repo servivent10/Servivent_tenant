@@ -1,0 +1,1 @@
+-- Este documento se ha dejado vacío intencionadamente para reflejar que la funcionalidad de integración con Google Contacts ha sido eliminada del sistema a petición del usuario.

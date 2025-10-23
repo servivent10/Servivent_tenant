@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import { useState, useCallback } from 'preact/hooks';
+import { useState, useCallback, useRef } from 'preact/hooks';
 import { html } from 'htm/preact';
 import { FormInput } from '../../components/FormComponents.js';
 import { Spinner } from '../../components/Spinner.js';
@@ -18,38 +18,55 @@ const debounce = (func, delay) => {
     };
 };
 
+// Regex to check for a syntactically complete email format ending in .com
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.com$/;
+
 export function ClienteIdentificacionPage({ navigate, slug }) {
     const [formData, setFormData] = useState({ email: '', nombre: '', telefono: '', password: '' });
     const [loading, setLoading] = useState(false);
     const { addToast } = useToast();
 
-    const [emailState, setEmailState] = useState('idle'); // idle, checking, new, exists_unlinked, exists_linked
+    // State for backend validation result
+    const [emailState, setEmailState] = useState('idle'); // 'idle', 'checking', 'new', 'exists_unlinked', 'exists_linked'
+    // State for local, synchronous format validation error message
+    const [emailFormatError, setEmailFormatError] = useState('');
+    
     const [welcomeName, setWelcomeName] = useState('');
 
     const [phoneState, setPhoneState] = useState('idle'); // idle, checking, found, not_found
     const [clientFoundByPhone, setClientFoundByPhone] = useState(null);
     const [linkConfirmation, setLinkConfirmation] = useState(null); // 'link' or 'create_new'
 
-    const checkEmailStatus = async (emailToCheck) => {
-        if (!emailToCheck || !emailToCheck.includes('@') || !emailToCheck.includes('.')) {
-            setEmailState('idle');
-            return;
-        }
+    const debounceTimeout = useRef(null);
+
+    const checkEmailOnBackend = async (emailToCheck) => {
         setEmailState('checking');
-        setPhoneState('idle');
-        setClientFoundByPhone(null);
-        setLinkConfirmation(null);
         try {
-            const { data, error } = await supabase.rpc('validate_client_email_status', { p_slug: slug, p_correo: emailToCheck });
+            const { data, error } = await supabase.rpc('validate_client_email_status', {
+                p_slug: slug,
+                p_correo: emailToCheck,
+            });
             if (error) throw error;
-            setEmailState(data.status);
-            if (data.status === 'exists_unlinked') setWelcomeName(data.nombre);
+            
+            // Only update if the backend didn't return 'idle' (which means format was incomplete on its side)
+            if (data.status !== 'idle') {
+                setEmailState(data.status);
+                if (data.status === 'exists_unlinked') {
+                    setWelcomeName(data.nombre);
+                } else {
+                    setWelcomeName('');
+                }
+            } else {
+                // If backend says idle, it means format is still considered invalid. Revert to format error.
+                setEmailState('invalid_format');
+                setEmailFormatError('Formato o proveedor de correo no válido (ej: gmail, hotmail).');
+            }
         } catch (err) {
             setEmailState('idle');
             addToast({ message: 'No se pudo verificar el correo.', type: 'error' });
         }
     };
-
+    
     const checkPhoneStatus = async (phoneToCheck) => {
         if (!phoneToCheck || phoneToCheck.length < 5) {
             setPhoneState('idle');
@@ -70,15 +87,47 @@ export function ClienteIdentificacionPage({ navigate, slug }) {
             addToast({ message: 'No se pudo verificar el teléfono.', type: 'error' });
         }
     };
-
-    const debouncedCheckEmail = useCallback(debounce(checkEmailStatus, 500), [slug]);
+    
     const debouncedCheckPhone = useCallback(debounce(checkPhoneStatus, 500), [slug]);
 
     const handleInput = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-        if (name === 'email') debouncedCheckEmail(value);
-        if (name === 'telefono' && emailState === 'new') debouncedCheckPhone(value);
+
+        if (name === 'email') {
+            clearTimeout(debounceTimeout.current);
+            const trimmedEmail = value.trim();
+
+            if (!trimmedEmail) {
+                setEmailState('idle');
+                setEmailFormatError('');
+                setPhoneState('idle');
+                setClientFoundByPhone(null);
+                setLinkConfirmation(null);
+                return;
+            }
+
+            if (EMAIL_REGEX.test(trimmedEmail)) {
+                // Format is VALID. Clear local error and trigger backend check.
+                setEmailFormatError('');
+                setEmailState('checking');
+                debounceTimeout.current = setTimeout(() => {
+                    checkEmailOnBackend(trimmedEmail);
+                }, 400);
+            } else {
+                // Format is INCOMPLETE/INVALID. Show local error and do NOT call backend.
+                setEmailState('invalid_format');
+                if (trimmedEmail.includes('@')) {
+                    setEmailFormatError('Formato o proveedor de correo no válido (ej: gmail, hotmail).');
+                } else {
+                    setEmailFormatError('');
+                }
+            }
+        }
+
+        if (name === 'telefono' && emailState === 'new') {
+            debouncedCheckPhone(value);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -140,12 +189,21 @@ export function ClienteIdentificacionPage({ navigate, slug }) {
             title = 'Crea tu cuenta';
             subtitle = 'Completa tus datos para registrarte.';
             break;
-        default:
+        default: // idle, checking, invalid_format
             title = 'Identifícate';
             subtitle = 'Ingresa tu correo para continuar.';
     }
 
-    const isSubmitDisabled = loading || emailState === 'idle' || emailState === 'checking' || (emailState === 'new' && phoneState === 'found' && !linkConfirmation);
+    let emailIndicatorIcon = null;
+    if (emailState === 'checking') {
+        emailIndicatorIcon = html`<${Spinner} size="h-5 w-5" color="text-gray-400" />`;
+    } else if (['new', 'exists_linked', 'exists_unlinked'].includes(emailState) && !emailFormatError) {
+        emailIndicatorIcon = html`<div class="text-green-500">${ICONS.success}</div>`;
+    } else if (emailFormatError) {
+        emailIndicatorIcon = html`<div class="text-red-500">${ICONS.error}</div>`;
+    }
+
+    const isSubmitDisabled = loading || !(['new', 'exists_unlinked', 'exists_linked'].includes(emailState)) || (emailState === 'new' && phoneState === 'found' && !linkConfirmation);
 
     return html`
         <div class="min-h-full flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8 bg-slate-50">
@@ -157,9 +215,15 @@ export function ClienteIdentificacionPage({ navigate, slug }) {
             <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
                 <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
                     <form class="space-y-6" onSubmit=${handleSubmit}>
-                        <${FormInput} label="Correo Electrónico" name="email" type="email" value=${formData.email} onInput=${handleInput} disabled=${emailState !== 'idle'} />
-
-                        ${emailState === 'checking' && html`<div class="flex justify-center"><${Spinner} color="text-primary"/></div>`}
+                        <${FormInput}
+                            label="Correo Electrónico"
+                            name="email"
+                            type="email"
+                            value=${formData.email}
+                            onInput=${handleInput}
+                            error=${emailFormatError}
+                            rightElement=${emailIndicatorIcon}
+                        />
 
                         ${emailState === 'exists_linked' && html`
                             <div class="space-y-6 animate-fade-in-down">

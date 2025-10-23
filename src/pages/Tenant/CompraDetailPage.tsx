@@ -18,6 +18,13 @@ export function CompraDetailPage({ compraId, user, onLogout, onProfileUpdate, co
     const { isLoading, startLoading, stopLoading } = useLoading();
     const { addToast } = useToast();
 
+    useEffect(() => {
+        if (user.role === 'Empleado') {
+            addToast({ message: 'No tienes permiso para acceder a este módulo.', type: 'error' });
+            navigate('/dashboard');
+        }
+    }, [user.role, navigate, addToast]);
+
     const formatCurrency = (value, currencyCode) => {
         const number = Number(value || 0);
         const formattedNumber = number.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -25,6 +32,7 @@ export function CompraDetailPage({ compraId, user, onLogout, onProfileUpdate, co
     };
 
     const fetchData = async () => {
+        if (user.role === 'Empleado') return;
         startLoading();
         try {
             const { data, error } = await supabase.rpc('get_purchase_details', { p_compra_id: compraId });
@@ -128,6 +136,10 @@ export function CompraDetailPage({ compraId, user, onLogout, onProfileUpdate, co
         `;
     };
     
+    if (user.role === 'Empleado') {
+        return null;
+    }
+
     const renderContent = () => {
         if (isLoading && !compra) {
             return html`<div class="py-20"></div>`; // Placeholder to prevent layout jump while loading
@@ -160,7 +172,8 @@ export function CompraDetailPage({ compraId, user, onLogout, onProfileUpdate, co
                             <h3 class="text-lg font-semibold text-gray-800 mb-2">Detalles Generales</h3>
                         <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                             <div><dt class="text-gray-500">Fecha de Compra</dt><dd class="font-medium text-gray-800">${new Date(compra.fecha).toLocaleString()}</dd></div>
-                             <div><dt class="text-gray-500">N° Factura/Nota</dt><dd class="font-medium text-gray-800">${compra.n_factura || 'N/A'}</dd></div>
+                            <div><dt class="text-gray-500">Registrado por</dt><dd class="font-medium text-gray-800">${compra.usuario_nombre || 'N/A'}</dd></div>
+                            <div><dt class="text-gray-500">N° Factura/Nota</dt><dd class="font-medium text-gray-800">${compra.n_factura || 'N/A'}</dd></div>
                             <div><dt class="text-gray-500">Tipo de Pago</dt><dd class="font-medium text-gray-800">${compra.tipo_pago}</dd></div>
                             <div><dt class="text-gray-500">Moneda</dt><dd class="font-medium text-gray-800">${compra.moneda}</dd></div>
                             ${compra.fecha_vencimiento && html`<div><dt class="text-gray-500">Vencimiento</dt><dd class="font-medium text-red-600">${new Date(compra.fecha_vencimiento).toLocaleDateString()}</dd></div>`}

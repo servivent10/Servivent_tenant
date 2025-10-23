@@ -1,0 +1,3 @@
+-- Este script se ha dejado vacío intencionadamente.
+-- La lógica para eliminar la integración de Google Contacts ahora reside en el script principal
+-- `86_FEATURE_google_contacts_integration.md` para simplificar el proceso de eliminación.

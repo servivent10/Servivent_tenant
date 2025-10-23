@@ -407,14 +407,16 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
                         <p class="text-sm text-gray-500">SKU: ${details.sku || 'N/A'}</p>
                     </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <button onClick=${handleEdit} class="flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
-                        ${ICONS.edit} Editar
-                    </button>
-                    <button onClick=${handleDelete} class="flex items-center gap-2 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500">
-                        ${ICONS.delete} Eliminar
-                    </button>
-                </div>
+                ${(user.role === 'Propietario' || user.role === 'Administrador') && html`
+                    <div class="flex items-center gap-2">
+                        <button onClick=${handleEdit} class="flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                            ${ICONS.edit} Editar
+                        </button>
+                        <button onClick=${handleDelete} class="flex items-center gap-2 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500">
+                            ${ICONS.delete} Eliminar
+                        </button>
+                    </div>
+                `}
             </div>
 
             ${(!generalPrice || generalPrice <= 0) && (user.role === 'Propietario' || user.role === 'Administrador') && html`
@@ -495,7 +497,7 @@ export function ProductoDetailPage({ productoId, user, onLogout, onProfileUpdate
                                     <div><dt class="text-sm font-medium text-gray-500">Unidad de Medida</dt><dd class="mt-1 text-sm text-gray-900">${details.unidad_medida}</dd></div>
                                     <div class="sm:col-span-2">
                                         <dt class="text-sm font-medium text-gray-500">Descripción</dt>
-                                        <dd class="mt-1 text-sm text-gray-900 whitespace-pre-wrap" dangerouslySetInnerHTML=${{ __html: details.descripcion || 'Sin descripción.' }}></dd>
+                                        <dd class="mt-1 text-sm text-gray-900 whitespace-pre-wrap" dangerouslySetInnerHTML=${{ __html: details.descripcion || 'Sin descripción detallada.' }}></dd>
                                     </div>
                                 </dl>
                             </div>

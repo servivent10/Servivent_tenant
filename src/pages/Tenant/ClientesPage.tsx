@@ -99,7 +99,7 @@ export function ClientesPage({ user, onLogout, onProfileUpdate, companyInfo, nav
     const handleSave = (action, savedClient) => {
         setFormModalOpen(false);
         addToast({ message: `Cliente ${action === 'edit' ? 'actualizado' : 'creado'} con éxito.`, type: 'success' });
-        fetchData(); // Refetch all data for simplicity
+        fetchData();
     };
 
     const escapeCsvCell = (cell) => {

@@ -42,7 +42,13 @@ export function ProveedorFormModal({ isOpen, onClose, onSave, proveedorToEdit })
                 p_nombre_contacto: formData.nombre_contacto
             });
             if (error) throw error;
-            onSave(isEditMode ? 'edit' : 'create', newId);
+
+            const savedProveedor = {
+                id: isEditMode ? proveedorToEdit.id : newId,
+                ...formData
+            };
+            onSave(isEditMode ? 'edit' : 'create', savedProveedor);
+
         } catch(err) {
             addToast({ message: `Error al guardar: ${err.message}`, type: 'error' });
         } finally {

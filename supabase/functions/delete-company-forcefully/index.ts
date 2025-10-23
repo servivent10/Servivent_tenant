@@ -27,9 +27,9 @@ Deno.serve(async (req) => {
       throw new Error("Faltan parámetros: se requieren p_empresa_id y p_superadmin_password.");
     }
 
-    console.log(`[START] Proceso de eliminación en 2 etapas para la empresa: ${p_empresa_id}`);
+    console.log(`[START] Proceso de eliminación en 4 etapas para la empresa: ${p_empresa_id}`);
 
-    // --- 1. VERIFICACIÓN DE PERMISOS (LÓGICA DE SEGURIDAD) ---
+    // --- ETAPA 1: VERIFICACIÓN DE PERMISOS ---
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -54,53 +54,49 @@ Deno.serve(async (req) => {
       password: p_superadmin_password,
     });
     if (signInError) throw new Error("Contraseña de SuperAdmin incorrecta. Operación cancelada.");
-    console.log('[STEP 1/3] Verificación de SuperAdmin completada.');
+    console.log('[ETAPA 1/4] Verificación de SuperAdmin completada.');
 
-    // --- 2. ETAPA 1: OBTENER Y ELIMINAR TODOS LOS USUARIOS DE AUTH ---
-    console.log('[STEP 2/3] Obteniendo la lista de todos los usuarios (empleados y clientes) para eliminar...');
+    // --- ETAPA 2: OBTENER Y ELIMINAR TODOS LOS USUARIOS DE AUTH (EMPLEADOS Y CLIENTES) ---
+    console.log('[ETAPA 2/4] Obteniendo la lista de todos los usuarios (empleados y clientes) para eliminar...');
     
-    // Obtener IDs de empleados de la empresa
     const { data: tenantUsers, error: tenantUserError } = await supabaseAdmin
-      .from('usuarios')
-      .select('id')
-      .eq('empresa_id', p_empresa_id);
+      .from('usuarios').select('id').eq('empresa_id', p_empresa_id);
+    if (tenantUserError) throw new Error(`Error al obtener empleados: ${tenantUserError.message}`);
 
-    if (tenantUserError) {
-      throw new Error(`Error al obtener la lista de empleados: ${tenantUserError.message}`);
-    }
-
-    // Obtener IDs de clientes con cuenta web de la empresa
     const { data: customerUsers, error: customerUserError } = await supabaseAdmin
-      .from('clientes')
-      .select('auth_user_id')
-      .eq('empresa_id', p_empresa_id)
-      .not('auth_user_id', 'is', null);
-
-    if (customerUserError) {
-      throw new Error(`Error al obtener la lista de clientes: ${customerUserError.message}`);
-    }
+      .from('clientes').select('auth_user_id').eq('empresa_id', p_empresa_id).not('auth_user_id', 'is', null);
+    if (customerUserError) throw new Error(`Error al obtener clientes: ${customerUserError.message}`);
 
     const tenantUserIds = tenantUsers.map(u => u.id);
     const customerUserIds = customerUsers.map(c => c.auth_user_id);
-    
-    // Combinar y eliminar duplicados
     const allUserIdsToDelete = [...new Set([...tenantUserIds, ...customerUserIds])];
 
-    console.log(`[STEP 2/3] Se encontraron ${allUserIdsToDelete.length} usuarios en total (empleados y clientes). Procediendo a eliminarlos...`);
+    console.log(`[ETAPA 2/4] Se encontraron ${allUserIdsToDelete.length} usuarios en total. Procediendo a eliminarlos de auth.users...`);
     
-    // Eliminar cada usuario usando el cliente de administrador
     for (const userIdToDelete of allUserIdsToDelete) {
       const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(userIdToDelete);
-      if (deleteUserError) {
-        // Registrar el error pero continuar si es posible (ej. usuario ya no existe)
-        console.warn(`No se pudo eliminar al usuario ${userIdToDelete}: ${deleteUserError.message}`);
+      if (deleteUserError && !deleteUserError.message.includes('User not found')) {
+        console.warn(`No se pudo eliminar al usuario ${userIdToDelete} de auth: ${deleteUserError.message}`);
       }
     }
-    console.log('[STEP 2/3] Preparación completada, usuarios eliminados de auth.users.');
+    console.log('[ETAPA 2/4] Usuarios eliminados de auth.users.');
 
+    // --- ETAPA 3: LIMPIAR TABLAS NO CASCADABLES (historial_cambios) ---
+    console.log('[ETAPA 3/4] Limpiando registros de auditoría no enlazados por cascada...');
+    const { error: auditError } = await supabaseAdmin
+        .from('historial_cambios')
+        .delete()
+        .eq('empresa_id', p_empresa_id);
 
-    // --- 3. ETAPA 2: DEMOLICIÓN FINAL ---
-    console.log('[STEP 3/3] Ejecutando DELETE final en la tabla de empresas...');
+    if (auditError) {
+        // No detener el proceso, solo advertir.
+        console.warn(`Advertencia: No se pudieron limpiar los registros de auditoría: ${auditError.message}`);
+    } else {
+        console.log('[ETAPA 3/4] Registros de auditoría eliminados.');
+    }
+
+    // --- ETAPA 4: DEMOLICIÓN FINAL ---
+    console.log('[ETAPA 4/4] Ejecutando DELETE final en la tabla de empresas...');
     const { error: deleteError } = await supabaseAdmin
       .from('empresas')
       .delete()
@@ -111,7 +107,6 @@ Deno.serve(async (req) => {
     }
     console.log(`[SUCCESS] La empresa ${p_empresa_id} ha sido eliminada correctamente.`);
     
-    // --- 4. RESPUESTA DE ÉXITO ---
     return new Response(JSON.stringify({ message: "ÉXITO: La empresa y todos sus datos asociados han sido eliminados." }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,

@@ -57,10 +57,10 @@ DROP FUNCTION IF EXISTS public.get_company_clients();
 CREATE OR REPLACE FUNCTION get_company_clients()
 RETURNS TABLE (
     id uuid, nombre text, nit_ci text, telefono text, correo text,
-    direccion text, avatar_url text, saldo_pendiente numeric, codigo_cliente text
+    direccion text, avatar_url text, saldo_pendiente numeric, auth_user_id uuid
 ) LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
-    RETURN QUERY SELECT c.id, c.nombre, c.nit_ci, c.telefono, c.correo, c.direccion, c.avatar_url, c.saldo_pendiente, c.codigo_cliente
+    RETURN QUERY SELECT c.id, c.nombre, c.nit_ci, c.telefono, c.correo, c.direccion, c.avatar_url, c.saldo_pendiente, c.auth_user_id
     FROM public.clientes c
     WHERE c.empresa_id = public.get_empresa_id_from_jwt() ORDER BY c.created_at DESC;
 END;
@@ -74,20 +74,12 @@ CREATE OR REPLACE FUNCTION upsert_client(
 ) RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
     caller_empresa_id uuid := public.get_empresa_id_from_jwt();
-    v_cliente_id uuid; v_new_client_code text;
+    v_cliente_id uuid;
 BEGIN
     IF p_id IS NULL THEN
-        LOOP
-            v_new_client_code := upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 8));
-            BEGIN
-                INSERT INTO public.clientes(empresa_id, nombre, nit_ci, telefono, correo, direccion, avatar_url, codigo_cliente)
-                VALUES (caller_empresa_id, p_nombre, p_nit_ci, p_telefono, p_correo, p_direccion, p_avatar_url, v_new_client_code)
-                RETURNING id INTO v_cliente_id;
-                EXIT;
-            EXCEPTION WHEN unique_violation THEN
-                RAISE NOTICE 'Colisión de código de cliente detectada. Reintentando...';
-            END;
-        END LOOP;
+        INSERT INTO public.clientes(empresa_id, nombre, nit_ci, telefono, correo, direccion, avatar_url)
+        VALUES (caller_empresa_id, p_nombre, p_nit_ci, p_telefono, p_correo, p_direccion, p_avatar_url)
+        RETURNING id INTO v_cliente_id;
     ELSE
         UPDATE public.clientes SET nombre = p_nombre, nit_ci = p_nit_ci, telefono = p_telefono, correo = p_correo, direccion = p_direccion, avatar_url = p_avatar_url
         WHERE id = p_id AND empresa_id = caller_empresa_id;
@@ -117,8 +109,8 @@ BEGIN
     END IF;
 
     -- Validar formato y proveedor de correo con una expresión regular
-    -- Acepta dominios comunes como gmail, hotmail, outlook, yahoo, icloud.
-    IF NOT (p_correo ~* '^[a-zA-Z0-9._%+-]+@(gmail|hotmail|outlook|yahoo|icloud)\.(com|es|net|org)$') THEN
+    -- Acepta dominios comunes como gmail, hotmail, outlook, yahoo, icloud y que terminen en .com
+    IF NOT (p_correo ~* '^[a-zA-Z0-9._%+-]+@(gmail|hotmail|outlook|yahoo|icloud|servivent)\.com$') THEN
         RETURN json_build_object('valid', false, 'reason', 'format');
     END IF;
 
