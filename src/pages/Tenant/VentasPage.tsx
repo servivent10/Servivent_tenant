@@ -506,7 +506,10 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
                             <div class="flex justify-between items-start">
                                 <div class="min-w-0">
                                     <div class="font-bold text-gray-800 truncate">${v.cliente_nombre || 'Consumidor Final'}</div>
-                                    <div class="text-sm text-gray-600">Folio: ${v.folio}</div>
+                                    <div class="flex items-center gap-2">
+                                        <div class="text-sm text-gray-600">Folio: ${v.folio}</div>
+                                        ${v.metodo_pago === 'Pedido Web' && html`<span title="Pedido Web" class="text-primary">${ICONS.bolt}</span>`}
+                                    </div>
                                 </div>
                                 <div class="flex flex-col items-end gap-1">
                                     <span class=${getStatusPill(v.estado_pago)}>${v.estado_pago}</span>
@@ -537,8 +540,8 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
                             <th class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Folio</th>
                             <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Cliente</th>
                             <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Fecha</th>
-                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Total</th>
-                            <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Estado Pago</th>
+                            <th class="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Total</th>
+                            <th class="px-3 py-3.5 text-center text-sm font-semibold text-gray-900">Estado Pago</th>
                             <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Vencimiento</th>
                             <th class="relative py-3.5 pl-3 pr-4 sm:pr-6"><span class="sr-only">Acciones</span></th>
                         </tr>
@@ -546,11 +549,16 @@ export function VentasPage({ user, onLogout, onProfileUpdate, companyInfo, navig
                     <tbody class="divide-y divide-gray-200 bg-white">
                         ${ventas.map(v => html`
                             <tr key=${v.id} onClick=${() => handleRowClick(v)} class="hover:bg-gray-50 cursor-pointer">
-                                <td class="py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">${v.folio}</td>
+                                <td class="py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
+                                    <div class="flex items-center gap-2">
+                                        <span>${v.folio}</span>
+                                        ${v.metodo_pago === 'Pedido Web' && html`<span title="Pedido Web" class="text-primary">${ICONS.bolt}</span>`}
+                                    </div>
+                                </td>
                                 <td class="px-3 py-4 text-sm text-gray-500 truncate">${v.cliente_nombre || 'Consumidor Final'}</td>
                                 <td class="px-3 py-4 text-sm text-gray-500">${new Date(v.fecha).toLocaleDateString()}</td>
-                                <td class="px-3 py-4 text-sm font-semibold text-primary">${formatCurrency(v.total)}</td>
-                                <td class="px-3 py-4 text-sm"><span class=${getStatusPill(v.estado_pago)}>${v.estado_pago}</span></td>
+                                <td class="px-3 py-4 text-sm text-right font-semibold text-primary">${formatCurrency(v.total)}</td>
+                                <td class="px-3 py-4 text-sm text-center"><span class=${getStatusPill(v.estado_pago)}>${v.estado_pago}</span></td>
                                 <td class="px-3 py-4 text-sm"><${VencimientoPill} estado=${v.estado_vencimiento} dias=${v.dias_diferencia} /></td>
                                  <td class="relative py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                                     <button onClick=${(e) => { e.stopPropagation(); handleDownloadReceipt(v); }} disabled=${downloadingId === v.id} class="p-2 rounded-full text-gray-400 hover:text-primary hover:bg-gray-100 disabled:opacity-50" title="Descargar Nota de Venta (PDF)">

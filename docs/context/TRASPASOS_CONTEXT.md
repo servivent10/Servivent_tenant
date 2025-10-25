@@ -18,11 +18,10 @@ Este documento define la arquitectura y funcionalidad del módulo de **Traspasos
     -   Muestra KPIs relevantes y un historial de todos los traspasos con su estado actual.
     -   Un botón "Nuevo Traspaso" dirige al usuario al asistente de creación.
 
--   **`NuevoTraspasoPage.tsx` (Asistente de Creación):**
-    -   Un asistente de 3 pasos guía al usuario para **iniciar un envío**:
-        1.  **Origen y Destino:** Se selecciona la sucursal que envía y la que recibe.
-        2.  **Selección de Productos:** Un buscador muestra solo productos con stock en la **sucursal de origen**. El usuario define la cantidad a traspasar.
-        3.  **Confirmación:** Se muestra un resumen antes de procesar el envío. Al confirmar, el traspaso se crea con estado "En Camino".
+-   **`NuevoTraspasoPage.tsx` (Asistente de Creación y Procesamiento):**
+    -   Esta página ahora tiene **dos puntos de entrada**:
+        1.  **Manual:** El usuario hace clic en "Nuevo Traspaso" y completa el asistente de 3 pasos para iniciar un envío: Origen/Destino, Selección de Productos y Confirmación.
+        2.  **Automático (Logística Inteligente):** El usuario recibe una notificación de "Solicitud de Traspaso" (generada desde una proforma o un pedido web). El enlace de la notificación lo dirige a `#/traspasos/nuevo?solicitud=[ID]`. La página detecta este parámetro, llama a la RPC `get_solicitud_traspaso_details` y **precarga todo el formulario automáticamente** (origen, destino y la lista de productos solicitados). El usuario solo necesita verificar y confirmar.
 
 -   **`TraspasoDetailPage.tsx` (Página de Detalle y Recepción):**
     -   Muestra toda la información de un traspaso: folio, sucursales, fechas, y productos.
@@ -47,4 +46,4 @@ El proceso se divide en dos funciones transaccionales clave:
     4.  Crea un movimiento de auditoría de "Entrada por Traspaso".
     5.  Genera una notificación en tiempo real de `TRASPASO_RECIBIDO`.
 
--   **Otras Funciones:** `get_traspasos_data`, `get_data_for_new_traspaso`, `get_products_for_traspaso(p_sucursal_id)`, `get_traspaso_details(p_traspaso_id)`.
+-   **Otras Funciones:** `get_traspasos_data`, `get_data_for_new_traspaso`, `get_products_for_traspaso(p_sucursal_id)`, `get_traspaso_details(p_traspaso_id)`, `get_solicitud_traspaso_details(p_solicitud_id)`.

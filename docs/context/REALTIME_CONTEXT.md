@@ -24,7 +24,7 @@ El sistema se basa en la funcionalidad "Realtime" de Supabase, que escucha los c
 5.  **Transmisión (Broadcast) por WebSocket:** Con la validación de RLS ahora exitosa y sin recursión, el servicio de Supabase envía la notificación del cambio a través de WebSocket a todos los navegadores suscritos.
 
 6.  **Receptor en el Frontend (`RealtimeProvider`):**
-    -   El componente `src/hooks/useRealtime.js` es el núcleo del sistema en el frontend. Gestiona la conexión WebSocket y se suscribe a los cambios de una **lista predefinida de tablas de negocio** (ej. `ventas`, `inventarios`, `sesiones_caja`, `empresas`, etc.).
+    -   El componente `src/hooks/useRealtime.js` es el núcleo del sistema en el frontend. Gestiona la conexión WebSocket y se suscribe a los cambios de una **lista predefinida de tablas de negocio** (ej. `ventas`, `inventarios`, `sesiones_caja`, `empresas`, `solicitudes_traspaso`, etc.).
     -   Al recibir una notificación de CUALQUIER cambio (INSERT, UPDATE, DELETE) en una de estas tablas, su acción principal es **incrementar un contador de cambios (`changeCounter`)**.
     -   Adicionalmente, si el cambio proviene específicamente de la tabla `notificaciones`, también se encarga de mostrar un `Toast` al usuario (siempre que el cambio no haya sido generado por el mismo usuario).
 

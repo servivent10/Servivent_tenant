@@ -101,6 +101,18 @@ Esta carpeta contiene todos los scripts SQL para configurar y mantener la base d
 | `88_FEATURE_user_email_validation.md`| Registro / Usuarios | `[ACTIVO]` | `88_REVERT_...` | Añade validación de correo en tiempo real para nuevos usuarios del sistema. |
 | `89_FEATURE_superadmin_sucursal_maps.md`| SuperAdmin / Sucursales | `[ACTIVO]` | `89_REVERT_...` | Enriquece los datos de las sucursales en el panel de SuperAdmin con coordenadas. |
 | `90_FEATURE_compra_detail_user.md`| Compras (Detalle) | `[ACTIVO]` | `90_REVERT_...` | Añade el nombre del usuario que registró la compra a la vista de detalle. |
+| `91_FEATURE_proforma_conversion_status.md`| Ventas (Proformas) |`[ACTIVO]`| Próximamente | Implementa la lógica para marcar proformas como convertidas. |
+| `92_FEATURE_depositos.md`| Sucursales / Inventarios|`[ACTIVO]`| `92_REVERT_...` | Implementa la distinción entre Sucursales y Depósitos. |
+| `93_FEATURE_landed_cost.md` | Compras / Inventarios |`[ACTIVO]`| `93_REVERT_...` | Implementa el módulo de Costo de Adquisición Total (Landed Cost). |
+| `94_FEATURE_catalogo_web_logistics_v2.md`| Catálogo Web | `[ACTIVO]` | `94_REVERT_...` | Implementa la selección de sucursal de despacho y confirmación de pedidos. |
+| `95_HOTFIX_catalog_prices.md`| Catálogo Web | `[ACTIVO]` | `95_REVERT_...` | Corrige un error de rendimiento que impedía la carga de precios en el catálogo web. |
+| `96_HOTFIX_web_order_signature.md`| Catálogo Web | `[ACTIVO]` | `96_REVERT_...` | Corrige la firma de la función `registrar_pedido_web` para solucionar el error al finalizar un pedido. |
+| `97_HOTFIX_verify_stock_function.md`| Catálogo Web / Ventas | `[ACTIVO]` | `97_REVERT_...` | Asegura la existencia y correcta firma de la función `verificar_stock_para_venta` para corregir un error en la vista de detalle de venta. |
+| `98_HOTFIX_confirm_order_function.md`| Catálogo Web / Ventas | `[ACTIVO]` | `98_REVERT_...` | Asegura la existencia y correcta firma de la función `confirmar_pedido_web` para corregir el error al procesar un pedido. |
+| `99_HOTFIX_web_order_payment_flow.md` | Catálogo Web / Ventas |`[ACTIVO]`| `99_REVERT_...` | Corrige el flujo de pago y confirmación de pedidos web, evitando que el panel de gestión desaparezca. |
+| `100_HOTFIX_sale_details_syntax.md`| Ventas (Detalle) |`[ACTIVO]`| `100_REVERT_...` | Corrige un error de sintaxis en `get_sale_details` que impedía ver el detalle de venta. |
+| `101_HOTFIX_web_order_final_flow.md` | Catálogo Web / Ventas |`[ACTIVO]`| `101_REVERT_...` | Corrige el flujo final de pedidos web, manteniendo el estado 'Pendiente' hasta la confirmación. |
+| `102_FEATURE_web_order_logistics.md`| Ventas (Detalle) / Traspasos |`[ACTIVO]`| `102_REVERT_...` | Implementa la lógica de solicitud de traspasos para pedidos web con stock insuficiente. |
 | `DATA_INTEGRITY_FIX.md`| Core | `[REPARACIÓN]` | N/A | Script maestro que unifica y corrige los problemas de datos más comunes. |
 | `FIX_remove_registration_trigger.md`| Core | `[OBSOLETO]` | N/A | Reemplazado por `DATA_INTEGRITY_FIX.md`. |
 | `FIX_assign_owners_to_branch.md`| Sucursales y Usuarios | `[OBSOLETO]` | N/A | Reemplazado por `DATA_INTEGRITY_FIX.md`. |

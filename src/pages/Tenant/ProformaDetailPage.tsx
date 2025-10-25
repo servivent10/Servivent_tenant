@@ -131,7 +131,7 @@ export function ProformaDetailPage({ proformaId, user, onLogout, onProfileUpdate
 
         const phoneNumber = proforma.cliente_telefono.replace(/\D/g, '');
         const fullPhoneNumber = phoneNumber.length > 8 ? phoneNumber : `591${phoneNumber}`;
-
+        
         const itemsText = (proforma.items || [])
             .map(item => `• ${item.cantidad} x ${item.producto_nombre}`)
             .join('\n');
@@ -150,11 +150,12 @@ export function ProformaDetailPage({ proformaId, user, onLogout, onProfileUpdate
             const catalogUrl = `https://servivent-tenant-627784733720.us-west1.run.app/#/catalogo/${companyInfo.slug}`;
             message += `\n\n---\nVisita nuestro catálogo y haz tu próximo pedido en línea:\n${catalogUrl}`;
         }
-
+        
         const whatsappUrl = `https://wa.me/${fullPhoneNumber}?text=${encodeURIComponent(message)}`;
 
         window.open(whatsappUrl, '_blank');
     };
+
 
     const handleContinueAnyway = async () => {
         setIsStockModalOpen(false);
@@ -166,7 +167,8 @@ export function ProformaDetailPage({ proformaId, user, onLogout, onProfileUpdate
     
             setSelectedClientId(proforma.cliente_id);
     
-            const stockIssuesMap = new Map(stockIssues.map(item => [item.producto_id, item]));
+            // FIX: Explicitly type the Map to ensure `issue` is correctly typed as StockIssue.
+            const stockIssuesMap = new Map<string, StockIssue>(stockIssues.map(item => [item.producto_id, item]));
             const newCart = [];
             const newCustomPrices = {};
     
@@ -244,7 +246,6 @@ export function ProformaDetailPage({ proformaId, user, onLogout, onProfileUpdate
         }
 
         startLoading();
-        setPopoverState({ openFor: null, target: null });
         try {
             const { error } = await supabase.rpc('solicitar_traspaso_desde_proforma', {
                 p_proforma_id: proformaId,
@@ -254,6 +255,7 @@ export function ProformaDetailPage({ proformaId, user, onLogout, onProfileUpdate
             if (error) throw error;
             const originBranchName = item.other_branches_stock.find(b => b.id === originBranchId)?.nombre || 'la sucursal seleccionada';
             addToast({ message: `Solicitud de traspaso enviada a ${originBranchName}.`, type: 'success' });
+            setPopoverState({ openFor: null, target: null });
             setIsStockModalOpen(false);
         } catch (err) {
             addToast({ message: `Error al solicitar traspaso: ${err.message}`, type: 'error' });

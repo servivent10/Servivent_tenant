@@ -265,7 +265,7 @@ export function CatalogApp({ path, navigate, customerProfile }) {
                 p_slug: slug,
                 p_items: orderItems,
                 p_direccion_id: deliveryDetails.addressId || null,
-                p_sucursal_id_retiro: deliveryDetails.sucursalId || null
+                p_sucursal_id: deliveryDetails.sucursalId || null
             });
 
             if (rpcError) throw rpcError;

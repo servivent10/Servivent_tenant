@@ -70,7 +70,7 @@ const UserList = ({ users, onEdit, onDelete, currentUser }) => {
         return html`
             <div class="text-center py-12 rounded-lg border-2 border-dashed border-gray-300 bg-white mt-6">
                 <div class="text-6xl text-gray-300">${ICONS.users}</div>
-                <h3 class="mt-2 text-lg font-medium text-gray-900">No hay usuarios en esta sucursal</h3>
+                <h3 class="mt-2 text-lg font-medium text-gray-900">No hay usuarios en esta ubicación</h3>
                 <p class="mt-1 text-sm text-gray-500">Añade el primer miembro del equipo para esta ubicación.</p>
             </div>
         `;
@@ -175,7 +175,7 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
     const [userToDelete, setUserToDelete] = useState(null);
     const [isProfileModalOpen, setProfileModalOpen] = useState(false);
 
-    const [branchDetails, setBranchDetails] = useState({ nombre: '', direccion: '', telefono: '', latitud: null, longitud: null });
+    const [branchDetails, setBranchDetails] = useState({ nombre: '', direccion: '', telefono: '', latitud: null, longitud: null, tipo: 'Sucursal' });
     
     const planLimits = companyInfo?.planDetails?.limits;
     const maxUsers = planLimits?.max_users ?? 1;
@@ -219,9 +219,10 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
                 p_telefono: branchDetails.telefono,
                 p_latitud: branchDetails.latitud,
                 p_longitud: branchDetails.longitud,
+                p_tipo: branchDetails.tipo
             });
             if (error) throw error;
-            addToast({ message: 'Detalles de la sucursal actualizados.', type: 'success' });
+            addToast({ message: 'Detalles de la ubicación actualizados.', type: 'success' });
             fetchData();
         } catch (err) {
             addToast({ message: `Error al guardar: ${err.message}`, type: 'error' });
@@ -297,8 +298,8 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
     }
 
     const breadcrumbs = user.role === 'Propietario'
-        ? [ { name: 'Sucursales', href: '#/sucursales' }, { name: data.details.nombre, href: `#/sucursales/${sucursalId}` } ]
-        : [ { name: 'Mi Sucursal', href: `#/sucursales/${sucursalId}` } ];
+        ? [ { name: 'Ubicaciones', href: '#/sucursales' }, { name: data.details.nombre, href: `#/sucursales/${sucursalId}` } ]
+        : [ { name: 'Mi Ubicación', href: `#/sucursales/${sucursalId}` } ];
     
     const tabs = [
         { id: 'usuarios', label: 'Gestión de Usuarios' },
@@ -343,17 +344,10 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
                         ${user.role !== 'Empleado' && html`
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
                                 <${KPI_Card} 
-                                    title="Equipo en esta Sucursal"
+                                    title="Equipo en esta Ubicación"
                                     value=${`${userCountInBranch} ${userCountInBranch === 1 ? 'Miembro' : 'Miembros'}`}
                                     icon=${ICONS.users}
                                     color='primary'
-                                    subtext=${html`
-                                        <div class="flex flex-wrap gap-2 mt-2">
-                                            <${RolePill} role="Propietario" count=${kpis.propietarios_count} />
-                                            <${RolePill} role="Administrador" count=${kpis.administradores_count} />
-                                            <${RolePill} role="Empleado" count=${kpis.empleados_count} />
-                                        </div>
-                                    `}
                                 />
                                 <${KPI_Card} 
                                     title="Uso Total de Usuarios"
@@ -366,7 +360,7 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
                         `}
                          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                             <div>
-                                <h2 class="text-xl font-semibold text-gray-800">Equipo de la Sucursal</h2>
+                                <h2 class="text-xl font-semibold text-gray-800">Equipo de la Ubicación</h2>
                                 ${user.role !== 'Empleado' && html`
                                 <p class="mt-1 text-sm text-gray-600">
                                     Gestiona los miembros del equipo asignados a esta ubicación.
@@ -389,11 +383,15 @@ export function SucursalDetailPage({ sucursalId, user, onLogout, onProfileUpdate
                 ${activeTab === 'detalles' && html`
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         <div class="max-w-xl">
-                            <h2 class="text-xl font-semibold text-gray-800">Información de la Sucursal</h2>
+                            <h2 class="text-xl font-semibold text-gray-800">Información de la Ubicación</h2>
                             <div class="mt-4 p-6 bg-white rounded-lg shadow border space-y-4">
                                 <${FormInput} label="Nombre" name="nombre" type="text" value=${branchDetails.nombre} onInput=${handleDetailsInput} />
                                 <${FormInput} label="Dirección" name="direccion" type="text" value=${branchDetails.direccion} onInput=${handleDetailsInput} required=${false} />
                                 <${FormInput} label="Teléfono" name="telefono" type="tel" value=${branchDetails.telefono} onInput=${handleDetailsInput} required=${false} />
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-700">Tipo de Ubicación</dt>
+                                    <dd class="mt-1 text-base text-gray-900 font-semibold p-2 bg-slate-100 rounded-md">${branchDetails.tipo}</dd>
+                                </div>
                             </div>
                             <div class="mt-4 flex justify-end">
                                 <button onClick=${handleSaveChanges} disabled=${isSaving} class="flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50 min-w-[120px]">

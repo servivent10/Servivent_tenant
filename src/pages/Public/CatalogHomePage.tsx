@@ -8,7 +8,7 @@ import { ICONS } from '../../components/Icons.js';
 import { NO_IMAGE_ICON_URL } from '../../lib/config.js';
 import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 
-const BANNER_IMAGE_URL = "https://raw.githubusercontent.com/servivent10/iconos/refs/heads/main/Lucid_Origin_Empresas_comerciales_de_productos_variables_en_un_0.jpg";
+const BANNER_IMAGE_URL = "https://fqqmbgqeikiaehzpdway.supabase.co/storage/v1/object/public/img_app/shopping-cart-banner-online-store-vector-42935756.avif";
 
 const formatCurrency = (value, currencySymbol = 'Bs') => {
     const number = Number(value || 0);

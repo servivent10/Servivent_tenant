@@ -46,6 +46,39 @@ export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company,
     const [selectedSucursalId, setSelectedSucursalId] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const { addToast } = useToast();
+    
+    const [selectedDispatchSucursalId, setSelectedDispatchSucursalId] = useState(null);
+
+    const dispatchOptions = useMemo(() => {
+        if (!sucursales || !cart || cart.length === 0) return [];
+        
+        return sucursales.map(sucursal => {
+            let fullStock = true;
+            let partialStock = false;
+            
+            for (const item of cart) {
+                const stockInfo = item.all_branch_stock?.find(s => s.id === sucursal.id);
+                const stock = stockInfo ? stockInfo.cantidad : 0;
+                
+                if (stock < item.quantity) {
+                    fullStock = false;
+                }
+                if (stock > 0) {
+                    partialStock = true;
+                }
+            }
+            
+            if (fullStock) return { ...sucursal, stockStatus: 'full' };
+            if (partialStock) return { ...sucursal, stockStatus: 'partial' };
+            return { ...sucursal, stockStatus: 'none' };
+        }).sort((a, b) => {
+            if (a.stockStatus === 'full' && b.stockStatus !== 'full') return -1;
+            if (a.stockStatus !== 'full' && b.stockStatus === 'full') return 1;
+            if (a.stockStatus === 'partial' && b.stockStatus === 'none') return -1;
+            if (a.stockStatus === 'none' && b.stockStatus === 'partial') return 1;
+            return 0;
+        });
+    }, [sucursales, cart]);
 
     const fetchAddresses = useCallback(async () => {
         if (!customerProfile) return;
@@ -74,14 +107,28 @@ export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company,
             setSelectedSucursalId(sucursales[0].id);
         }
     }, [deliveryMethod, fetchAddresses, sucursales]);
+    
+    useEffect(() => {
+        if (deliveryMethod === 'domicilio' && dispatchOptions.length > 0 && !selectedDispatchSucursalId) {
+            const firstFullStock = dispatchOptions.find(opt => opt.stockStatus === 'full');
+            if (firstFullStock) {
+                setSelectedDispatchSucursalId(firstFullStock.id);
+            }
+        }
+    }, [deliveryMethod, dispatchOptions, selectedDispatchSucursalId]);
+
 
     const handleConfirmOrder = () => {
         if (deliveryMethod === 'domicilio') {
+            if (!selectedDispatchSucursalId) {
+                addToast({ message: 'Por favor, selecciona una sucursal para el despacho.', type: 'warning'});
+                return;
+            }
             if (!selectedAddressId) {
                 addToast({ message: 'Por favor, selecciona o añade una dirección de envío.', type: 'warning' });
                 return;
             }
-            onPlaceOrder({ addressId: selectedAddressId, sucursalId: null });
+            onPlaceOrder({ addressId: selectedAddressId, sucursalId: selectedDispatchSucursalId });
         } else if (deliveryMethod === 'retiro') {
             if (!selectedSucursalId) {
                 addToast({ message: 'Por favor, selecciona una sucursal para el retiro.', type: 'warning' });
@@ -163,26 +210,53 @@ export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company,
                     </div>
 
                     ${deliveryMethod === 'domicilio' && html`
-                        <div class="mt-6 animate-fade-in-down">
-                            <h3 class="text-base font-medium text-gray-800">Dirección de Envío</h3>
-                            ${isLoadingAddresses ? html`<div class="flex justify-center p-4"><${Spinner} color="text-primary"/></div>` :
-                                addresses.length === 0 ? html`
-                                    <div class="mt-2 text-center p-4 bg-white rounded-md border">
-                                        <p class="text-sm text-gray-600">No tienes direcciones guardadas.</p>
-                                        <button onClick=${() => setIsModalOpen(true)} class="mt-2 text-sm font-semibold text-primary hover:underline">Añadir una dirección</button>
-                                    </div>
-                                ` : html`
-                                    <div class="mt-2 space-y-2">
-                                        ${addresses.map(addr => html`
-                                            <div onClick=${() => setSelectedAddressId(addr.id)} class=${`p-3 rounded-md border cursor-pointer ${selectedAddressId === addr.id ? 'bg-blue-100 border-blue-300 ring-2 ring-blue-500' : 'bg-white'}`}>
-                                                <p class="font-semibold text-sm ${selectedAddressId === addr.id ? 'text-blue-900' : 'text-gray-900'}">${addr.nombre} ${addr.es_principal ? '(Principal)' : ''}</p>
-                                                <p class="text-xs ${selectedAddressId === addr.id ? 'text-blue-700' : 'text-gray-600'}">${addr.direccion_texto}</p>
+                        <div class="mt-6 space-y-6 animate-fade-in-down">
+                            <div>
+                                <h3 class="text-base font-medium text-gray-800">1. Selecciona Sucursal de Despacho</h3>
+                                <div class="mt-2 space-y-2">
+                                    ${dispatchOptions.map(opt => {
+                                        const statusColors = {
+                                            full: { bg: 'bg-green-50', border: 'border-green-300', ring: 'ring-green-500', text: 'text-green-900', subtext: 'text-green-700', label: 'Stock Completo' },
+                                            partial: { bg: 'bg-amber-50', border: 'border-amber-300', ring: 'ring-amber-500', text: 'text-amber-900', subtext: 'text-amber-700', label: 'Stock Parcial' },
+                                            none: { bg: 'bg-gray-100', border: 'border-gray-300', ring: 'ring-gray-500', text: 'text-gray-900', subtext: 'text-gray-500', label: 'Sin Stock' },
+                                        };
+                                        const colors = statusColors[opt.stockStatus];
+                                        return html`
+                                            <div onClick=${() => setSelectedDispatchSucursalId(opt.id)} class=${`p-3 rounded-md border cursor-pointer ${selectedDispatchSucursalId === opt.id ? `${colors.bg} ${colors.border} ring-2 ${colors.ring}` : 'bg-white'}`}>
+                                                <div class="flex justify-between items-start">
+                                                    <p class="font-semibold text-sm ${colors.text}">${opt.nombre}</p>
+                                                    <span class="text-xs font-bold ${colors.subtext}">${colors.label}</span>
+                                                </div>
+                                                <p class="text-xs ${colors.subtext}">${opt.direccion}</p>
                                             </div>
-                                        `)}
-                                        <button onClick=${() => setIsModalOpen(true)} class="text-sm font-semibold text-primary hover:underline">+ Añadir otra dirección</button>
-                                    </div>
-                                `
-                            }
+                                        `;
+                                    })}
+                                </div>
+                            </div>
+
+                            ${selectedDispatchSucursalId && html`
+                                <div class="animate-fade-in-down">
+                                    <h3 class="text-base font-medium text-gray-800">2. Selecciona Dirección de Envío</h3>
+                                    ${isLoadingAddresses ? html`<div class="flex justify-center p-4"><${Spinner} color="text-primary"/></div>` :
+                                        addresses.length === 0 ? html`
+                                            <div class="mt-2 text-center p-4 bg-white rounded-md border">
+                                                <p class="text-sm text-gray-600">No tienes direcciones guardadas.</p>
+                                                <button onClick=${() => setIsModalOpen(true)} class="mt-2 text-sm font-semibold text-primary hover:underline">Añadir una dirección</button>
+                                            </div>
+                                        ` : html`
+                                            <div class="mt-2 space-y-2">
+                                                ${addresses.map(addr => html`
+                                                    <div onClick=${() => setSelectedAddressId(addr.id)} class=${`p-3 rounded-md border cursor-pointer ${selectedAddressId === addr.id ? 'bg-blue-100 border-blue-300 ring-2 ring-blue-500' : 'bg-white'}`}>
+                                                        <p class="font-semibold text-sm ${selectedAddressId === addr.id ? 'text-blue-900' : 'text-gray-900'}">${addr.nombre} ${addr.es_principal ? '(Principal)' : ''}</p>
+                                                        <p class="text-xs ${selectedAddressId === addr.id ? 'text-blue-700' : 'text-gray-600'}">${addr.direccion_texto}</p>
+                                                    </div>
+                                                `)}
+                                                <button onClick=${() => setIsModalOpen(true)} class="text-sm font-semibold text-primary hover:underline">+ Añadir otra dirección</button>
+                                            </div>
+                                        `
+                                    }
+                                </div>
+                            `}
                         </div>
                     `}
                      ${deliveryMethod === 'retiro' && html`
@@ -196,6 +270,7 @@ export function CatalogCartPage({ cart, onUpdateQuantity, onPlaceOrder, company,
                                         <div onClick=${() => setSelectedSucursalId(s.id)} class=${`p-3 rounded-md border cursor-pointer ${selectedSucursalId === s.id ? 'bg-blue-100 border-blue-300 ring-2 ring-blue-500' : 'bg-white'}`}>
                                             <p class="font-semibold text-sm ${selectedSucursalId === s.id ? 'text-blue-900' : 'text-gray-900'}">${s.nombre}</p>
                                             <p class="text-xs ${selectedSucursalId === s.id ? 'text-blue-700' : 'text-gray-600'}">${s.direccion}</p>
+                                            <a href=${`https://maps.google.com/?q=${s.latitud},${s.longitud}`} target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-primary hover:underline mt-1 inline-block">Ver en mapa</a>
                                         </div>
                                     `)}
                                 </div>

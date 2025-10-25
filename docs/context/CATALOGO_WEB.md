@@ -99,40 +99,50 @@ Esta fase mejorará drásticamente la experiencia del cliente y la logística de
 
 ### Fase 5: Logística de Entrega y Despacho (Flujo Unificado)
 
-Este paso ocurre durante el checkout, después de que el cliente ya ha iniciado sesión.
+Este paso ocurre durante el checkout (`CatalogCartPage.tsx`), después de que el cliente ya ha iniciado sesión.
 
 1.  **Paso Único: "Método de Entrega"**
     -   Se le presentan al cliente dos opciones principales: **"Retiro en Sucursal"** y **"Envío a Domicilio"**.
 
 2.  **Flujo "Retiro en Sucursal":**
-    -   Si la empresa tiene más de una sucursal, se le muestra una lista de las sucursales disponibles para que seleccione una.
-    -   El `sucursal_id` seleccionado se asigna al pedido.
-    -   (Si solo hay una sucursal, se selecciona automáticamente).
+    -   Se le muestra al cliente una lista enriquecida de las sucursales, incluyendo su **dirección completa** y un enlace para **"Ver en mapa"**.
+    -   Al seleccionar una, el `sucursal_id` se asigna al pedido para su procesamiento.
 
 3.  **Flujo "Envío a Domicilio":**
-    -   **Selección de Dirección:** Se le muestra al cliente su lista de direcciones guardadas (gestionadas desde el Portal de Cliente) para que seleccione una. El `id` de la dirección se guardará en la `venta`.
-    -   **Selección de Sucursal de Despacho (Lógica Crítica):** Se le pide al cliente que seleccione de qué sucursal se deben despachar los productos. Esto es fundamental para saber de qué inventario descontar el stock.
+    -   **Selección de Sucursal de Despacho (Lógica Crítica):** La interfaz muestra una lista de las sucursales que pueden despachar el pedido. Esta lista es **inteligente**:
+        -   Indica qué sucursales tienen **stock completo** para todo el carrito.
+        -   Indica cuáles tienen **stock parcial**.
+        -   Esto se logra gracias a que la función `get_public_catalog_data` ahora devuelve el stock de cada producto desglosado por sucursal (`all_branch_stock`).
+    -   **Selección de Dirección:** Una vez seleccionada la sucursal de despacho, se muestra la lista de direcciones guardadas del cliente para que elija a dónde se enviará el pedido.
+    -   **Asignación de Datos:** Al confirmar, tanto el `sucursal_id` de despacho como el `direccion_entrega_id` se guardan en el registro de la `venta`.
 
 ### Fase 6: Gestión de Ubicaciones con Mapas
 
--   **Backend:** Se añadirán columnas `latitud` y `longitud` a la tabla `sucursales`.
--   **UI (Propietario):** El modal `SucursalFormModal` incluirá un mapa interactivo para que el propietario establezca la ubicación exacta de sus sucursales.
--   **UI (Público):** El modal "Nuestra Empresa" usará estas coordenadas para mostrar un mapa por cada sucursal.
+-   **Backend:** Se añadieron columnas `latitud` y `longitud` a la tabla `sucursales`.
+-   **UI (Propietario):** El modal `SucursalFormModal` incluye un mapa interactivo para que el propietario establezca la ubicación exacta de sus sucursales.
+-   **UI (Público):** La lista de sucursales en el checkout ahora usa estas coordenadas para el enlace "Ver en mapa".
 
-### Fase 7: Procesamiento de Pedidos (Interfaz de Empresa)
+### Fase 7: Procesamiento de Pedidos (Interfaz de Empresa) - **OBSOLETO, VER FASE 8**
+
+### Fase 8: Procesamiento de Pedidos con Logística Inteligente (Flujo Definitivo)
 
 Este es el flujo que sigue el personal de la empresa después de que un cliente realiza un pedido desde el catálogo web.
 
-1.  **Recepción del Pedido:** Cuando un cliente finaliza su compra, se crea un nuevo registro en la tabla `ventas` con un estado especial: **"Pedido Web Pendiente"**. El inventario **NO** se descuenta en este momento.
-2.  **Notificación y Visibilidad:**
-    -   Se genera una notificación en tiempo real para alertar al personal.
-    -   En la `VentasPage.tsx`, una nueva pestaña o filtro "Pedidos Web" mostrará estas nuevas órdenes para su gestión.
+1.  **Recepción del Pedido:** Se crea un registro en `ventas` con estado **"Pedido Web Pendiente"**. El inventario **NO** se descuenta.
+
+2.  **Notificación y Visibilidad:** Se genera una notificación para la sucursal asignada. El pedido aparece en la `VentasPage`.
+
 3.  **Gestión en `VentaDetailPage.tsx`:**
-    -   Al abrir el detalle de un pedido web, el sistema realizará una **verificación de stock en tiempo real** para la sucursal de despacho asignada.
-    -   Se mostrará de forma prominente la información de entrega (dirección de envío o sucursal de retiro).
-    -   **Si el stock es correcto:** El personal usará un botón para **"Confirmar y Despachar"**. Esta acción cambiará el estado de la venta (ej. a "Pagada" o "En Preparación") y **finalmente descontará el stock** del inventario.
-    -   **Si hay inconsistencias de stock:** Se mostrarán alertas visuales. El personal podrá contactar al cliente o ajustar el pedido.
-
-### Fase 8: Notificaciones y Aislamiento
-
--   **Aislamiento de Pedidos:** Gracias a las políticas RLS, solo los usuarios de la sucursal de destino (para "Retiro") o de la sucursal de despacho (para "Envío") verán el pedido y la notificación correspondiente. El Propietario tendrá visibilidad total.
+    -   Al abrir el detalle, un nuevo panel **"Gestión de Pedido Web"** realiza una **verificación de stock en tiempo real** (`verificar_stock_para_venta`).
+    -   **Caso 1: Stock Suficiente:**
+        -   El panel muestra un estado "OK" y habilita el botón **"Confirmar y Procesar Pedido"**.
+        -   Al hacer clic, la RPC `confirmar_pedido_web` descuenta el stock y cambia el estado a "Pagada".
+    -   **Caso 2: Stock Insuficiente:**
+        -   El panel muestra una advertencia. El botón principal cambia a **"Ver Faltantes y Solicitar Traspaso"**.
+        -   Al hacer clic, se abre un modal de logística (idéntico al de Proformas) que permite:
+            -   **Solicitar productos individualmente** a otras sucursales.
+            -   Usar **"Sugerencias de Traspaso"** para solicitar en bloque.
+            -   La RPC `solicitar_traspaso_desde_venta` crea el registro en `solicitudes_traspaso`.
+        -   El empleado de la otra sucursal recibe una notificación que lo lleva a `NuevoTraspasoPage` con todo el formulario precargado.
+        -   Una vez que el traspaso se completa, el stock de la sucursal se actualiza y el pedido web puede ser confirmado.
+        -   Se mantiene una opción para "Vender Stock Disponible", que carga los productos con stock en el Punto de Venta.

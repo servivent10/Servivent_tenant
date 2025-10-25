@@ -29,6 +29,9 @@ Este documento define la arquitectura, diseño y funcionalidad del módulo de **
 
 -   Muestra un desglose completo de la transacción.
 -   Incluye un **gestor de pagos** para registrar abonos a las ventas a crédito, actualizando el saldo pendiente.
+-   **Gestión de Pedidos Web:** Para las ventas que provienen del catálogo público, la página ahora incluye un panel de **"Gestión de Pedido Web"**. Este panel realiza una verificación de stock en tiempo real y presenta la acción correspondiente:
+    -   **Si hay stock:** Habilita un botón para "Confirmar y Procesar Pedido", que descuenta el inventario.
+    -   **Si el stock es insuficiente:** Habilita un botón que abre un modal de logística, desde el cual el personal puede solicitar un traspaso de los productos faltantes a otras sucursales, replicando la funcionalidad inteligente del módulo de Proformas.
 
 ## 3. Lógica de Backend (Funciones RPC)
 
@@ -37,6 +40,9 @@ Este documento define la arquitectura, diseño y funcionalidad del módulo de **
 -   **`get_sale_details()`:** Recupera la información para la página de detalle.
 -   **`registrar_pago_venta()`:** Registra un abono y actualiza los saldos.
 -   **`get_sales_filter_data()`:** Carga los datos para los menús desplegables de los filtros.
+-   **`verificar_stock_para_venta()`:** Verifica el stock disponible para un pedido web.
+-   **`confirmar_pedido_web()`:** Finaliza un pedido web, descontando el stock.
+-   **`solicitar_traspaso_desde_venta()`:** Crea un registro de solicitud de traspaso para un pedido web.
 
 ## 4. Pagos Múltiples para Ventas (Contado y Crédito)
 

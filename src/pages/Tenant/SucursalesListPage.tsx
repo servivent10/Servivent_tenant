@@ -15,24 +15,6 @@ import { ConfirmationModal } from '../../components/ConfirmationModal.js';
 import { SucursalFormModal } from '../../components/modals/SucursalFormModal.js';
 import { Avatar } from '../../components/Avatar.js';
 
-const RolePill = ({ role, count }) => {
-  if (!count || count === 0) return null;
-
-  const styles = {
-    Propietario: 'bg-amber-100 text-amber-800 border-amber-200',
-    Administrador: 'bg-blue-100 text-blue-800 border-blue-200',
-    Empleado: 'bg-slate-100 text-slate-800 border-slate-200',
-  };
-  const style = styles[role] || styles.Empleado;
-  const text = `${count} ${role}${count > 1 ? 's' : ''}`;
-
-  return html`
-    <span class="${style} text-xs font-medium inline-flex items-center px-2.5 py-0.5 rounded-full border">
-      ${text}
-    </span>
-  `;
-};
-
 const SucursalCard = ({ sucursal, onClick, onEdit, onDelete }) => {
     const GOOGLE_MAPS_API_KEY = 'AIzaSyDcOzOJnV2qJWsXeCGqBfWiORfUa4ZIBtw';
     const staticMapUrl = (sucursal.latitud && sucursal.longitud)
@@ -42,9 +24,15 @@ const SucursalCard = ({ sucursal, onClick, onEdit, onDelete }) => {
     return html`
         <div class="bg-white rounded-lg shadow-md border overflow-hidden transition-shadow hover:shadow-xl flex flex-col">
             {/* Header */}
-            <div class="p-4 border-b flex items-center gap-3 bg-gray-50">
-                <div class="text-primary text-2xl">${ICONS.storefront}</div>
-                <h3 class="text-lg font-bold text-gray-800 truncate" title=${sucursal.nombre}>${sucursal.nombre}</h3>
+            <div class="p-4 border-b flex items-center justify-between gap-3 bg-gray-50">
+                <div class="flex items-center gap-3">
+                    <div class="text-primary text-2xl">${ICONS.storefront}</div>
+                    <h3 class="text-lg font-bold text-gray-800 truncate" title=${sucursal.nombre}>${sucursal.nombre}</h3>
+                </div>
+                ${sucursal.tipo === 'Depósito' ? 
+                    html`<span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-800">Depósito</span>` :
+                    html`<span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">Sucursal</span>`
+                }
             </div>
 
             {/* Body */}
@@ -91,7 +79,7 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
     const { addToast } = useToast();
     const { startLoading, stopLoading } = useLoading();
     
-    const [data, setData] = useState({ sucursales: [], kpis: { total_sucursales: 0, total_empleados: 0, propietarios_count: 0, administradores_count: 0, empleados_count: 0 } });
+    const [data, setData] = useState({ sucursales: [], kpis: { total_sucursales: 0, total_empleados: 0 } });
     const [isFormModalOpen, setFormModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [sucursalToEdit, setSucursalToEdit] = useState(null);
@@ -194,7 +182,7 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
         `;
     }
     
-    const kpis = data?.kpis || { total_sucursales: 0, total_empleados: 0, propietarios_count: 0, administradores_count: 0, empleados_count: 0 };
+    const kpis = data?.kpis || { total_sucursales: 0, total_empleados: 0 };
 
     return html`
         <${DashboardLayout} 
@@ -208,43 +196,32 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
         >
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 class="text-2xl font-semibold text-gray-900">Gestión de Sucursales</h1>
+                    <h1 class="text-2xl font-semibold text-gray-900">Gestión de Ubicaciones</h1>
                     <p class="mt-1 text-sm text-gray-600">
-                        Administra todas las ubicaciones de tu negocio. 
-                        <span class="font-semibold text-primary">${branchCount} de ${maxBranches >= 99999 ? '∞' : maxBranches}</span> sucursales utilizadas.
+                        Administra todas las sucursales y depósitos de tu negocio. 
+                        <span class="font-semibold text-primary">${branchCount} de ${maxBranches >= 99999 ? '∞' : maxBranches}</span> ubicaciones utilizadas.
                     </p>
                 </div>
                  <button 
                     onClick=${handleAddSucursal}
                     disabled=${atLimit}
-                    title=${atLimit ? 'Has alcanzado el límite de sucursales de tu plan.' : 'Añadir nueva sucursal'}
+                    title=${atLimit ? 'Has alcanzado el límite de ubicaciones de tu plan.' : 'Añadir nueva ubicación'}
                     class="hidden sm:inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:bg-slate-400 disabled:cursor-not-allowed"
                 >
-                    ${ICONS.add} Añadir Sucursal
+                    ${ICONS.add} Añadir Ubicación
                 </button>
             </div>
 
-            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 mt-6">
-                 <${KPI_Card} title="Total de Sucursales" value=${kpis.total_sucursales || 0} icon=${ICONS.storefront} />
-                 <${KPI_Card} 
-                    title="Total de Empleados" 
-                    value=${kpis.total_empleados || 0} 
-                    icon=${ICONS.users}
-                    subtext=${html`
-                        <div class="flex flex-wrap gap-2 mt-2">
-                            <${RolePill} role="Propietario" count=${kpis.propietarios_count} />
-                            <${RolePill} role="Administrador" count=${kpis.administradores_count} />
-                            <${RolePill} role="Empleado" count=${kpis.empleados_count} />
-                        </div>
-                    `}
-                 />
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-6">
+                 <${KPI_Card} title="Total de Ubicaciones" value=${kpis.total_sucursales || 0} icon=${ICONS.storefront} />
+                 <${KPI_Card} title="Total de Empleados" value=${kpis.total_empleados || 0} icon=${ICONS.users} />
             </div>
             
             ${data.sucursales.length === 0 ? html`
                  <div class="text-center py-12 rounded-lg border-2 border-dashed border-gray-300 bg-white mt-6">
                     <div class="text-6xl text-gray-300">${ICONS.storefront}</div>
-                    <h3 class="mt-2 text-lg font-medium text-gray-900">No hay sucursales registradas</h3>
-                    <p class="mt-1 text-sm text-gray-500">Comienza añadiendo la primera sucursal de tu empresa.</p>
+                    <h3 class="mt-2 text-lg font-medium text-gray-900">No hay ubicaciones registradas</h3>
+                    <p class="mt-1 text-sm text-gray-500">Comienza añadiendo la primera sucursal o depósito de tu empresa.</p>
                 </div>
             ` : html `
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
@@ -260,7 +237,7 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
             `}
 
             <div class="sm:hidden">
-                <${FloatingActionButton} onClick=${handleAddSucursal} disabled=${atLimit} label="Añadir Sucursal" />
+                <${FloatingActionButton} onClick=${handleAddSucursal} disabled=${atLimit} label="Añadir Ubicación" />
             </div>
 
             <${SucursalFormModal} 
@@ -279,7 +256,7 @@ export function SucursalesListPage({ user, onLogout, onProfileUpdate, companyInf
                 confirmVariant="danger"
                 icon=${ICONS.warning_amber}
             >
-                <p class="text-sm text-gray-600">¿Estás seguro de que quieres eliminar la sucursal <span class="font-bold text-gray-800">${sucursalToDelete?.nombre}</span>? Esta acción no se puede deshacer.</p>
+                <p class="text-sm text-gray-600">¿Estás seguro de que quieres eliminar la ubicación <span class="font-bold text-gray-800">${sucursalToDelete?.nombre}</span>? Esta acción no se puede deshacer.</p>
             <//>
 
         <//>

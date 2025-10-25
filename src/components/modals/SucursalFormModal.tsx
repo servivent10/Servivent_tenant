@@ -20,6 +20,7 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursalToEdit }) {
         telefono: '',
         latitud: null,
         longitud: null,
+        tipo: 'Sucursal',
     });
     const [isLoading, setIsLoading] = useState(false);
     const [errors, setErrors] = useState({ nombre: '' });
@@ -147,9 +148,10 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursalToEdit }) {
                     telefono: sucursalToEdit.telefono || '',
                     latitud: sucursalToEdit.latitud || null,
                     longitud: sucursalToEdit.longitud || null,
+                    tipo: sucursalToEdit.tipo || 'Sucursal',
                 });
             } else {
-                setFormData({ nombre: '', direccion: '', telefono: '', latitud: null, longitud: null });
+                setFormData({ nombre: '', direccion: '', telefono: '', latitud: null, longitud: null, tipo: 'Sucursal' });
             }
             // Use a short timeout to ensure the modal DOM is ready before initializing the map
             setTimeout(initMap, 150);
@@ -163,7 +165,7 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursalToEdit }) {
 
     const handleConfirm = async () => {
         if (!formData.nombre.trim()) {
-            setErrors({ nombre: 'El nombre de la sucursal es obligatorio.' });
+            setErrors({ nombre: 'El nombre de la ubicación es obligatorio.' });
             return;
         }
 
@@ -174,7 +176,8 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursalToEdit }) {
                 p_direccion: formData.direccion,
                 p_telefono: formData.telefono,
                 p_latitud: formData.latitud,
-                p_longitud: formData.longitud
+                p_longitud: formData.longitud,
+                p_tipo: formData.tipo,
             };
 
             if (isEditMode) {
@@ -197,7 +200,7 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursalToEdit }) {
         }
     };
 
-    const title = isEditMode ? 'Editar Sucursal' : 'Añadir Nueva Sucursal';
+    const title = isEditMode ? 'Editar Ubicación' : 'Añadir Nueva Ubicación';
 
     return html`
         <${ConfirmationModal}
@@ -205,7 +208,7 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursalToEdit }) {
             onClose=${onClose}
             onConfirm=${handleConfirm}
             title=${title}
-            confirmText=${isLoading ? html`<${Spinner}/>` : (isEditMode ? 'Guardar Cambios' : 'Crear Sucursal')}
+            confirmText=${isLoading ? html`<${Spinner}/>` : (isEditMode ? 'Guardar Cambios' : 'Crear Ubicación')}
             icon=${ICONS.storefront}
             maxWidthClass="max-w-4xl"
         >
@@ -214,6 +217,21 @@ export function SucursalFormModal({ isOpen, onClose, onSave, sucursalToEdit }) {
                     <${FormInput} label="Nombre" name="nombre" type="text" value=${formData.nombre} onInput=${handleInput} error=${errors.nombre} />
                     <${FormInput} label="Teléfono (Opcional)" name="telefono" type="tel" value=${formData.telefono} onInput=${handleInput} required=${false} />
                     <${FormInput} label="Dirección Completa" name="direccion" type="text" value=${formData.direccion} onInput=${handleInput} required=${false} />
+                     <div>
+                        <label class="block text-sm font-medium text-gray-700">Tipo de Ubicación</label>
+                        <fieldset class="mt-2">
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-x-3">
+                                    <input id="tipo-sucursal" name="tipo" type="radio" value="Sucursal" checked=${formData.tipo === 'Sucursal'} onInput=${handleInput} class="h-4 w-4 border-gray-300 text-primary focus:ring-primary" />
+                                    <label for="tipo-sucursal" class="block text-sm font-medium leading-6 text-gray-900">Sucursal (Punto de Venta)</label>
+                                </div>
+                                <div class="flex items-center gap-x-3">
+                                    <input id="tipo-deposito" name="tipo" type="radio" value="Depósito" checked=${formData.tipo === 'Depósito'} onInput=${handleInput} class="h-4 w-4 border-gray-300 text-primary focus:ring-primary" />
+                                    <label for="tipo-deposito" class="block text-sm font-medium leading-6 text-gray-900">Depósito (Solo Almacén)</label>
+                                </div>
+                            </div>
+                        </fieldset>
+                    </div>
                 </div>
                 <div>
                      <label class="block text-sm font-medium text-gray-700">Ubicación en el Mapa</label>
